@@ -1,0 +1,4 @@
+[plugin]
+name = "io"
+version = "1.0.0"
+description = "Arquivos e formatos: texto, JSON, CSV, diretórios, compressão, variáveis de ambiente"

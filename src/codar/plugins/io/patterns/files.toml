@@ -1,0 +1,545 @@
+# Arquivos: gravação que nunca deixa o arquivo pela metade, leitura de arquivos grandes sem estourar a memória e busca
+# recursiva que não entra em node_modules/.git.
+
+[[pattern]]
+id = "io.atomic_write"
+title = "Gravar arquivo de forma atômica (nunca pela metade)"
+keywords = "gravar salvar escrever arquivo atomico atomica atomicamente seguro temporario substituir sem corromper"
+require = ["atomico", "atomica", "atomicamente", "atomic", "atomically"]
+tags = ["io", "best-practice", "reliability"]
+
+[pattern.code]
+python = '''
+import os
+import tempfile
+from pathlib import Path
+
+
+def gravar_atomico(caminho: str | os.PathLike, conteudo: str | bytes, encoding: str = "utf-8") -> None:
+    """Grava num temporário da mesma pasta e troca de uma vez (os.replace): quem lê vê o arquivo antigo ou o novo,
+    nunca um pela metade, mesmo se o programa cair ou faltar energia no meio. Preserva as permissões."""
+    destino = Path(caminho)
+    dados = conteudo.encode(encoding) if isinstance(conteudo, str) else conteudo
+    modo = destino.stat().st_mode & 0o7777 if destino.exists() else 0o644
+    fd, tmp = tempfile.mkstemp(dir=destino.parent, prefix=f".{destino.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(dados)
+            f.flush()
+            os.fsync(f.fileno())  # os bytes chegam ao disco antes da troca
+        os.chmod(tmp, modo)
+        os.replace(tmp, destino)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    if os.name == "posix":  # grava também a entrada do diretório (a troca em si) no disco
+        pasta = os.open(destino.parent, os.O_RDONLY)
+        try:
+            os.fsync(pasta)
+        finally:
+            os.close(pasta)
+'''
+javascript = '''
+import { randomBytes } from "node:crypto";
+import { chmod, open, rename, rm, stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+
+/** Grava num temporário da mesma pasta e troca de uma vez: quem lê nunca vê o arquivo pela metade. */
+export async function gravarAtomico(caminho, conteudo) {
+  const tmp = join(dirname(caminho), `.${basename(caminho)}.${randomBytes(6).toString("hex")}.tmp`);
+  let modo = 0o644;
+  try {
+    modo = (await stat(caminho)).mode & 0o7777; // preserva as permissões do arquivo que será substituído
+  } catch {
+    // arquivo novo
+  }
+  try {
+    const arquivo = await open(tmp, "wx", modo);
+    try {
+      await arquivo.writeFile(conteudo);
+      await arquivo.sync(); // os bytes chegam ao disco antes da troca
+    } finally {
+      await arquivo.close();
+    }
+    await chmod(tmp, modo); // o umask pode ter reduzido as permissões na criação
+    await rename(tmp, caminho);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
+}
+'''
+go = '''
+package main
+
+import (
+	"os"
+	"path/filepath"
+)
+
+// GravarAtomico grava num temporário da mesma pasta e troca de uma vez (os.Rename): quem lê vê o arquivo antigo ou
+// o novo, nunca um pela metade. Preserva as permissões do arquivo substituído.
+func GravarAtomico(caminho string, dados []byte) (err error) {
+	modo := os.FileMode(0o644)
+	if info, e := os.Stat(caminho); e == nil {
+		modo = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(caminho), "."+filepath.Base(caminho)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(tmp.Name())
+		}
+	}()
+	if _, err = tmp.Write(dados); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err = tmp.Sync(); err != nil { // os bytes chegam ao disco antes da troca
+		tmp.Close()
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	if err = os.Chmod(tmp.Name(), modo); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), caminho)
+}
+'''
+bash = '''
+# gravar_atomico ARQUIVO < conteúdo: grava num temporário da mesma pasta e troca de uma vez (mv na mesma partição é
+# atômico); quem lê nunca vê o arquivo pela metade. Preserva as permissões do arquivo substituído.
+gravar_atomico() {
+  local destino="$1" tmp
+  tmp="$(mktemp "$(dirname -- "$destino")/.$(basename -- "$destino").XXXXXX")" || return 1
+  if ! cat > "$tmp"; then
+    rm -f -- "$tmp"
+    return 1
+  fi
+  if [[ -e "$destino" ]]; then
+    chmod "$(stat -c %a -- "$destino")" -- "$tmp"
+  else
+    chmod 644 -- "$tmp"
+  fi
+  sync -- "$tmp" 2>/dev/null || true  # os bytes chegam ao disco antes da troca
+  mv -f -- "$tmp" "$destino"
+}
+'''
+powershell = '''
+function Set-ConteudoAtomico {
+    <#
+    .SYNOPSIS
+    Grava num temporário da mesma pasta e troca de uma vez: quem lê nunca vê o arquivo pela metade.
+    Funciona no Windows PowerShell 5.1 e no PowerShell 7.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value
+    )
+    $destino = $PSCmdlet.GetUnresolvedProviderPathFromPSPath($Path)
+    $nome = [System.IO.Path]::GetFileName($destino)
+    $tmp = Join-Path ([System.IO.Path]::GetDirectoryName($destino)) ".$nome.$([guid]::NewGuid().ToString('N')).tmp"
+    try {
+        $fluxo = [System.IO.File]::Open($tmp, [System.IO.FileMode]::CreateNew)
+        try {
+            $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($Value)
+            $fluxo.Write($bytes, 0, $bytes.Length)
+            $fluxo.Flush($true)  # os bytes chegam ao disco antes da troca
+        }
+        finally { $fluxo.Dispose() }
+        if (Test-Path -LiteralPath $destino) {
+            [System.IO.File]::Replace($tmp, $destino, [NullString]::Value)
+        }
+        else {
+            [System.IO.File]::Move($tmp, $destino)
+        }
+    }
+    catch {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+import pathlib
+import tempfile
+
+pasta = pathlib.Path(tempfile.mkdtemp())
+alvo = pasta / "config.json"
+gravar_atomico(alvo, '{"a": 1}')
+assert alvo.read_text() == '{"a": 1}'
+alvo.chmod(0o640)
+gravar_atomico(alvo, b"novo")
+assert alvo.read_bytes() == b"novo" and (alvo.stat().st_mode & 0o777) == 0o640
+assert [p.name for p in pasta.iterdir()] == ["config.json"]  # nenhum temporário sobrando
+'''
+javascript = '''
+import { chmod as mudarModo, mkdtemp, readFile, readdir, stat as estado } from "node:fs/promises";
+import { tmpdir } from "node:os";
+
+const pasta = await mkdtemp(join(tmpdir(), "atomico-"));
+const alvo = join(pasta, "config.json");
+await gravarAtomico(alvo, '{"a": 1}');
+if ((await readFile(alvo, "utf8")) !== '{"a": 1}') throw new Error("conteúdo");
+await mudarModo(alvo, 0o640);
+await gravarAtomico(alvo, "novo");
+if ((await readFile(alvo, "utf8")) !== "novo") throw new Error("conteúdo novo");
+if (((await estado(alvo)).mode & 0o777) !== 0o640) throw new Error("permissões");
+if ((await readdir(pasta)).join() !== "config.json") throw new Error("sobrou temporário");
+'''
+bash = '''
+pasta="$(mktemp -d)"
+printf 'versão 1\n' | gravar_atomico "$pasta/notas.txt"
+chmod 640 "$pasta/notas.txt"
+printf 'versão 2\n' | gravar_atomico "$pasta/notas.txt"
+[[ "$(cat "$pasta/notas.txt")" == "versão 2" ]] || { echo "falhou: conteúdo" >&2; exit 1; }
+[[ "$(stat -c %a "$pasta/notas.txt")" == 640 ]] || { echo "falhou: permissões" >&2; exit 1; }
+[[ "$(ls -A "$pasta")" == "notas.txt" ]] || { echo "falhou: sobrou temporário" >&2; exit 1; }
+'''
+powershell = '''
+$pasta = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $pasta | Out-Null
+$alvo = Join-Path $pasta 'notas.txt'
+Set-ConteudoAtomico -Path $alvo -Value 'versão 1'
+Set-ConteudoAtomico -Path $alvo -Value 'versão 2'
+if ([System.IO.File]::ReadAllText($alvo) -ne 'versão 2') { throw 'falhou: conteúdo' }
+if (@(Get-ChildItem -LiteralPath $pasta -Force).Count -ne 1) { throw 'falhou: sobrou temporário' }
+'''
+
+[[pattern]]
+id = "io.read_lines"
+title = "Ler arquivo grande linha por linha"
+keywords = "ler arquivo grande linha por linha linhas stream streaming sem carregar memoria log contar ocorrencias"
+require = ["linha", "line", "streaming", "stream"]
+tags = ["io", "performance"]
+
+[pattern.code]
+python = '''
+from collections.abc import Iterator
+from pathlib import Path
+
+
+def linhas(caminho: str | Path, encoding: str = "utf-8") -> Iterator[str]:
+    """Uma linha por vez, sem o fim de linha e sem carregar o arquivo inteiro na memória (serve para arquivos de
+    vários GB). errors="replace" evita que um byte inválido no meio do arquivo derrube a leitura."""
+    with open(caminho, encoding=encoding, errors="replace", newline="") as f:
+        for linha in f:
+            yield linha.rstrip("\r\n")
+
+
+def contar_ocorrencias(caminho: str | Path, termo: str) -> int:
+    return sum(1 for linha in linhas(caminho) if termo in linha)
+'''
+javascript = '''
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
+
+/** Uma linha por vez, sem carregar o arquivo inteiro na memória (crlfDelay: \r\n conta como uma quebra só). */
+export async function* linhas(caminho) {
+  const rl = createInterface({ input: createReadStream(caminho, { encoding: "utf8" }), crlfDelay: Infinity });
+  try {
+    for await (const linha of rl) yield linha;
+  } finally {
+    rl.close();
+  }
+}
+
+export async function contarOcorrencias(caminho, termo) {
+  let n = 0;
+  for await (const linha of linhas(caminho)) if (linha.includes(termo)) n++;
+  return n;
+}
+'''
+go = '''
+package main
+
+import (
+	"bufio"
+	"os"
+	"strings"
+)
+
+// ContarOcorrencias lê uma linha por vez (bufio.Scanner), sem carregar o arquivo inteiro na memória.
+func ContarOcorrencias(caminho, termo string) (int, error) {
+	f, err := os.Open(caminho)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64*1024), 16*1024*1024) // linhas de até 16 MB (o padrão desiste em 64 KB)
+	n := 0
+	for sc.Scan() {
+		if strings.Contains(sc.Text(), termo) {
+			n++
+		}
+	}
+	return n, sc.Err()
+}
+'''
+bash = '''
+# contar_ocorrencias ARQUIVO TERMO: lê uma linha por vez; "|| [[ -n $linha ]]" não perde a última linha sem \n.
+# Só para contar, `grep -cF -- "$termo" "$arquivo"` é bem mais rápido; o laço serve quando cada linha é processada.
+contar_ocorrencias() {
+  local arquivo="$1" termo="$2" linha n=0
+  while IFS= read -r linha || [[ -n "$linha" ]]; do
+    [[ "$linha" == *"$termo"* ]] && ((n += 1))
+  done < "$arquivo"
+  echo "$n"
+}
+'''
+powershell = '''
+function Measure-Ocorrencia {
+    <#
+    .SYNOPSIS
+    Conta as linhas que contêm um termo lendo uma linha por vez ([IO.File]::ReadLines). Em arquivos grandes,
+    Get-Content é lento e cria um objeto por linha.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Termo
+    )
+    $n = 0
+    foreach ($linha in [System.IO.File]::ReadLines($PSCmdlet.GetUnresolvedProviderPathFromPSPath($Path))) {
+        if ($linha.Contains($Termo)) { $n++ }
+    }
+    $n
+}
+'''
+
+[pattern.test]
+python = '''
+import pathlib
+import tempfile
+
+log = pathlib.Path(tempfile.mkdtemp()) / "app.log"
+log.write_bytes(b"erro 1\r\nok\nerro 2\nsem quebra no fim, erro")
+assert list(linhas(log))[:2] == ["erro 1", "ok"]
+assert contar_ocorrencias(log, "erro") == 3
+'''
+javascript = '''
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const log = join(await mkdtemp(join(tmpdir(), "linhas-")), "app.log");
+await writeFile(log, "erro 1\r\nok\nerro 2\nsem quebra no fim, erro");
+const todas = [];
+for await (const l of linhas(log)) todas.push(l);
+if (todas[0] !== "erro 1" || todas.length !== 4) throw new Error(JSON.stringify(todas));
+if ((await contarOcorrencias(log, "erro")) !== 3) throw new Error("contagem");
+'''
+bash = '''
+log="$(mktemp)"
+printf 'erro 1\r\nok\nerro 2\nsem quebra no fim, erro' > "$log"
+[[ "$(contar_ocorrencias "$log" erro)" == 3 ]] || { echo "falhou: contagem" >&2; exit 1; }
+'''
+powershell = '''
+$log = [System.IO.Path]::GetTempFileName()
+[System.IO.File]::WriteAllText($log, "erro 1`r`nok`nerro 2`nsem quebra no fim, erro")
+if ((Measure-Ocorrencia -Path $log -Termo 'erro') -ne 3) { throw 'falhou: contagem' }
+'''
+
+[[pattern]]
+id = "io.find_files"
+title = "Listar arquivos recursivamente por extensão"
+keywords = "listar buscar procurar encontrar arquivos recursivamente recursivo pasta diretorio subpastas extensao ignorar node_modules git walk glob"
+require = ["recursivamente", "recursivo", "recursiva", "recursive", "recursively", "extensao", "extension", "subpastas", "walk"]
+tags = ["io", "performance"]
+
+[pattern.code]
+python = '''
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+IGNORAR = frozenset({".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"})
+
+
+def arquivos(raiz: str | Path, extensoes: tuple[str, ...] = (), ignorar: frozenset[str] = IGNORAR) -> Iterator[Path]:
+    """Arquivos sob `raiz`, filtrando por extensão (".py", ".md"; vazio = todos, sem diferenciar maiúsculas) e sem
+    entrar em node_modules, .git e afins: a poda acontece antes de descer na pasta, o que poupa muito tempo."""
+    exts = tuple(e.lower() for e in extensoes)
+    for pasta, subpastas, nomes in os.walk(raiz):
+        subpastas[:] = sorted(d for d in subpastas if d not in ignorar)
+        for nome in sorted(nomes):
+            if not exts or nome.lower().endswith(exts):
+                yield Path(pasta, nome)
+'''
+javascript = '''
+import { readdir } from "node:fs/promises";
+import { extname, join } from "node:path";
+
+const IGNORAR = new Set([".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"]);
+
+/** Arquivos sob `raiz`, filtrando por extensão (sem diferenciar maiúsculas) e sem entrar em node_modules e .git. */
+export async function* arquivos(raiz, extensoes = [], ignorar = IGNORAR) {
+  const exts = extensoes.map((e) => e.toLowerCase());
+  const pilha = [raiz];
+  while (pilha.length) {
+    const pasta = pilha.pop();
+    let entradas;
+    try {
+      entradas = await readdir(pasta, { withFileTypes: true });
+    } catch {
+      continue; // sem permissão: segue em frente
+    }
+    for (const e of entradas) {
+      const caminho = join(pasta, e.name);
+      if (e.isDirectory()) {
+        if (!ignorar.has(e.name)) pilha.push(caminho);
+      } else if (e.isFile() && (!exts.length || exts.includes(extname(e.name).toLowerCase()))) {
+        yield caminho;
+      }
+    }
+  }
+}
+'''
+go = '''
+package main
+
+import (
+	"io/fs"
+	"path/filepath"
+	"strings"
+)
+
+var ignorar = map[string]bool{
+	".git": true, "node_modules": true, "__pycache__": true, ".venv": true, "venv": true, "dist": true, "build": true,
+}
+
+// Arquivos lista os arquivos sob raiz com uma das extensões (".go", ".md"; nenhuma = todos), sem entrar em
+// node_modules, .git e afins: fs.SkipDir poda a pasta inteira.
+func Arquivos(raiz string, extensoes ...string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(raiz, func(caminho string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // sem permissão: segue em frente
+		}
+		if d.IsDir() {
+			if caminho != raiz && ignorar[d.Name()] {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(d.Name()))
+		if len(extensoes) == 0 {
+			out = append(out, caminho)
+			return nil
+		}
+		for _, e := range extensoes {
+			if ext == strings.ToLower(e) {
+				out = append(out, caminho)
+				break
+			}
+		}
+		return nil
+	})
+	return out, err
+}
+'''
+bash = '''
+# listar_arquivos PASTA [EXT...]: arquivos com as extensões (sem o ponto, sem diferenciar maiúsculas), sem entrar em
+# node_modules, .git e afins (-prune corta a pasta inteira).
+listar_arquivos() {
+  local raiz="$1" e
+  shift
+  local poda=(-type d \( -name .git -o -name node_modules -o -name __pycache__ -o -name .venv -o -name venv
+    -o -name dist -o -name build \) -prune)
+  if (($# == 0)); then
+    find "$raiz" "${poda[@]}" -o -type f -print 2>/dev/null
+    return
+  fi
+  local filtro=()
+  for e in "$@"; do
+    ((${#filtro[@]})) && filtro+=(-o)
+    filtro+=(-iname "*.$e")
+  done
+  find "$raiz" "${poda[@]}" -o -type f \( "${filtro[@]}" \) -print 2>/dev/null
+}
+'''
+powershell = '''
+function Find-Arquivo {
+    <#
+    .SYNOPSIS
+    Arquivos sob -Path com as extensões dadas (sem diferenciar maiúsculas), sem entrar em node_modules, .git e afins.
+    Get-ChildItem -Recurse -Exclude não serve: ele filtra o resultado, mas continua descendo nas pastas excluídas.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string[]]$Extensao = @(),
+        [string[]]$Ignorar = @('.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', 'build')
+    )
+    $exts = @($Extensao | ForEach-Object { '.' + $_.TrimStart('.').ToLowerInvariant() })
+    $pilha = [System.Collections.Generic.Stack[System.IO.DirectoryInfo]]::new()
+    $pilha.Push([System.IO.DirectoryInfo]::new($PSCmdlet.GetUnresolvedProviderPathFromPSPath($Path)))
+    while ($pilha.Count) {
+        $pasta = $pilha.Pop()
+        try { $itens = $pasta.GetFileSystemInfos() } catch { continue }  # sem permissão: segue em frente
+        foreach ($item in $itens) {
+            if ($item -is [System.IO.DirectoryInfo]) {
+                $link = $item.Attributes -band [System.IO.FileAttributes]::ReparsePoint
+                if ($Ignorar -notcontains $item.Name -and -not $link) { $pilha.Push($item) }
+            }
+            elseif ($exts.Count -eq 0 -or $exts -contains $item.Extension.ToLowerInvariant()) {
+                $item.FullName
+            }
+        }
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+import pathlib
+import tempfile
+
+raiz = pathlib.Path(tempfile.mkdtemp())
+for caminho in ["a.py", "sub/b.PY", "sub/c.md", "node_modules/d.py", ".git/e.py"]:
+    (raiz / caminho).parent.mkdir(parents=True, exist_ok=True)
+    (raiz / caminho).write_text("x")
+achados = sorted(p.relative_to(raiz).as_posix() for p in arquivos(raiz, (".py",)))
+assert achados == ["a.py", "sub/b.PY"], achados
+assert len(list(arquivos(raiz))) == 3
+'''
+javascript = '''
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { relative } from "node:path";
+
+const raiz = await mkdtemp(join(tmpdir(), "arquivos-"));
+for (const c of ["a.py", "sub/b.PY", "sub/c.md", "node_modules/d.py", ".git/e.py"]) {
+  await mkdir(join(raiz, c, ".."), { recursive: true });
+  await writeFile(join(raiz, c), "x");
+}
+const achados = [];
+for await (const a of arquivos(raiz, [".py"])) achados.push(relative(raiz, a));
+if (achados.sort().join() !== "a.py,sub/b.PY") throw new Error(achados.join());
+'''
+bash = '''
+raiz="$(mktemp -d)"
+mkdir -p "$raiz/sub" "$raiz/node_modules" "$raiz/.git"
+touch "$raiz/a.py" "$raiz/sub/b.PY" "$raiz/sub/c.md" "$raiz/node_modules/d.py" "$raiz/.git/e.py"
+achados="$(listar_arquivos "$raiz" py | sed "s|^$raiz/||" | sort | tr '\n' ' ')"
+[[ "$achados" == "a.py sub/b.PY " ]] || { echo "falhou: $achados" >&2; exit 1; }
+[[ "$(listar_arquivos "$raiz" | wc -l)" == 3 ]] || { echo "falhou: sem filtro" >&2; exit 1; }
+'''
+powershell = '''
+$raiz = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString('N'))
+foreach ($c in 'a.py', 'sub/b.PY', 'sub/c.md', 'node_modules/d.py', '.git/e.py') {
+    $f = Join-Path $raiz $c
+    New-Item -ItemType Directory -Force -Path (Split-Path $f) | Out-Null
+    Set-Content -LiteralPath $f -Value 'x'
+}
+$achados = @(Find-Arquivo -Path $raiz -Extensao py | ForEach-Object { $_.Substring($raiz.Length + 1).Replace('\', '/') } | Sort-Object)
+if (($achados -join ',') -ne 'a.py,sub/b.PY') { throw "falhou: $($achados -join ',')" }
+'''
