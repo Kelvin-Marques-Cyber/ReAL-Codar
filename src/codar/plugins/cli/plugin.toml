@@ -1,0 +1,4 @@
+[plugin]
+name = "cli"
+version = "1.0.0"
+description = "Ferramentas de linha de comando: argumentos, subcomandos, logging, sinais, configuração"

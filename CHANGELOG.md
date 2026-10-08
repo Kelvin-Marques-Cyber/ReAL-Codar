@@ -14,7 +14,7 @@ Primeira versão pública.
   - expressões como "o tamanho de pedidos", "a média entre x e y" e "o dobro de preço";
   - saída para 14 linguagens.
 - Abreviações HTML e CSS no estilo Emmet (`ul>li.item$*3`, `form:post>input:email+btn:s`, `df+jcc+aic`), com JSX em `.jsx` e `.tsx`.
-- Banco com 95 padrões testados, entre eles uma calculadora com tratamento de erros em 9 linguagens, Dijkstra, CPF e o novo CNPJ alfanumérico, Pix copia e cola, CI e Dockerfile.
+- Banco com 98 padrões testados, entre eles uma calculadora com tratamento de erros em 9 linguagens, Dijkstra, CPF e o novo CNPJ alfanumérico, Pix copia e cola, programas de linha de comando com subcomandos, CI e Dockerfile.
 - IA local (Qwen2.5-Coder 1.5B) em modo literal:
   - traduz só o que a linha diz e usa o código acima como contexto;
   - remove imports inúteis e dados de exemplo inventados.

@@ -193,6 +193,7 @@ cli: cli terminal argparse
 command: comando comandos command commands cmd
 arg: argumento argumentos argument arguments args parametro parametros parameter parameters flag flags opcoes options
 config: configuracao configuracoes config configuration settings
+confirm: confirmar confirme confirma confirmacao confirmacoes confirm confirmation
 retry: retry retentativa retentativas backoff tentativa tentativas
 rate: rate limite limitador limiter throttle throttling
 debounce: debounce

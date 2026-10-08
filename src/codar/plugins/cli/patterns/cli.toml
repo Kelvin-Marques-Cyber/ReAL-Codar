@@ -1,0 +1,583 @@
+# Programas de linha de comando: erros de uso saem com código 2 e mensagem que diz o que digitar, prompts não travam
+# quando a entrada acaba (pipe, Ctrl+D) e a configuração mostra todos os problemas de uma vez.
+
+[[pattern]]
+id = "cli.subcommands"
+title = "Programa de linha de comando com subcomandos"
+keywords = "cli linha de comando subcomandos subcomando argumentos opcoes flags argparse parametros terminal programa"
+require = ["subcomando", "subcomandos", "subcommand", "subcommands", "argparse", "argumentos", "arguments"]
+tags = ["cli", "best-practice"]
+
+[pattern.code]
+python = '''
+import argparse
+import sys
+
+
+def construir_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="tarefas", description="Gerencia uma lista de tarefas.")
+    sub = parser.add_subparsers(dest="comando", required=True, metavar="{adicionar,listar}")
+    adicionar = sub.add_parser("adicionar", help="adiciona uma tarefa")
+    adicionar.add_argument("titulo", help="o que precisa ser feito")
+    adicionar.add_argument("--prioridade", type=int, choices=range(1, 6), default=3, metavar="1-5")
+    listar = sub.add_parser("listar", help="lista as tarefas")
+    listar.add_argument("--todas", action="store_true", help="inclui as concluídas")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Erros de uso saem com código 2 (o argparse já faz isso) e a mensagem mostra o uso correto."""
+    args = construir_parser().parse_args(argv)
+    if args.comando == "adicionar":
+        print(f"adicionada: {args.titulo} (prioridade {args.prioridade})")
+    else:
+        print("listando todas" if args.todas else "listando pendentes")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+javascript = '''
+import { parseArgs } from "node:util";
+
+const COMANDOS = {
+  adicionar: {
+    uso: "adicionar <titulo> [--prioridade 1-5]",
+    opcoes: { prioridade: { type: "string", default: "3" } },
+    executar({ values, positionals }) {
+      const prioridade = Number(values.prioridade);
+      if (positionals.length !== 1 || !Number.isInteger(prioridade) || prioridade < 1 || prioridade > 5) {
+        throw new Error(`uso: tarefas ${this.uso}`);
+      }
+      console.log(`adicionada: ${positionals[0]} (prioridade ${prioridade})`);
+    },
+  },
+  listar: {
+    uso: "listar [--todas]",
+    opcoes: { todas: { type: "boolean", default: false } },
+    executar({ values }) {
+      console.log(values.todas ? "listando todas" : "listando pendentes");
+    },
+  },
+};
+
+export function main(argv) {
+  const [nome, ...resto] = argv;
+  const comando = Object.hasOwn(COMANDOS, nome ?? "") ? COMANDOS[nome] : null;
+  if (!comando) {
+    console.error(`comando inválido: ${nome ?? "(nenhum)"}\nuso: tarefas {${Object.keys(COMANDOS).join(",")}} ...`);
+    return 2;
+  }
+  try {
+    comando.executar(parseArgs({ args: resto, options: comando.opcoes, allowPositionals: true }));
+    return 0;
+  } catch (err) {
+    console.error(err.message); // opção desconhecida ou uso errado: código 2, como nos programas Unix
+    return 2;
+  }
+}
+
+process.exitCode = main(process.argv.slice(2));
+'''
+go = '''
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"os"
+)
+
+func uso(stderr io.Writer) int {
+	fmt.Fprintln(stderr, "uso: tarefas {adicionar,listar} ...")
+	return 2
+}
+
+// parse aceita opções antes e depois dos argumentos ("adicionar pão --prioridade 5"), o que o flag sozinho não faz.
+func parse(fs *flag.FlagSet, args []string) ([]string, error) {
+	var posicionais []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		args = fs.Args()
+		if len(args) == 0 {
+			return posicionais, nil
+		}
+		posicionais = append(posicionais, args[0])
+		args = args[1:]
+	}
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return uso(stderr)
+	}
+	switch args[0] {
+	case "adicionar":
+		fs := flag.NewFlagSet("adicionar", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		prioridade := fs.Int("prioridade", 3, "prioridade de 1 a 5")
+		posicionais, err := parse(fs, args[1:])
+		if err != nil || len(posicionais) != 1 || *prioridade < 1 || *prioridade > 5 {
+			fmt.Fprintln(stderr, "uso: tarefas adicionar <titulo> [--prioridade 1-5]")
+			return 2
+		}
+		fmt.Fprintf(stdout, "adicionada: %s (prioridade %d)\n", posicionais[0], *prioridade)
+	case "listar":
+		fs := flag.NewFlagSet("listar", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		todas := fs.Bool("todas", false, "inclui as concluídas")
+		if _, err := parse(fs, args[1:]); err != nil {
+			return 2
+		}
+		if *todas {
+			fmt.Fprintln(stdout, "listando todas")
+		} else {
+			fmt.Fprintln(stdout, "listando pendentes")
+		}
+	default:
+		fmt.Fprintf(stderr, "comando inválido: %s\n", args[0])
+		return uso(stderr)
+	}
+	return 0
+}
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+'''
+bash = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+uso() {
+  echo "uso: tarefas {adicionar,listar} ..." >&2
+  exit 2
+}
+
+cmd_adicionar() {
+  local prioridade=3 titulo=""
+  while (($#)); do
+    case "$1" in
+      --prioridade) prioridade="${2:-}"; shift 2 || uso ;;
+      --prioridade=*) prioridade="${1#*=}"; shift ;;
+      -*) echo "opção desconhecida: $1" >&2; exit 2 ;;
+      *) [[ -z "$titulo" ]] || uso; titulo="$1"; shift ;;
+    esac
+  done
+  [[ -n "$titulo" && "$prioridade" =~ ^[1-5]$ ]] || uso
+  echo "adicionada: $titulo (prioridade $prioridade)"
+}
+
+cmd_listar() {
+  local todas=0
+  while (($#)); do
+    case "$1" in
+      --todas) todas=1; shift ;;
+      *) echo "opção desconhecida: $1" >&2; exit 2 ;;
+    esac
+  done
+  if ((todas)); then echo "listando todas"; else echo "listando pendentes"; fi
+}
+
+main() {
+  (($#)) || uso
+  local comando="$1"
+  shift
+  case "$comando" in
+    adicionar) cmd_adicionar "$@" ;;
+    listar) cmd_listar "$@" ;;
+    *) echo "comando inválido: $comando" >&2; uso ;;
+  esac
+}
+
+main "$@"
+'''
+powershell = '''
+# No PowerShell, as opções seguem a convenção da linguagem: -Prioridade 5, -Todas.
+[CmdletBinding()]
+param(
+    [Parameter(Position = 0)][string]$Comando,
+    [Parameter(Position = 1)][string]$Titulo,
+    [int]$Prioridade = 3,
+    [switch]$Todas
+)
+
+function Write-Uso {
+    [Console]::Error.WriteLine('uso: tarefas.ps1 {adicionar,listar} [<titulo>] [-Prioridade 1-5] [-Todas]')
+    exit 2
+}
+
+switch ($Comando) {
+    'adicionar' {
+        if (-not $Titulo -or $Prioridade -lt 1 -or $Prioridade -gt 5) { Write-Uso }
+        Write-Output "adicionada: $Titulo (prioridade $Prioridade)"
+    }
+    'listar' {
+        if ($Todas) { Write-Output 'listando todas' } else { Write-Output 'listando pendentes' }
+    }
+    default {
+        [Console]::Error.WriteLine("comando inválido: $Comando")
+        Write-Uso
+    }
+}
+'''
+
+[[pattern.test.runs]]
+args = ["adicionar", "comprar pão", "--prioridade", "5"]
+expect = ["adicionada: comprar pão (prioridade 5)"]
+langs = ["python", "javascript", "go", "bash"]
+
+[[pattern.test.runs]]
+args = ["listar", "--todas"]
+expect = ["listando todas"]
+langs = ["python", "javascript", "go", "bash"]
+
+[[pattern.test.runs]]
+args = ["adicionar", "comprar pão", "--prioridade", "9"]
+status = 2
+expect = ["adicionar"]
+langs = ["python", "javascript", "go", "bash"]
+
+[[pattern.test.runs]]
+args = ["adicionar", "comprar pão", "-Prioridade", "5"]
+expect = ["adicionada: comprar pão (prioridade 5)"]
+langs = ["powershell"]
+
+[[pattern.test.runs]]
+args = ["listar", "-Todas"]
+expect = ["listando todas"]
+langs = ["powershell"]
+
+[[pattern.test.runs]]
+args = []
+status = 2
+expect = ["adicionar"]
+
+[[pattern.test.runs]]
+args = ["voar"]
+status = 2
+expect = ["voar"]
+
+[[pattern]]
+id = "cli.confirm"
+title = "Pedir confirmação sim/não no terminal"
+keywords = "confirmar confirmacao pedir perguntar usuario sim nao yes no prompt terminal tem certeza continuar antes apagar excluir remover"
+require = ["confirmar", "confirmacao", "confirm", "confirmation"]
+tags = ["cli", "best-practice"]
+
+[pattern.code]
+python = '''
+from collections.abc import Callable
+
+
+def confirmar(pergunta: str, padrao: bool = False, ler: Callable[[str], str] = input) -> bool:
+    """Pergunta sim/não. Enter vazio usa o padrão; sem terminal (pipe, Ctrl+D) também. Aceita s/sim/y/yes e
+    n/não/nao/no, em qualquer caixa; outra resposta pergunta de novo."""
+    opcoes = "[S/n]" if padrao else "[s/N]"
+    while True:
+        try:
+            resposta = ler(f"{pergunta} {opcoes} ").strip().lower()
+        except EOFError:
+            return padrao
+        if not resposta:
+            return padrao
+        if resposta in ("s", "sim", "y", "yes"):
+            return True
+        if resposta in ("n", "não", "nao", "no"):
+            return False
+        print("responda s ou n")
+'''
+javascript = '''
+import * as readline from "node:readline/promises";
+
+// Lê uma linha do terminal; devolve null se a entrada acabar (pipe, Ctrl+D) em vez de travar.
+async function perguntarNoTerminal(texto) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const fechou = new Promise((resolve) => rl.once("close", () => resolve(null)));
+  try {
+    return await Promise.race([rl.question(texto), fechou]);
+  } finally {
+    rl.close();
+  }
+}
+
+/** Pergunta sim/não. Enter vazio ou entrada fechada usam o padrão. */
+export async function confirmar(pergunta, padrao = false, ler = perguntarNoTerminal) {
+  for (;;) {
+    const resposta = await ler(`${pergunta} ${padrao ? "[S/n]" : "[s/N]"} `);
+    if (resposta === null) return padrao;
+    const r = resposta.trim().toLowerCase();
+    if (!r) return padrao;
+    if (["s", "sim", "y", "yes"].includes(r)) return true;
+    if (["n", "não", "nao", "no"].includes(r)) return false;
+    console.log("responda s ou n");
+  }
+}
+'''
+bash = '''
+# confirmar "Pergunta?" [s|n]: status 0 para sim, 1 para não. Enter vazio ou entrada fechada usam o padrão.
+confirmar() {
+  local pergunta="$1" padrao="${2:-n}" resposta opcoes="[s/N]"
+  [[ "$padrao" == s ]] && opcoes="[S/n]"
+  while true; do
+    if ! read -r -p "$pergunta $opcoes " resposta; then
+      [[ "$padrao" == s ]]
+      return
+    fi
+    case "${resposta,,}" in
+      "") [[ "$padrao" == s ]]; return ;;
+      s | sim | y | yes) return 0 ;;
+      n | não | nao | no) return 1 ;;
+      *) echo "responda s ou n" >&2 ;;
+    esac
+  done
+}
+'''
+powershell = '''
+function Confirm-Acao {
+    <#
+    .SYNOPSIS
+    Pergunta sim/não. Enter vazio usa o padrão. Para confirmar ações destrutivas em cmdlets, prefira
+    [CmdletBinding(SupportsShouldProcess)] e $PSCmdlet.ShouldProcess, que dão -WhatIf e -Confirm de graça.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Pergunta,
+        [switch]$PadraoSim,
+        [scriptblock]$Ler = { param($texto) Read-Host -Prompt $texto }
+    )
+    $opcoes = if ($PadraoSim) { '[S/n]' } else { '[s/N]' }
+    while ($true) {
+        $resposta = & $Ler "$Pergunta $opcoes"
+        if ($null -eq $resposta) { return [bool]$PadraoSim }
+        switch -Regex ($resposta.Trim().ToLowerInvariant()) {
+            '^$' { return [bool]$PadraoSim }
+            '^(s|sim|y|yes)$' { return $true }
+            '^(n|não|nao|no)$' { return $false }
+            default { Write-Host 'responda s ou n' }
+        }
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+def respostas(*itens):
+    fila = list(itens)
+
+    def ler(_prompt):
+        if not fila:
+            raise EOFError
+        return fila.pop(0)
+    return ler
+
+
+assert confirmar("Apagar?", ler=respostas("talvez", "SIM")) is True
+assert confirmar("Apagar?", ler=respostas("")) is False
+assert confirmar("Apagar?", padrao=True, ler=respostas("")) is True
+assert confirmar("Apagar?", ler=respostas("Não")) is False
+assert confirmar("Apagar?", padrao=True, ler=respostas()) is True  # entrada fechada
+'''
+javascript = '''
+const respostas = (...itens) => async () => (itens.length ? itens.shift() : null);
+if ((await confirmar("Apagar?", false, respostas("talvez", "SIM"))) !== true) throw new Error("sim");
+if ((await confirmar("Apagar?", false, respostas(""))) !== false) throw new Error("padrão não");
+if ((await confirmar("Apagar?", true, respostas(""))) !== true) throw new Error("padrão sim");
+if ((await confirmar("Apagar?", true, respostas())) !== true) throw new Error("entrada fechada");
+'''
+bash = '''
+printf 'talvez\nsim\n' | confirmar "Apagar?" 2>/dev/null || { echo "falhou: sim" >&2; exit 1; }
+if printf '\n' | confirmar "Apagar?"; then echo "falhou: padrão não" >&2; exit 1; fi
+printf 'Não\n' | confirmar "Apagar?" s && { echo "falhou: não" >&2; exit 1; }
+printf '' | confirmar "Apagar?" s || { echo "falhou: entrada fechada" >&2; exit 1; }
+'''
+powershell = '''
+$fila = [System.Collections.Generic.Queue[string]]::new()
+$ler = { param($t) if ($fila.Count) { $fila.Dequeue() } else { $null } }
+'talvez', 'SIM' | ForEach-Object { $fila.Enqueue($_) }
+if (-not (Confirm-Acao -Pergunta 'Apagar?' -Ler $ler 6>$null)) { throw 'falhou: sim' }
+$fila.Enqueue('')
+if (Confirm-Acao -Pergunta 'Apagar?' -Ler $ler) { throw 'falhou: padrão não' }
+if (-not (Confirm-Acao -Pergunta 'Apagar?' -PadraoSim -Ler $ler)) { throw 'falhou: entrada fechada' }
+'''
+
+[[pattern]]
+id = "cli.env_config"
+title = "Configuração por variáveis de ambiente com validação"
+keywords = "configuracao config variaveis de ambiente env environment ler carregar validar porta debug 12 factor settings"
+require = ["ambiente", "environment", "env", "dotenv"]
+tags = ["cli", "config", "best-practice"]
+
+[pattern.code]
+python = '''
+import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Config:
+    porta: int
+    debug: bool
+    url_banco: str
+
+
+def _booleano(valor: str) -> bool:
+    v = valor.strip().lower()
+    if v in ("1", "true", "sim", "yes", "on"):
+        return True
+    if v in ("", "0", "false", "nao", "não", "no", "off"):
+        return False
+    raise ValueError(f"esperava sim/não, veio {valor!r}")
+
+
+def carregar_config(env: Mapping[str, str] = os.environ) -> Config:
+    """Lê a configuração do ambiente (12-factor). Junta todos os erros numa mensagem só: quem configura corrige
+    tudo de uma vez, em vez de descobrir um problema por execução."""
+    erros = []
+    porta = 0
+    try:
+        porta = int(env.get("PORTA", "8080"))
+        if not 1 <= porta <= 65535:
+            raise ValueError
+    except ValueError:
+        erros.append(f"PORTA deve ser um número de 1 a 65535 (veio {env.get('PORTA')!r})")
+    debug = False
+    try:
+        debug = _booleano(env.get("DEBUG", "0"))
+    except ValueError as exc:
+        erros.append(f"DEBUG: {exc}")
+    url_banco = env.get("URL_BANCO", "")
+    if not url_banco:
+        erros.append("URL_BANCO é obrigatória")
+    if erros:
+        raise ValueError("configuração inválida:\n  " + "\n  ".join(erros))
+    return Config(porta, debug, url_banco)
+'''
+javascript = '''
+const VERDADEIRO = ["1", "true", "sim", "yes", "on"];
+const FALSO = ["", "0", "false", "nao", "não", "no", "off"];
+
+/**
+ * Lê a configuração do ambiente (12-factor) e junta todos os erros numa mensagem só.
+ * @returns {{porta: number, debug: boolean, urlBanco: string}}
+ */
+export function carregarConfig(env = process.env) {
+  const erros = [];
+  const porta = Number(env.PORTA ?? "8080");
+  if (!Number.isInteger(porta) || porta < 1 || porta > 65535) {
+    erros.push(`PORTA deve ser um número de 1 a 65535 (veio ${JSON.stringify(env.PORTA)})`);
+  }
+  const debugTexto = String(env.DEBUG ?? "0").trim().toLowerCase();
+  if (!VERDADEIRO.includes(debugTexto) && !FALSO.includes(debugTexto)) {
+    erros.push(`DEBUG: esperava sim/não, veio ${JSON.stringify(env.DEBUG)}`);
+  }
+  const urlBanco = env.URL_BANCO ?? "";
+  if (!urlBanco) erros.push("URL_BANCO é obrigatória");
+  if (erros.length) throw new Error(`configuração inválida:\n  ${erros.join("\n  ")}`);
+  return Object.freeze({ porta, debug: VERDADEIRO.includes(debugTexto), urlBanco });
+}
+'''
+bash = '''
+# carregar_config: valida PORTA, DEBUG e URL_BANCO do ambiente e mostra todos os erros de uma vez.
+carregar_config() {
+  local erros=()
+  PORTA="${PORTA:-8080}"
+  if ! [[ "$PORTA" =~ ^[0-9]+$ ]] || ((PORTA < 1 || PORTA > 65535)); then
+    erros+=("PORTA deve ser um número de 1 a 65535 (veio '$PORTA')")
+  fi
+  local debug="${DEBUG:-0}"
+  case "${debug,,}" in
+    1 | true | sim | yes | on) DEBUG=1 ;;
+    "" | 0 | false | nao | não | no | off) DEBUG=0 ;;
+    *) erros+=("DEBUG: esperava sim/não, veio '$debug'") ;;
+  esac
+  [[ -n "${URL_BANCO:-}" ]] || erros+=("URL_BANCO é obrigatória")
+  if ((${#erros[@]})); then
+    printf 'configuração inválida:\n' >&2
+    printf '  %s\n' "${erros[@]}" >&2
+    return 1
+  fi
+  export PORTA DEBUG URL_BANCO
+}
+'''
+powershell = '''
+function Get-Configuracao {
+    <#
+    .SYNOPSIS
+    Lê PORTA, DEBUG e URL_BANCO do ambiente (12-factor) e junta todos os erros numa mensagem só.
+    #>
+    [CmdletBinding()]
+    param([hashtable]$Ambiente)
+    $ler = { param($nome, $padrao) if ($Ambiente) { $Ambiente[$nome] } else { [Environment]::GetEnvironmentVariable($nome) } }
+    $erros = [System.Collections.Generic.List[string]]::new()
+    $textoPorta = & $ler 'PORTA'
+    if (-not $textoPorta) { $textoPorta = '8080' }
+    $porta = 0
+    if (-not [int]::TryParse($textoPorta, [ref]$porta) -or $porta -lt 1 -or $porta -gt 65535) {
+        $erros.Add("PORTA deve ser um número de 1 a 65535 (veio '$textoPorta')")
+    }
+    $textoDebug = [string](& $ler 'DEBUG')
+    $debug = $false
+    switch -Regex ($textoDebug.Trim().ToLowerInvariant()) {
+        '^(1|true|sim|yes|on)$' { $debug = $true }
+        '^(|0|false|nao|não|no|off)$' { $debug = $false }
+        default { $erros.Add("DEBUG: esperava sim/não, veio '$textoDebug'") }
+    }
+    $url = & $ler 'URL_BANCO'
+    if (-not $url) { $erros.Add('URL_BANCO é obrigatória') }
+    if ($erros.Count) { throw "configuração inválida:`n  " + ($erros -join "`n  ") }
+    [pscustomobject]@{ Porta = $porta; Debug = $debug; UrlBanco = $url }
+}
+'''
+
+[pattern.test]
+python = '''
+c = carregar_config({"URL_BANCO": "postgres://localhost/app", "DEBUG": "sim"})
+assert c.porta == 8080 and c.debug is True and c.url_banco.startswith("postgres")
+try:
+    carregar_config({"PORTA": "99999", "DEBUG": "talvez"})
+except ValueError as exc:
+    msg = str(exc)
+    assert "PORTA" in msg and "DEBUG" in msg and "URL_BANCO" in msg  # todos os erros juntos
+else:
+    raise AssertionError("deveria falhar")
+'''
+javascript = '''
+const c = carregarConfig({ URL_BANCO: "postgres://localhost/app", DEBUG: "sim" });
+if (c.porta !== 8080 || c.debug !== true) throw new Error("padrões");
+let msg = "";
+try {
+  carregarConfig({ PORTA: "99999", DEBUG: "talvez" });
+} catch (err) {
+  msg = err.message;
+}
+if (!(msg.includes("PORTA") && msg.includes("DEBUG") && msg.includes("URL_BANCO"))) throw new Error(msg || "não falhou");
+'''
+bash = '''
+(
+  unset PORTA DEBUG
+  URL_BANCO=postgres://localhost/app
+  DEBUG=sim
+  carregar_config
+  [[ $PORTA == 8080 && $DEBUG == 1 ]]
+) || { echo "falhou: padrões" >&2; exit 1; }
+saida="$( (PORTA=99999 DEBUG=talvez URL_BANCO='' carregar_config) 2>&1 )" && { echo "falhou: deveria falhar" >&2; exit 1; }
+[[ $saida == *PORTA* && $saida == *DEBUG* && $saida == *URL_BANCO* ]] || { echo "falhou: $saida" >&2; exit 1; }
+'''
+powershell = '''
+$c = Get-Configuracao -Ambiente @{ URL_BANCO = 'postgres://localhost/app'; DEBUG = 'sim' }
+if ($c.Porta -ne 8080 -or -not $c.Debug) { throw 'falhou: padrões' }
+try {
+    Get-Configuracao -Ambiente @{ PORTA = '99999'; DEBUG = 'talvez' } | Out-Null
+    throw 'não falhou'
+}
+catch {
+    $m = $_.Exception.Message
+    if ($m -notmatch 'PORTA' -or $m -notmatch 'DEBUG' -or $m -notmatch 'URL_BANCO') { throw "falhou: $m" }
+}
+'''
