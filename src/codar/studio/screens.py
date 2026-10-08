@@ -7,6 +7,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
+from codar.vocab import EXAMPLES
+
 
 class AdviceScreen(ModalScreen[str | None]):
     """Cartão de sugestão: motivo, opções (botões) e o plano de cada uma. Retorna o id da opção ou None."""
@@ -74,12 +76,6 @@ SHORTCUTS: list[tuple[str, list[tuple[str, str]]]] = [
                   ("Ctrl+B", "mostra/esconde o explorer"), ("F9", "mostra/esconde o painel")]),
     ("PROJETO", [("F5", "executa o arquivo"), ("F6", "audita o arquivo"), ("F8", "consultor de projeto"),
                  ("Ctrl+O", "abre no VS Code"), ("Ctrl+P", "paleta de comandos"), ("Ctrl+Q", "sai")]),
-]
-EXAMPLES: list[tuple[str, str]] = [
-    ("x é igual a 10", "atribuição"), ("se total maior que 100 imprimir 'caro'", "condição"),
-    ("para cada nome em nomes imprimir nome", "laço"), ("imprimir o tamanho de pedidos", "expressão"),
-    ("criar uma calculadora", "padrão completo do banco"), ("validar cnpj", "padrão brasileiro"),
-    ("ul>li.item$*3", "HTML (Tab num .html)"), ("df+jcc+aic", "CSS (Tab num .css)"),
 ]
 
 

@@ -30,9 +30,10 @@ from textual.widgets.text_area import Selection
 from codar import __version__, langs
 from codar.studio.backend import StudioBackend
 from codar.engine import emmet
-from codar.studio.screens import EXAMPLES, AdviceScreen, HelpScreen, PromptScreen
+from codar.studio.screens import AdviceScreen, HelpScreen, PromptScreen
 from codar.studio.widgets import C, SENTRY_THEME, STAGE_COLORS, TITLE, CodeEditor, OrbitRadar, gauge
 from codar.textutil import looks_like_intent
+from codar.vocab import EXAMPLES
 
 STAGE_NAMES = {"0": "S0 COMPILER", "1": "S1 PATTERN", "2:tools": "S2 TOOLS", "2:adapt": "S2 ADAPT", "2:gen": "S2 SLM",
                "2:pseudo": "S2 PSEUDO"}

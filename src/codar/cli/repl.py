@@ -3,15 +3,42 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 from codar import paths
 
-HELP = """comandos:
+HELP = """comandos (Tab completa comandos, linguagens e palavras; ↑ volta ao histórico):
   :lang <ling>   troca a linguagem (py, go, rs, ts, ps1, sh...)     :stages 0,1   restringe estágios
   :hints         liga/desliga dicas inline                          :stats        telemetria do daemon
   :block         alterna modo pseudocódigo (linha vazia executa)    :save <id>    salva o último resultado como padrão
   :history       últimas traduções                                  :q            sai"""
+META = (":lang", ":stages", ":hints", ":block", ":stats", ":history", ":save", ":help", ":q")
+
+
+def completer(readline):
+    """Tab: comandos (:lang…), linguagens depois de :lang, e palavras do pseudocódigo e do histórico."""
+    from codar import langs
+    from codar.vocab import EXAMPLES, PSEUDO_WORDS
+
+    word = re.compile(r"[^\W\d]\w{2,}")  # palavras e identificadores; nada de 'caro' entre aspas ou números
+    words = set(PSEUDO_WORDS) | {w for phrase, _ in EXAMPLES for w in phrase.split() if word.fullmatch(w)}
+    lang_names = sorted(set(langs.LANGS) | {"py", "js", "ts", "rs", "cs", "sh", "ps1", "rb"})
+
+    def complete(text: str, state: int) -> str | None:
+        line = readline.get_line_buffer()
+        if line.startswith(":lang "):
+            pool = lang_names
+        elif line.startswith(":") and " " not in line:
+            pool = list(META)
+        else:
+            seen = {w for i in range(1, readline.get_current_history_length() + 1)
+                    for w in (readline.get_history_item(i) or "").split() if word.fullmatch(w)}
+            pool = sorted(words | seen)
+        matches = [w + " " for w in pool if w.startswith(text)]
+        return matches[state] if state < len(matches) else None
+
+    return complete
 
 
 def repl(args) -> int:
@@ -28,6 +55,10 @@ def repl(args) -> int:
             readline.read_history_file(str(hist))
         except OSError:
             pass
+        readline.set_completer(completer(readline))
+        readline.set_completer_delims(" \t\n")
+        # libedit (macOS) usa outra sintaxe para ligar o Tab
+        readline.parse_and_bind("bind ^I rl_complete" if "libedit" in (readline.__doc__ or "") else "tab: complete")
     except ImportError:
         readline, hist = None, None
     try:
