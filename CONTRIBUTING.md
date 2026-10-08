@@ -39,7 +39,7 @@ Siga [docs/EXTENDING.md](docs/EXTENDING.md). Um padrão só entra no banco com:
 
 ## Estilo
 
-- Escreva como o código ao redor: mesma densidade de comentários, mesmos nomes, linhas de até 120 colunas.
+- Escreva como o código ao redor: mesma densidade de comentários, mesmos nomes e linhas de por volta de 120 colunas.
 - Mensagens, documentação e comentários em português. As *skills* (diretrizes para a IA) ficam em inglês, porque modelos pequenos seguem instruções em inglês com mais consistência.
 - Commits no formato [Conventional Commits](https://www.conventionalcommits.org/pt-br/), em português: `feat(studio): autocompletar na barra de intenção`, `fix(emmet): operador no fim não é abreviação`.
 - Nenhuma dependência nova no núcleo: o daemon, o compilador e o CLI usam só a biblioteca padrão.

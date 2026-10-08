@@ -31,7 +31,7 @@ codar extras | grep -q "codar extras install" || fail "dica dos extras"
 test -f /usr/share/nvim/site/pack/codar/start/codar/plugin/codar.lua || fail "plugin do Neovim"
 test -n "$(ls /usr/share/vim/*/plugin/codar.vim 2>/dev/null)" || fail "plugin do Vim"
 # o manual pelo índice do pacote: imagens Docker de Ubuntu e Arch descartam /usr/share/man de propósito
-eval "$LIST" | grep -q "/usr/share/man/man1/codar.1.gz" || fail "manual no pacote"
+eval "$LIST" | grep -q "usr/share/man/man1/codar.1.gz" || fail "manual no pacote"  # o apk lista sem a / inicial
 ls /usr/lib/codar/codar/__pycache__/*.pyc >/dev/null 2>&1 || fail "pyc da instalação"
 echo "uso OK"
 CHECK
