@@ -1,0 +1,28 @@
+name: Problema
+description: Algo não funcionou como esperado
+labels: [bug]
+body:
+  - type: textarea
+    id: o-que
+    attributes:
+      label: O que aconteceu
+      description: O que você digitou (a frase ou o comando) e o que o CODAR gerou.
+      placeholder: |
+        Digitei "some os dois números e imprima" num arquivo Python com x e y definidos
+        e saiu: ...
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que você esperava
+    validations:
+      required: true
+  - type: textarea
+    id: ambiente
+    attributes:
+      label: Ambiente
+      description: Cole a saída de `codar doctor` e diga por onde usou (CLI, Studio, Neovim, Vim, VS Code, PowerShell).
+      render: text
+    validations:
+      required: true

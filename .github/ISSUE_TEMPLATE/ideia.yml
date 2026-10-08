@@ -1,0 +1,11 @@
+name: Ideia ou padrão novo
+description: Sugira uma funcionalidade, uma frase que o compilador deveria entender ou um padrão para o banco
+labels: [enhancement]
+body:
+  - type: textarea
+    id: ideia
+    attributes:
+      label: Ideia
+      description: Se for uma frase, mostre a frase e o código esperado em pelo menos uma linguagem.
+    validations:
+      required: true

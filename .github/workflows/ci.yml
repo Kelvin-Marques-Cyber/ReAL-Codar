@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -e ".[dev,studio]"
+      - run: pytest
+
+  padroes:
+    name: Banco de padrões (sintaxe e testes executáveis)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4  # Node 24 executa as variantes TypeScript sem compilar
+        with:
+          node-version: 24
+      - run: pip install -e ".[dev]"
+      - run: python -m codar.evals.patternlint
+
+  editores:
+    name: Plugins de Neovim e Vim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq vim
+      - run: pip install -e .
+      - run: tests/clients/run.sh "$(command -v codar)"
+
+  pacotes:
+    name: Pacotes (deb, rpm, apk, Arch) instalados em contêineres
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instala o nfpm
+        run: |
+          curl -fsSL -o /tmp/nfpm.tgz https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
+          sudo tar xzf /tmp/nfpm.tgz -C /usr/local/bin nfpm
+      - run: pip install build
+      - run: packaging/build.sh
+      - run: packaging/test-containers.sh debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 alpine:latest archlinux:latest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pacotes
+          path: dist/
