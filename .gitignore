@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# gerados pelo build e pelos testes de empacotamento
+build/
+dist/
+
+# modelos de IA (baixados por `codar model pull`, nunca versionados)
+*.gguf
+*.part
+
+# extensão do VS Code
+node_modules/
+clients/vscode/out/
+*.vsix
+
+# sistema
+.DS_Store

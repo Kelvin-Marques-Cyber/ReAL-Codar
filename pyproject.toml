@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codar"
+version = "0.1.0"
+description = "Framework offline de tradução de intenção para código, com auditoria estática e teto de 3GB de RAM"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Kelvin e Silva Marques" }]
+keywords = ["llm", "codegen", "llama.cpp", "offline", "cli", "tui", "vscode", "neovim", "powershell"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Environment :: Console :: Curses",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Natural Language :: Portuguese (Brazilian)",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Code Generators",
+  "Topic :: Text Editors :: Integrated Development Environments (IDE)",
+]
+# O núcleo (daemon, estágios 0/1, auditor, CLI, SDK) não tem dependências externas
+# (tomli só no Python 3.10, que não traz tomllib).
+dependencies = ["tomli>=2; python_version < '3.11'"]
+
+[project.optional-dependencies]
+# Estágio 2 (SLM). Para wheels pré-compiladas de CPU use:
+#   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+llm = ["llama-cpp-python>=0.3.16"]
+studio = ["textual[syntax]>=1.0"]
+needle = ["cactus-needle>=3.0"]
+all = ["codar[llm,studio]"]
+dev = ["pytest>=8", "pyflakes>=3", "tree-sitter>=0.23", "tree-sitter-python", "tree-sitter-javascript", "tree-sitter-typescript",
+       "tree-sitter-go", "tree-sitter-rust", "tree-sitter-java", "tree-sitter-c", "tree-sitter-cpp",
+       "tree-sitter-c-sharp", "tree-sitter-bash", "tree-sitter-powershell", "tree-sitter-lua", "tree-sitter-php",
+       "tree-sitter-ruby", "tree-sitter-sql", "tree-sitter-json", "tree-sitter-yaml", "tree-sitter-toml"]
+
+[project.urls]
+Homepage = "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar"
+Documentation = "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/tree/main/docs"
+Issues = "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/issues"
+Changelog = "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/blob/main/CHANGELOG.md"
+
+[project.scripts]
+codar = "codar.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+codar = ["plugins/**/*.toml", "plugins/**/*.md", "studio/*.tcss", "evals/*.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+  "slow: testes que chamam toolchains externas ou o modelo",
+  "model: requer um modelo GGUF local",
+]

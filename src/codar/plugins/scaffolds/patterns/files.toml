@@ -1,0 +1,779 @@
+# Arquivos de projeto (kind = "file"). Também respondem a intenções como "gitignore para node".
+
+[[pattern]]
+id = "file.gitignore.node"
+title = "gitignore para Node/JavaScript"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar node javascript typescript npm"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.nuxt/
+.cache/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+'''
+
+[[pattern]]
+id = "file.gitignore.python"
+title = "gitignore para Python"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar python pip venv"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+'''
+
+[[pattern]]
+id = "file.gitignore.go"
+title = "gitignore para Go"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar golang go"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+/bin/
+*.exe
+*.test
+*.out
+coverage.*
+.env
+.DS_Store
+.idea/
+'''
+
+[[pattern]]
+id = "file.gitignore.rust"
+title = "gitignore para Rust"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar rust cargo"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+/target/
+**/*.rs.bk
+.env
+.DS_Store
+.idea/
+'''
+
+[[pattern]]
+id = "file.gitignore.java"
+title = "gitignore para Java"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar java maven gradle"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+target/
+build/
+.gradle/
+*.class
+*.jar
+*.war
+.idea/
+*.iml
+.env
+.DS_Store
+'''
+
+[[pattern]]
+id = "file.gitignore.dotnet"
+title = "gitignore para .NET"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar dotnet csharp"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+*.nupkg
+.env
+.DS_Store
+'''
+
+[[pattern]]
+id = "file.gitignore.generic"
+title = "gitignore genérico"
+kind = "file"
+path = ".gitignore"
+keywords = "gitignore ignorar generico"
+require = ["gitignore"]
+[pattern.code]
+gitignore = '''
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+'''
+
+[[pattern]]
+id = "file.editorconfig"
+title = "editorconfig padrão"
+kind = "file"
+path = ".editorconfig"
+keywords = "editorconfig indentacao formatacao editor"
+require = ["editorconfig"]
+[pattern.code]
+editorconfig = '''
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{js,jsx,ts,tsx,mjs,cjs,json,yml,yaml,css,scss,html,vue,md,lua}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[{*.go,Makefile,go.mod}]
+indent_style = tab
+'''
+
+[[pattern]]
+id = "file.dockerignore"
+title = "dockerignore padrão"
+kind = "file"
+path = ".dockerignore"
+keywords = "dockerignore docker ignorar imagem"
+require = ["dockerignore"]
+[pattern.code]
+dockerignore = '''
+.git
+.github
+node_modules
+.venv
+__pycache__
+dist
+build
+target
+coverage
+*.log
+.env
+.env.*
+.codar
+Dockerfile*
+docker-compose*
+'''
+
+[[pattern]]
+id = "file.ci.node"
+title = "GitHub Actions CI para Node"
+kind = "file"
+path = ".github/workflows/ci.yml"
+keywords = "github actions ci pipeline integracao continua node npm workflow"
+require = ["ci", "actions", "workflow"]
+[pattern.code]
+yaml = '''
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test --if-present
+      - run: npm run build --if-present
+'''
+
+[[pattern]]
+id = "file.ci.python"
+title = "GitHub Actions CI para Python"
+kind = "file"
+path = ".github/workflows/ci.yml"
+keywords = "github actions ci pipeline integracao continua python pytest workflow"
+require = ["ci", "actions", "workflow"]
+[pattern.code]
+yaml = '''
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: if [ -f pyproject.toml ]; then pip install -e ".[dev]" || pip install -e .; else pip install -r requirements.txt; fi
+      - run: python -m pip install pytest
+      - run: python -m pytest -q
+'''
+
+[[pattern]]
+id = "file.ci.go"
+title = "GitHub Actions CI para Go"
+kind = "file"
+path = ".github/workflows/ci.yml"
+keywords = "github actions ci pipeline integracao continua golang go workflow"
+require = ["ci", "actions", "workflow"]
+[pattern.code]
+yaml = '''
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+'''
+
+[[pattern]]
+id = "file.ci.rust"
+title = "GitHub Actions CI para Rust"
+kind = "file"
+path = ".github/workflows/ci.yml"
+keywords = "github actions ci pipeline integracao continua rust cargo workflow"
+require = ["ci", "actions", "workflow"]
+[pattern.code]
+yaml = '''
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all
+'''
+
+[[pattern]]
+id = "file.ci.dotnet"
+title = "GitHub Actions CI para .NET"
+kind = "file"
+path = ".github/workflows/ci.yml"
+keywords = "github actions ci pipeline integracao continua dotnet csharp workflow"
+require = ["ci", "actions", "workflow"]
+[pattern.code]
+yaml = '''
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore
+      - run: dotnet build --no-restore -warnaserror
+      - run: dotnet test --no-build --verbosity normal
+'''
+
+[[pattern]]
+id = "file.ci.powershell"
+title = "GitHub Actions CI para PowerShell (Pester + PSScriptAnalyzer)"
+kind = "file"
+path = ".github/workflows/ci.yml"
+keywords = "github actions ci pipeline integracao continua powershell pester workflow"
+require = ["ci", "actions", "workflow"]
+[pattern.code]
+yaml = '''
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5 -Scope CurrentUser -Force
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+      - shell: pwsh
+        run: Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error,Warning -EnableExit
+      - shell: pwsh
+        run: Invoke-Pester -CI
+'''
+
+[[pattern]]
+id = "file.dockerfile.python"
+title = "Dockerfile para Python (multi-stage, sem root)"
+kind = "file"
+path = "Dockerfile"
+keywords = "dockerfile docker container imagem python"
+require = ["dockerfile", "docker"]
+slots = { port = "8000", module = "app" }
+[pattern.code]
+dockerfile = '''
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+WORKDIR /app
+
+FROM base AS deps
+COPY requirements.txt .
+RUN pip install --prefix=/install -r requirements.txt
+
+FROM base
+COPY --from=deps /install /usr/local
+COPY . .
+RUN useradd --system --uid 10001 app
+USER app
+EXPOSE {{port}}
+CMD ["python", "-m", "{{module}}"]
+'''
+
+[[pattern]]
+id = "file.dockerfile.node"
+title = "Dockerfile para Node (multi-stage, sem root)"
+kind = "file"
+path = "Dockerfile"
+keywords = "dockerfile docker container imagem node javascript"
+require = ["dockerfile", "docker"]
+slots = { port = "3000", entry = "index.js" }
+[pattern.code]
+dockerfile = '''
+# syntax=docker/dockerfile:1
+FROM node:22-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+
+FROM node:22-slim
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+USER node
+EXPOSE {{port}}
+CMD ["node", "{{entry}}"]
+'''
+
+[[pattern]]
+id = "file.dockerfile.go"
+title = "Dockerfile para Go (estático, distroless, sem root)"
+kind = "file"
+path = "Dockerfile"
+keywords = "dockerfile docker container imagem golang go distroless"
+require = ["dockerfile", "docker"]
+slots = { pkg = "." }
+[pattern.code]
+dockerfile = '''
+# syntax=docker/dockerfile:1
+FROM golang:1.23 AS build
+WORKDIR /src
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/app {{pkg}}
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/app /app
+USER nonroot:nonroot
+ENTRYPOINT ["/app"]
+'''
+
+[[pattern]]
+id = "file.compose.postgres_redis"
+title = "docker compose com PostgreSQL e Redis"
+kind = "file"
+path = "compose.yaml"
+keywords = "docker compose postgres postgresql redis banco cache desenvolvimento local"
+require = ["compose"]
+[pattern.code]
+yaml = '''
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: app
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+
+volumes:
+  pgdata:
+'''
+
+[[pattern]]
+id = "file.ruff"
+title = "configuração do Ruff (lint + format Python)"
+kind = "file"
+path = "ruff.toml"
+keywords = "ruff lint linter formatador python configuracao"
+require = ["ruff"]
+[pattern.code]
+toml = '''
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101"]
+
+[lint.per-file-ignores]
+"tests/**" = ["S"]
+'''
+
+[[pattern]]
+id = "file.eslint"
+title = "configuração do ESLint (flat config)"
+kind = "file"
+path = "eslint.config.js"
+keywords = "eslint lint linter javascript configuracao"
+require = ["eslint"]
+[pattern.code]
+javascript = '''
+import js from "@eslint/js";
+
+export default [
+  js.configs.recommended,
+  {
+    rules: {
+      eqeqeq: "error",
+      "no-unused-vars": "warn",
+      "prefer-const": "error",
+    },
+  },
+];
+'''
+
+[[pattern]]
+id = "file.tsconfig.strict"
+title = "tsconfig estrito"
+kind = "file"
+path = "tsconfig.json"
+keywords = "tsconfig typescript strict configuracao compilador"
+require = ["tsconfig"]
+[pattern.code]
+json = '''
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}
+'''
+
+[[pattern]]
+id = "file.psscriptanalyzer"
+title = "configuração do PSScriptAnalyzer"
+kind = "file"
+path = "PSScriptAnalyzerSettings.psd1"
+keywords = "psscriptanalyzer powershell lint linter analise estatica configuracao"
+require = ["psscriptanalyzer", "analyzer"]
+[pattern.code]
+powershell = '''
+@{
+    Severity     = @('Error', 'Warning')
+    ExcludeRules = @()
+    Rules        = @{
+        PSUseCompatibleSyntax = @{
+            Enable         = $true
+            TargetVersions = @('5.1', '7.4')
+        }
+    }
+}
+'''
+
+[[pattern]]
+id = "file.pester.example"
+title = "teste Pester de exemplo"
+kind = "file"
+path = "tests/Exemplo.Tests.ps1"
+keywords = "pester teste powershell unitario exemplo"
+require = ["pester"]
+[pattern.code]
+powershell = '''
+Describe 'Exemplo' {
+    It 'soma dois números' {
+        $resultado = 2 + 3
+        $resultado | Should -Be 5
+    }
+
+    It 'lança erro com entrada inválida' {
+        { [int]::Parse('abc') } | Should -Throw
+    }
+}
+'''
+
+[[pattern]]
+id = "file.pytest.smoke"
+title = "teste pytest inicial"
+kind = "file"
+path = "tests/test_smoke.py"
+keywords = "pytest teste python inicial smoke"
+require = ["pytest"]
+[pattern.code]
+python = '''
+import pytest
+
+
+def test_soma():
+    assert 2 + 3 == 5
+
+
+@pytest.mark.parametrize(("entrada", "esperado"), [("a", "A"), ("abc", "ABC")])
+def test_maiusculas(entrada, esperado):
+    assert entrada.upper() == esperado
+'''
+
+[[pattern]]
+id = "file.vitest.example"
+title = "teste Vitest inicial"
+kind = "file"
+path = "tests/exemplo.test.js"
+keywords = "vitest teste javascript inicial"
+require = ["vitest"]
+[pattern.code]
+javascript = '''
+import { describe, expect, it } from "vitest";
+
+describe("exemplo", () => {
+  it("soma dois números", () => {
+    expect(2 + 3).toBe(5);
+  });
+});
+'''
+
+[[pattern]]
+id = "file.rust_toolchain"
+title = "rust-toolchain.toml"
+kind = "file"
+path = "rust-toolchain.toml"
+keywords = "rust toolchain rustup versao clippy rustfmt"
+require = ["toolchain"]
+[pattern.code]
+toml = '''
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
+'''
+
+[[pattern]]
+id = "file.golangci"
+title = "configuração do golangci-lint v2"
+kind = "file"
+path = ".golangci.yml"
+keywords = "golangci lint linter golang go configuracao"
+require = ["golangci"]
+[pattern.code]
+yaml = '''
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+    - revive
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+'''
+
+[[pattern]]
+id = "file.shellcheckrc"
+title = "configuração do ShellCheck"
+kind = "file"
+path = ".shellcheckrc"
+keywords = "shellcheck bash lint linter shell configuracao"
+require = ["shellcheck"]
+[pattern.code]
+ini = '''
+shell=bash
+external-sources=true
+enable=require-variable-braces,quote-safe-variables
+'''
+
+[[pattern]]
+id = "file.precommit.python"
+title = "pre-commit para Python (ruff + verificações)"
+kind = "file"
+path = ".pre-commit-config.yaml"
+keywords = "pre-commit hooks git python ruff"
+require = ["precommit", "pre-commit"]
+[pattern.code]
+yaml = '''
+# Rode `pre-commit autoupdate` para atualizar as versões.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: detect-private-key
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+'''
+
+[[pattern]]
+id = "file.readme"
+title = "README inicial"
+kind = "file"
+path = "README.md"
+keywords = "readme documentacao projeto"
+require = ["readme"]
+slots = { name = "Projeto" }
+[pattern.code]
+markdown = '''
+# {{name}}
+
+Descrição curta do que o projeto faz.
+
+## Requisitos
+
+## Instalação
+
+## Como rodar
+
+## Como testar
+
+## Licença
+'''

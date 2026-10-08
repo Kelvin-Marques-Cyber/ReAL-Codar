@@ -1,0 +1,4 @@
+[plugin]
+name = "apps"
+version = "1.0.0"
+description = "Mini-aplicações completas com boas práticas (calculadora, tarefas, cadastro, conversores)"

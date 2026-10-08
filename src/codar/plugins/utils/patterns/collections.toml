@@ -1,0 +1,628 @@
+# Coleções: funções puras (não alteram a entrada), O(n) sempre que possível.
+
+[[pattern]]
+id = "util.dedupe"
+title = "Remover duplicados preservando a ordem"
+keywords = "remover duplicados duplicatas repetidos unicos distinct dedupe lista linhas lines preservar ordem"
+require = ["duplicados", "duplicate", "repetidos", "unicos", "distinct", "dedupe"]
+tags = ["collections"]
+
+slots = { path = "arquivo.txt" }
+[pattern.code]
+python = '''
+def remover_duplicados(itens):
+    """Mantém a primeira ocorrência de cada item, na ordem original. O(n) (itens hasháveis)."""
+    return list(dict.fromkeys(itens))
+'''
+javascript = '''
+const removerDuplicados = (itens) => [...new Set(itens)];
+
+/** Duplicados por chave (ex.: objetos com o mesmo id). */
+function removerDuplicadosPor(itens, chave) {
+  const vistos = new Set();
+  return itens.filter((x) => {
+    const k = chave(x);
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+}
+'''
+typescript = '''
+export const removerDuplicados = <T>(itens: readonly T[]): T[] => [...new Set(itens)];
+'''
+go = '''
+// removerDuplicados mantém a primeira ocorrência, na ordem original.
+func removerDuplicados[T comparable](itens []T) []T {
+	vistos := make(map[T]struct{}, len(itens))
+	saida := make([]T, 0, len(itens))
+	for _, x := range itens {
+		if _, ok := vistos[x]; !ok {
+			vistos[x] = struct{}{}
+			saida = append(saida, x)
+		}
+	}
+	return saida
+}
+'''
+rust = '''
+use std::collections::HashSet;
+use std::hash::Hash;
+
+fn remover_duplicados<T: Eq + Hash + Clone>(itens: &[T]) -> Vec<T> {
+    let mut vistos = HashSet::new();
+    itens.iter().filter(|x| vistos.insert((*x).clone())).cloned().collect()
+}
+'''
+java = '''
+static <T> java.util.List<T> removerDuplicados(java.util.List<T> itens) {
+    return new java.util.ArrayList<>(new java.util.LinkedHashSet<>(itens));
+}
+'''
+csharp = '''
+static List<T> RemoverDuplicados<T>(IEnumerable<T> itens) => itens.Distinct().ToList();
+'''
+powershell = '''
+function Remove-Duplicados {
+    param([Parameter(Mandatory)][object[]]$Itens)
+    $vistos = [System.Collections.Generic.HashSet[object]]::new()
+    foreach ($x in $Itens) {
+        if ($vistos.Add($x)) { $x }
+    }
+}
+'''
+bash = '''
+# Linhas únicas preservando a ordem (sort -u perderia a ordem)
+awk '!visto[$0]++' "{{path}}"
+'''
+
+[pattern.test]
+python = '''
+assert remover_duplicados([3, 1, 3, 2, 1]) == [3, 1, 2] and remover_duplicados([]) == []
+'''
+javascript = '''
+if (removerDuplicados([3, 1, 3, 2, 1]).join() !== "3,1,2" || removerDuplicadosPor([{ id: 1 }, { id: 1 }], (x) => x.id).length !== 1) throw new Error("falhou");
+'''
+powershell = '''
+if ((Remove-Duplicados -Itens 3, 1, 3, 2, 1) -join ',' -ne '3,1,2') { throw 'falhou' }
+'''
+
+[[pattern]]
+id = "util.flatten"
+title = "Achatar listas aninhadas"
+keywords = "achatar flatten listas aninhadas nested lista de listas planificar"
+require = ["achatar", "flatten", "aninhadas", "nested"]
+tags = ["collections"]
+
+[pattern.code]
+python = '''
+def achatar(itens) -> list:
+    """Achata recursivamente listas/tuplas aninhadas (iterativo: sem limite de recursão)."""
+    saida, pilha = [], [iter(itens)]
+    while pilha:
+        for x in pilha[-1]:
+            if isinstance(x, (list, tuple)):
+                pilha.append(iter(x))
+                break
+            saida.append(x)
+        else:
+            pilha.pop()
+    return saida
+'''
+javascript = '''
+const achatar = (itens) => itens.flat(Infinity);
+'''
+typescript = '''
+export const achatar = <T>(itens: unknown[]): T[] => itens.flat(Infinity) as T[];
+'''
+powershell = '''
+function ConvertTo-Achatado {
+    param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Itens)
+    foreach ($x in $Itens) {
+        if ($x -is [System.Collections.IEnumerable] -and $x -isnot [string]) { ConvertTo-Achatado -Itens @($x) }
+        else { $x }
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+assert achatar([1, [2, [3, [4]]], (5,)]) == [1, 2, 3, 4, 5] and achatar([]) == [] and achatar([[], [1]]) == [1]
+'''
+javascript = '''
+if (achatar([1, [2, [3, [4]]]]).join() !== "1,2,3,4") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.chunk"
+title = "Dividir lista em blocos (lotes)"
+keywords = "dividir lista blocos lotes chunk chunks batch batches pedacos tamanho n paginar"
+require = ["blocos", "lotes", "chunk", "batch", "pedacos"]
+tags = ["collections"]
+
+[pattern.code]
+python = '''
+from itertools import islice
+
+
+def em_blocos(itens, tamanho: int):
+    """Gera listas de até `tamanho` itens (funciona com iteradores, sem carregar tudo). Python 3.12+: itertools.batched."""
+    if tamanho < 1:
+        raise ValueError("tamanho deve ser >= 1")
+    it = iter(itens)
+    while bloco := list(islice(it, tamanho)):
+        yield bloco
+'''
+javascript = '''
+function emBlocos(itens, tamanho) {
+  if (tamanho < 1) throw new RangeError("tamanho deve ser >= 1");
+  const blocos = [];
+  for (let i = 0; i < itens.length; i += tamanho) blocos.push(itens.slice(i, i + tamanho));
+  return blocos;
+}
+'''
+go = '''
+// emBlocos divide sem copiar (as fatias compartilham o array). Go 1.23+: slices.Chunk.
+func emBlocos[T any](itens []T, tamanho int) [][]T {
+	var blocos [][]T
+	for tamanho > 0 && len(itens) > 0 {
+		n := min(tamanho, len(itens))
+		blocos = append(blocos, itens[:n:n])
+		itens = itens[n:]
+	}
+	return blocos
+}
+'''
+rust = '''
+fn em_blocos<T: Clone>(itens: &[T], tamanho: usize) -> Vec<Vec<T>> {
+    itens.chunks(tamanho.max(1)).map(|b| b.to_vec()).collect()
+}
+'''
+csharp = '''
+static IEnumerable<T[]> EmBlocos<T>(IEnumerable<T> itens, int tamanho) => itens.Chunk(tamanho);
+'''
+powershell = '''
+function Split-EmBlocos {
+    param(
+        [Parameter(Mandatory)][object[]]$Itens,
+        [Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int]$Tamanho
+    )
+    for ($i = 0; $i -lt $Itens.Count; $i += $Tamanho) {
+        , @($Itens[$i..([math]::Min($i + $Tamanho, $Itens.Count) - 1)])
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+assert list(em_blocos([1, 2, 3, 4, 5], 2)) == [[1, 2], [3, 4], [5]] and list(em_blocos([], 3)) == []
+'''
+javascript = '''
+if (JSON.stringify(emBlocos([1, 2, 3, 4, 5], 2)) !== "[[1,2],[3,4],[5]]") throw new Error("falhou");
+'''
+powershell = '''
+$b = @(Split-EmBlocos -Itens 1, 2, 3, 4, 5 -Tamanho 2)
+if ($b.Count -ne 3 -or ($b[2] -join ',') -ne '5' -or ($b[0] -join ',') -ne '1,2') { throw 'falhou' }
+'''
+
+[[pattern]]
+id = "util.group_by"
+title = "Agrupar itens por chave"
+keywords = "agrupar group by groupby chave categoria dicionario de listas agrupamento"
+require = ["agrupar", "group", "groupby", "agrupamento"]
+tags = ["collections"]
+
+slots = { field = "Tipo" }
+[pattern.code]
+python = '''
+from collections import defaultdict
+
+
+def agrupar_por(itens, chave) -> dict:
+    """chave: função ou nome de campo (dict). Preserva a ordem dos itens dentro de cada grupo."""
+    obter = chave if callable(chave) else (lambda x: x[chave])
+    grupos = defaultdict(list)
+    for item in itens:
+        grupos[obter(item)].append(item)
+    return dict(grupos)
+'''
+javascript = '''
+/** Node 21+ e navegadores modernos: Object.groupBy / Map.groupBy. */
+const agruparPor = (itens, chave) =>
+  Object.groupBy(itens, typeof chave === "function" ? chave : (x) => x[chave]);
+'''
+typescript = '''
+export function agruparPor<T, K extends PropertyKey>(itens: readonly T[], chave: (x: T) => K): Record<K, T[]> {
+  const grupos = {} as Record<K, T[]>;
+  for (const item of itens) (grupos[chave(item)] ??= []).push(item);
+  return grupos;
+}
+'''
+go = '''
+func agruparPor[T any, K comparable](itens []T, chave func(T) K) map[K][]T {
+	grupos := make(map[K][]T)
+	for _, item := range itens {
+		k := chave(item)
+		grupos[k] = append(grupos[k], item)
+	}
+	return grupos
+}
+'''
+csharp = '''
+static Dictionary<TKey, List<T>> AgruparPor<T, TKey>(IEnumerable<T> itens, Func<T, TKey> chave) where TKey : notnull =>
+    itens.GroupBy(chave).ToDictionary(g => g.Key, g => g.ToList());
+'''
+java = '''
+static <T, K> java.util.Map<K, java.util.List<T>> agruparPor(java.util.List<T> itens, java.util.function.Function<T, K> chave) {
+    return itens.stream().collect(java.util.stream.Collectors.groupingBy(chave, java.util.LinkedHashMap::new,
+            java.util.stream.Collectors.toList()));
+}
+'''
+powershell = '''
+# Group-Object agrupa pela propriedade; -AsHashTable devolve chave -> itens
+$grupos = $itens | Group-Object -Property {{field}} -AsHashTable -AsString
+'''
+
+[pattern.test]
+python = '''
+g = agrupar_por([{"t": "a", "v": 1}, {"t": "b", "v": 2}, {"t": "a", "v": 3}], "t")
+assert [x["v"] for x in g["a"]] == [1, 3] and len(g) == 2
+'''
+javascript = '''
+const g = agruparPor([{ t: "a", v: 1 }, { t: "b", v: 2 }, { t: "a", v: 3 }], "t");
+if (g.a.length !== 2 || g.b[0].v !== 2) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.rotate"
+title = "Rotacionar lista"
+keywords = "rotacionar rotate girar deslocar lista array posicoes direita esquerda circular"
+require = ["rotacionar", "rotate", "girar"]
+tags = ["collections"]
+
+[pattern.code]
+python = '''
+from collections import deque
+
+
+def rotacionar(itens: list, k: int) -> list:
+    """Rotaciona k posições para a direita (k negativo: esquerda)."""
+    d = deque(itens)
+    d.rotate(k)
+    return list(d)
+'''
+javascript = '''
+function rotacionar(itens, k) {
+  if (!itens.length) return [];
+  const n = ((k % itens.length) + itens.length) % itens.length;
+  return [...itens.slice(-n || itens.length), ...itens.slice(0, -n || itens.length)].slice(0, itens.length);
+}
+'''
+go = '''
+func rotacionar[T any](itens []T, k int) []T {
+	n := len(itens)
+	if n == 0 {
+		return nil
+	}
+	k = ((k % n) + n) % n
+	return append(append([]T{}, itens[n-k:]...), itens[:n-k]...)
+}
+'''
+
+[pattern.test]
+python = '''
+assert rotacionar([1, 2, 3, 4, 5], 2) == [4, 5, 1, 2, 3] and rotacionar([1, 2, 3], -1) == [2, 3, 1] and rotacionar([], 3) == []
+'''
+javascript = '''
+if (rotacionar([1, 2, 3, 4, 5], 2).join() !== "4,5,1,2,3" || rotacionar([1, 2, 3, 4, 5], 7).join() !== "4,5,1,2,3" || rotacionar([1, 2], 0).join() !== "1,2") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.sort_by_key"
+title = "Ordenar por campo/chave"
+keywords = "ordenar por campo chave propriedade sort by key lista de objetos dicionarios crescente decrescente"
+require = ["ordenar", "sort"]
+tags = ["collections"]
+
+slots = { field = "idade" }
+[pattern.code]
+python = '''
+from operator import itemgetter
+
+# Nova lista (sorted não altera a original); estável: empates mantêm a ordem anterior.
+ordenados = sorted(pessoas, key=itemgetter("{{field}}"))
+decrescente = sorted(pessoas, key=itemgetter("{{field}}"), reverse=True)
+'''
+javascript = '''
+// toSorted (Node 20+) não altera o array original.
+const ordenados = pessoas.toSorted((a, b) => (a.{{field}} > b.{{field}}) - (a.{{field}} < b.{{field}}));
+'''
+go = '''
+import (
+	"cmp"
+	"slices"
+)
+
+// slices.SortStableFunc mantém a ordem relativa dos empates.
+slices.SortStableFunc(pessoas, func(a, b Pessoa) int { return cmp.Compare(a.Idade, b.Idade) })
+'''
+csharp = '''
+var ordenados = pessoas.OrderBy(p => p.Idade).ToList();
+var decrescente = pessoas.OrderByDescending(p => p.Idade).ToList();
+'''
+java = '''
+var ordenados = pessoas.stream().sorted(java.util.Comparator.comparing(Pessoa::idade)).toList();
+'''
+powershell = '''
+$ordenados = $pessoas | Sort-Object -Property {{field}}
+$decrescente = $pessoas | Sort-Object -Property {{field}} -Descending
+'''
+
+[pattern.test]
+python_setup = '''
+pessoas = [{"nome": "a", "idade": 30}, {"nome": "b", "idade": 20}, {"nome": "c", "idade": 25}]
+'''
+python = '''
+assert [p["nome"] for p in ordenados] == ["b", "c", "a"] and [p["nome"] for p in decrescente] == ["a", "c", "b"]
+assert pessoas[0]["nome"] == "a"
+'''
+javascript_setup = '''
+const pessoas = [{ nome: "a", idade: 30 }, { nome: "b", idade: 20 }];
+'''
+javascript = '''
+if (ordenados[0].nome !== "b" || pessoas[0].nome !== "a") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.stats"
+title = "Estatística básica (média, mediana, moda, desvio)"
+keywords = "media mediana moda desvio padrao estatistica mean median mode average variancia"
+require = ["media", "mediana", "moda", "mean", "median", "average", "desvio", "estatistica"]
+tags = ["math"]
+
+[pattern.code]
+python = '''
+import statistics
+
+
+def resumo(numeros: list[float]) -> dict:
+    """Estatísticas descritivas; lista vazia devolve zeros em vez de lançar StatisticsError."""
+    if not numeros:
+        return {"n": 0, "media": 0, "mediana": 0, "moda": None, "desvio": 0, "min": None, "max": None}
+    return {
+        "n": len(numeros),
+        "media": statistics.fmean(numeros),
+        "mediana": statistics.median(numeros),
+        "moda": statistics.mode(numeros),
+        "desvio": statistics.stdev(numeros) if len(numeros) > 1 else 0.0,
+        "min": min(numeros),
+        "max": max(numeros),
+    }
+
+
+def media(numeros: list[float]) -> float:
+    return statistics.fmean(numeros) if numeros else 0
+'''
+javascript = '''
+function resumo(numeros) {
+  const n = numeros.length;
+  if (!n) return { n: 0, media: 0, mediana: 0, desvio: 0 };
+  const media = numeros.reduce((a, b) => a + b, 0) / n;
+  const ord = numeros.toSorted((a, b) => a - b);
+  const mediana = n % 2 ? ord[(n - 1) / 2] : (ord[n / 2 - 1] + ord[n / 2]) / 2;
+  const variancia = n > 1 ? numeros.reduce((s, x) => s + (x - media) ** 2, 0) / (n - 1) : 0;
+  return { n, media, mediana, desvio: Math.sqrt(variancia), min: ord[0], max: ord[n - 1] };
+}
+'''
+go = '''
+import "slices"
+
+func media(numeros []float64) float64 {
+	if len(numeros) == 0 {
+		return 0
+	}
+	soma := 0.0
+	for _, x := range numeros {
+		soma += x
+	}
+	return soma / float64(len(numeros))
+}
+
+func mediana(numeros []float64) float64 {
+	n := len(numeros)
+	if n == 0 {
+		return 0
+	}
+	ord := slices.Clone(numeros)
+	slices.Sort(ord)
+	if n%2 == 1 {
+		return ord[n/2]
+	}
+	return (ord[n/2-1] + ord[n/2]) / 2
+}
+'''
+csharp = '''
+static (double Media, double Mediana) Resumo(IReadOnlyList<double> numeros)
+{
+    if (numeros.Count == 0) return (0, 0);
+    var ord = numeros.Order().ToArray();
+    int n = ord.Length;
+    double mediana = n % 2 == 1 ? ord[n / 2] : (ord[n / 2 - 1] + ord[n / 2]) / 2;
+    return (numeros.Average(), mediana);
+}
+'''
+powershell = '''
+$m = $numeros | Measure-Object -Average -Sum -Minimum -Maximum -StandardDeviation
+"Média: {0:N2}  Soma: {1}  Mín: {2}  Máx: {3}  Desvio: {4:N2}" -f $m.Average, $m.Sum, $m.Minimum, $m.Maximum, $m.StandardDeviation
+'''
+
+[pattern.test]
+python = '''
+r = resumo([1, 2, 2, 3, 4])
+assert r["media"] == 2.4 and r["mediana"] == 2 and r["moda"] == 2 and media([]) == 0 and media([1, 2, 3, 4]) == 2.5
+'''
+javascript = '''
+const r = resumo([1, 2, 3, 4]);
+if (r.media !== 2.5 || r.mediana !== 2.5 || resumo([]).n !== 0) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.second_largest"
+title = "Segundo maior valor distinto"
+keywords = "segundo maior valor distinto lista second largest maximo"
+require = ["segundo", "second"]
+tags = ["collections"]
+
+[pattern.code]
+python = '''
+def segundo_maior(itens):
+    """Segundo maior valor distinto em uma passada, ou None."""
+    primeiro = segundo = None
+    for x in itens:
+        if primeiro is None or x > primeiro:
+            primeiro, segundo = x, primeiro
+        elif x != primeiro and (segundo is None or x > segundo):
+            segundo = x
+    return segundo
+'''
+javascript = '''
+function segundoMaior(itens) {
+  const distintos = [...new Set(itens)].sort((a, b) => b - a);
+  return distintos.length > 1 ? distintos[1] : null;
+}
+'''
+
+[pattern.test]
+python = '''
+assert segundo_maior([5, 1, 5, 3]) == 3 and segundo_maior([2]) is None and segundo_maior([4, 4]) is None and segundo_maior([-1, -5, -3]) == -3
+'''
+javascript = '''
+if (segundoMaior([5, 1, 5, 3]) !== 3 || segundoMaior([4, 4]) !== null) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.count_items"
+title = "Contar ocorrências (caracteres, itens, vogais)"
+keywords = "contar ocorrencias caracteres letras vogais itens contagem counter quantas vezes"
+require = ["contar", "count", "contagem", "vogais"]
+tags = ["collections", "text"]
+
+[pattern.code]
+python = '''
+from collections import Counter
+
+
+def contar_caracteres(texto: str) -> Counter:
+    return Counter(texto)
+
+
+def contar_vogais(texto: str) -> int:
+    return sum(1 for c in texto.lower() if c in "aeiouáéíóúâêôãõà")
+'''
+javascript = '''
+function contarCaracteres(texto) {
+  const c = new Map();
+  for (const ch of texto) c.set(ch, (c.get(ch) ?? 0) + 1);
+  return c;
+}
+
+const contarVogais = (texto) => (texto.normalize("NFD").match(/[aeiou]/gi) ?? []).length;
+'''
+go = '''
+func contarCaracteres(texto string) map[rune]int {
+	c := map[rune]int{}
+	for _, r := range texto {
+		c[r]++
+	}
+	return c
+}
+'''
+powershell = '''
+function Measure-Caracteres {
+    param([Parameter(Mandatory)][string]$Texto)
+    $Texto.ToCharArray() | Group-Object -NoElement | Sort-Object Count -Descending
+}
+'''
+
+[pattern.test]
+python = '''
+assert dict(contar_caracteres("banana")) == {"b": 1, "a": 3, "n": 2} and contar_vogais("Hello World") == 3 and contar_vogais("AEIOU xyz") == 5
+'''
+javascript = '''
+if (contarCaracteres("banana").get("a") !== 3 || contarVogais("Hello World") !== 3 || contarVogais("Ação") !== 3) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.merge_dicts"
+title = "Mesclar dicionários/objetos (raso e profundo)"
+keywords = "mesclar merge combinar dicionarios objetos mapas deep merge sobrescrever configuracao"
+require = ["mesclar", "merge", "combinar"]
+tags = ["collections"]
+
+[pattern.code]
+python = '''
+def mesclar(*dicts: dict) -> dict:
+    """Mescla raso: os da direita vencem (Python 3.9+: a | b)."""
+    saida: dict = {}
+    for d in dicts:
+        saida |= d
+    return saida
+
+
+def mesclar_profundo(base: dict, extra: dict) -> dict:
+    """Mescla recursiva sem alterar as entradas."""
+    saida = dict(base)
+    for k, v in extra.items():
+        if isinstance(v, dict) and isinstance(saida.get(k), dict):
+            saida[k] = mesclar_profundo(saida[k], v)
+        else:
+            saida[k] = v
+    return saida
+'''
+javascript = '''
+const mesclar = (...objs) => Object.assign({}, ...objs);
+
+function mesclarProfundo(base, extra) {
+  const saida = { ...base };
+  for (const [k, v] of Object.entries(extra)) {
+    const ehObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+    saida[k] = ehObj(v) && ehObj(saida[k]) ? mesclarProfundo(saida[k], v) : v;
+  }
+  return saida;
+}
+'''
+go = '''
+import "maps"
+
+func mesclar[K comparable, V any](mapas ...map[K]V) map[K]V {
+	saida := map[K]V{}
+	for _, m := range mapas {
+		maps.Copy(saida, m)
+	}
+	return saida
+}
+'''
+powershell = '''
+function Merge-Hashtable {
+    param([hashtable]$Base, [hashtable]$Extra)
+    $saida = $Base.Clone()
+    foreach ($k in $Extra.Keys) {
+        if ($saida[$k] -is [hashtable] -and $Extra[$k] -is [hashtable]) { $saida[$k] = Merge-Hashtable $saida[$k] $Extra[$k] }
+        else { $saida[$k] = $Extra[$k] }
+    }
+    $saida
+}
+'''
+
+[pattern.test]
+python = '''
+assert mesclar({"a": 1}, {"a": 2, "b": 3}) == {"a": 2, "b": 3}
+assert mesclar_profundo({"db": {"host": "x", "port": 1}}, {"db": {"port": 2}}) == {"db": {"host": "x", "port": 2}}
+'''
+javascript = '''
+if (mesclarProfundo({ db: { host: "x", port: 1 } }, { db: { port: 2 } }).db.host !== "x") throw new Error("falhou");
+'''
+powershell = '''
+$r = Merge-Hashtable @{ db = @{ host = 'x'; port = 1 } } @{ db = @{ port = 2 } }
+if ($r.db.host -ne 'x' -or $r.db.port -ne 2) { throw 'falhou' }
+'''

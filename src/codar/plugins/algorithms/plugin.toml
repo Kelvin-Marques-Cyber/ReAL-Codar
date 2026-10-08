@@ -1,0 +1,4 @@
+[plugin]
+name = "algorithms"
+version = "1.0.0"
+description = "Algoritmos canônicos: busca, ordenação, grafos, programação dinâmica, strings, matemática"

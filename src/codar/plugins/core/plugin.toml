@@ -1,0 +1,4 @@
+[plugin]
+name = "core"
+version = "1.0.0"
+description = "Regras de auditoria multi-linguagem e diretrizes base (skills) por linguagem"

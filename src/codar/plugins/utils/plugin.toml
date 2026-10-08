@@ -1,0 +1,4 @@
+[plugin]
+name = "utils"
+version = "1.0.0"
+description = "Utilidades do dia a dia: coleções, texto, datas, números, identificadores, codificação"

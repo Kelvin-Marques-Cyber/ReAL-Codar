@@ -1,0 +1,127 @@
+# Skills: diretrizes curtas injetadas no prompt do SLM. "<lang>.base" entra sempre para a linguagem;
+# as demais entram quando os gatilhos (triggers) aparecem na intenção. Escritas em inglês de propósito:
+# modelos pequenos seguem instruções em inglês com mais consistência; o código pode ter nomes em PT.
+
+[[skill]]
+id = "python.base"
+langs = ["python"]
+guidance = ["Use type hints and f-strings.", "Use context managers (with) for files and connections.",
+            "Raise specific exceptions; never use bare except."]
+
+[[skill]]
+id = "javascript.base"
+langs = ["javascript"]
+guidance = ["Use modern ES modules, const/let and async/await.", "Use === and handle errors with try/catch."]
+
+[[skill]]
+id = "typescript.base"
+langs = ["typescript"]
+guidance = ["Use explicit types for function parameters and return values.", "Avoid any; prefer unknown and narrowing."]
+
+[[skill]]
+id = "go.base"
+langs = ["go"]
+guidance = ["Return errors instead of panicking and wrap them with fmt.Errorf(\"...: %w\", err).",
+            "Use the standard library; keep functions small."]
+
+[[skill]]
+id = "rust.base"
+langs = ["rust"]
+guidance = ["Return Result and propagate errors with ?; avoid unwrap.", "Prefer borrowing (&T) over cloning."]
+
+[[skill]]
+id = "java.base"
+langs = ["java"]
+guidance = ["Use try-with-resources for closeable objects.", "Prefer immutable records and final fields."]
+
+[[skill]]
+id = "csharp.base"
+langs = ["csharp"]
+guidance = ["Use async/await end to end; never block with .Result.", "Use using declarations for IDisposable."]
+
+[[skill]]
+id = "c.base"
+langs = ["c"]
+guidance = ["Check every malloc/fopen return value and free every allocation.", "Use snprintf/fgets, never gets/strcpy."]
+
+[[skill]]
+id = "cpp.base"
+langs = ["cpp"]
+guidance = ["Use RAII: std::unique_ptr, std::vector, std::string; no raw new/delete.", "Pass large objects by const reference."]
+
+[[skill]]
+id = "bash.base"
+langs = ["bash"]
+guidance = ["Start scripts with set -euo pipefail.", "Always quote variables: \"$var\"."]
+
+[[skill]]
+id = "powershell.base"
+langs = ["powershell"]
+guidance = ["Use approved Verb-Noun names and [CmdletBinding()] advanced functions.",
+            "Use Write-Output for data; avoid Write-Host and aliases in scripts.",
+            "Set $ErrorActionPreference = 'Stop' and use try/catch."]
+
+[[skill]]
+id = "lua.base"
+langs = ["lua"]
+guidance = ["Declare variables with local.", "Use table.concat to build strings in loops."]
+
+[[skill]]
+id = "php.base"
+langs = ["php"]
+guidance = ["Use declare(strict_types=1) and typed parameters.", "Use PDO prepared statements for SQL."]
+
+[[skill]]
+id = "ruby.base"
+langs = ["ruby"]
+guidance = ["Prefer Enumerable methods (map, select, each_with_object).", "Use frozen string literals."]
+
+[[skill]]
+id = "sql.base"
+langs = ["sql"]
+guidance = ["Name the columns explicitly; avoid SELECT *.", "Every UPDATE/DELETE needs a WHERE clause."]
+
+[[skill]]
+id = "security.sql"
+triggers = "sql query consulta banco database select insert update delete postgres mysql sqlite"
+guidance = ["Always use parameterized queries; never build SQL with string concatenation or interpolation."]
+
+[[skill]]
+id = "security.secrets"
+triggers = "senha password token api key secret credencial credential auth login"
+guidance = ["Read secrets from environment variables; never hardcode them.",
+            "Hash passwords with a slow KDF (argon2, bcrypt or scrypt)."]
+
+[[skill]]
+id = "reliability.http"
+triggers = "http https api rest request requisicao get post url endpoint fetch download baixar webhook"
+guidance = ["Set an explicit timeout on every HTTP call and check the response status.",
+            "Retry transient failures with exponential backoff."]
+
+[[skill]]
+id = "reliability.files"
+triggers = "arquivo file ler read escrever write csv json log diretorio pasta folder"
+guidance = ["Stream large files line by line instead of loading them fully into memory.",
+            "Use UTF-8 explicitly and handle missing files."]
+
+[[skill]]
+id = "performance.loops"
+triggers = "loop laco lista list array milhoes millions grande large performance desempenho rapido fast otimizar optimize"
+guidance = ["Avoid quadratic work inside loops; use sets/maps for lookups.", "Build strings with a builder/join."]
+
+[[skill]]
+id = "concurrency.limits"
+triggers = "paralelo parallel concorrente concurrent thread async worker pool goroutine fila queue"
+guidance = ["Bound concurrency with a pool or semaphore.", "Propagate cancellation and timeouts."]
+
+[[skill]]
+id = "cli.ux"
+triggers = "cli terminal comando command argumento argument flag script ferramenta tool"
+guidance = ["Parse arguments with the standard argument parser and print usage on error.",
+            "Exit with non-zero status on failure and write errors to stderr."]
+
+[[skill]]
+id = "testing.style"
+triggers = "teste test testes tests unitario unit pytest jest junit mock"
+guidance = ["Use the Arrange-Act-Assert structure with one behavior per test.",
+            "Name tests after the behavior they check."]

@@ -1,0 +1,353 @@
+/* Codar Studio — paleta "mission control" (fundo #05040A, âmbar, molduras laranja, rótulos vermelhos, dados menta) */
+
+Screen {
+    background: #05040A;
+    color: #f0b32a;
+    scrollbar-color: #3a2c0a;
+    scrollbar-color-hover: #7a5a14;
+    scrollbar-background: #0a0805;
+    scrollbar-size-vertical: 1;
+}
+
+#workspace {
+    height: 1fr;
+}
+
+#left {
+    width: 32;
+}
+
+#center {
+    width: 1fr;
+}
+
+#right {
+    width: 38;
+}
+
+#explorer, #radar, #feed, #editors, #panel, #last-card, #telemetry, #history, #intent-bar {
+    border: round #F26500;
+    border-title-color: #FF4747;
+    border-title-style: bold;
+    border-title-background: #05040A;
+    border-subtitle-color: #6b551f;
+    background: #05040A;
+}
+
+#explorer:focus-within, #editors:focus-within, #panel:focus-within, #intent-bar:focus-within {
+    border: round #47FFA9;
+}
+
+#explorer {
+    height: 1fr;
+    color: #54ff8a;
+}
+
+#radar {
+    height: 11;
+}
+
+#feed {
+    height: 14;
+    padding: 0 1;
+}
+
+#pills-bar {
+    height: 1;
+    padding: 0 1;
+}
+
+#pills {
+    width: 1fr;
+}
+
+#lang-pill {
+    width: auto;
+}
+
+#editors {
+    height: 1fr;
+}
+
+#panel {
+    height: 14;
+}
+
+#hud-title {
+    color: #47FFA9;
+    text-style: bold;
+    padding: 1 1 0 1;
+    height: 4;
+}
+
+#hud-meta {
+    height: 4;
+    padding: 0 1;
+}
+
+#last-card {
+    height: 10;
+    padding: 0 1;
+}
+
+#telemetry {
+    height: 11;
+    padding: 0 1;
+}
+
+#history {
+    height: 1fr;
+}
+
+#intent-bar {
+    height: 3;
+}
+
+#intent-label {
+    width: 13;
+    color: #FF4747;
+    text-style: bold;
+    padding: 0 1;
+    content-align: left middle;
+}
+
+#status {
+    height: 1;
+    background: #0B0915;
+}
+
+Input {
+    background: #05040A;
+    color: #47FFA9;
+    border: none;
+    height: 1;
+    padding: 0 1;
+}
+
+Input:focus {
+    border: none;
+    background: #0F0C1C;
+}
+
+Input > .input--placeholder {
+    color: #6b551f;
+}
+
+#term-log, #output {
+    height: 1fr;
+    padding: 0 1;
+    background: #05040A;
+}
+
+#term-input {
+    dock: bottom;
+}
+
+DirectoryTree {
+    background: #05040A;
+}
+
+DirectoryTree > .directory-tree--folder {
+    color: #f0b32a;
+    text-style: bold;
+}
+
+DirectoryTree > .directory-tree--file {
+    color: #54ff8a;
+}
+
+DataTable {
+    background: #05040A;
+    color: #54ff8a;
+}
+
+DataTable > .datatable--header {
+    background: #0F0C1C;
+    color: #6b551f;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #3a2c0a;
+    color: #47FFA9;
+}
+
+Tabs {
+    background: #05040A;
+}
+
+Tab {
+    color: #6b551f;
+}
+
+Tab.-active {
+    color: #FF4747;
+    text-style: bold;
+}
+
+Tab:hover {
+    color: #f0b32a;
+}
+
+Underline > .underline--bar {
+    color: #F26500;
+    background: #0F0C1C;
+}
+
+ListView {
+    background: #05040A;
+}
+
+ListItem {
+    background: #05040A;
+    padding: 0 1;
+}
+
+ListItem.-highlight, ListView > ListItem.-highlight {
+    background: #0F0C1C;
+}
+
+#advice-list > ListItem {
+    border-bottom: dashed #7a5a14;
+}
+
+TextArea {
+    background: #05040A;
+    border: none;
+}
+
+Footer {
+    background: #0B0915;
+    color: #f0b32a;
+}
+
+FooterKey .footer-key--key {
+    color: #47FFA9;
+    background: #0F0C1C;
+}
+
+FooterKey .footer-key--description {
+    color: #f0b32a;
+}
+
+AdviceScreen, PromptScreen {
+    align: center middle;
+    background: rgba(5, 4, 10, 0.75);
+}
+
+#advice-card {
+    width: 96;
+    max-width: 95%;
+    height: auto;
+    max-height: 85%;
+    border: round #F26500;
+    border-title-color: #FF4747;
+    background: #05040A;
+    padding: 1 2;
+}
+
+#advice-title {
+    color: #FF4747;
+    text-style: bold;
+}
+
+#advice-reason {
+    color: #f0b32a;
+    margin: 1 0;
+}
+
+#advice-options {
+    height: auto;
+    max-height: 18;
+}
+
+.advice-plan {
+    border-left: thick #7a5a14;
+    padding: 0 1;
+    margin: 0 0 1 0;
+}
+
+#advice-buttons {
+    height: 3;
+    align: right middle;
+}
+
+Button {
+    background: #05040A;
+    min-width: 12;
+    margin: 0 1;
+}
+
+Button.accept {
+    color: #47FFA9;
+    border: round #47FFA9;
+}
+
+Button.accept:hover {
+    background: #0F0C1C;
+}
+
+Button.reject {
+    color: #FF4747;
+    border: round #FF4747;
+}
+
+#prompt-card {
+    width: 70;
+    height: 7;
+    border: round #F26500;
+    background: #05040A;
+    padding: 1 2;
+}
+
+#prompt-title {
+    color: #FF4747;
+    text-style: bold;
+}
+
+#prompt-input {
+    border: round #7a5a14;
+    height: 3;
+}
+
+Toast {
+    background: #0B0915;
+    color: #f0b32a;
+    border-left: outer #F26500;
+}
+
+Toast.-error {
+    border-left: outer #FF4747;
+}
+
+/* ---------------------------------------------------------------- ajuda (F1) */
+HelpScreen {
+    align: center middle;
+    background: #05040A 70%;
+}
+
+#help-card {
+    width: 92;
+    max-width: 95%;
+    height: auto;
+    max-height: 90%;
+    border: round #F26500;
+    border-title-color: #FF4747;
+    border-title-style: bold;
+    border-subtitle-color: #6b551f;
+    background: #05040A;
+    padding: 1 2;
+}
+
+#help-body {
+    height: auto;
+    max-height: 100%;
+}
+
+.help-group {
+    margin-top: 1;
+}
+
+.help-items {
+    color: #f0b32a;
+}

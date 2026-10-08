@@ -1,0 +1,738 @@
+# Busca e ordenação: implementações canônicas, sem efeitos colaterais, com complexidade documentada.
+
+[[pattern]]
+id = "algo.binary_search"
+title = "Busca binária"
+keywords = "busca binaria binary search pesquisa lista ordenada indice log n bisect"
+require = ["binaria", "binary", "bisect"]
+tags = ["algorithm", "search"]
+
+[pattern.code]
+python = '''
+def busca_binaria(itens: list, alvo) -> int:
+    """Índice de `alvo` em `itens` (ordenada) ou -1. O(log n)."""
+    lo, hi = 0, len(itens) - 1
+    while lo <= hi:
+        meio = (lo + hi) // 2
+        if itens[meio] == alvo:
+            return meio
+        if itens[meio] < alvo:
+            lo = meio + 1
+        else:
+            hi = meio - 1
+    return -1
+'''
+javascript = '''
+/** Índice de `alvo` em `itens` (ordenado) ou -1. O(log n). */
+function buscaBinaria(itens, alvo) {
+  let lo = 0;
+  let hi = itens.length - 1;
+  while (lo <= hi) {
+    const meio = (lo + hi) >>> 1;
+    if (itens[meio] === alvo) return meio;
+    if (itens[meio] < alvo) lo = meio + 1;
+    else hi = meio - 1;
+  }
+  return -1;
+}
+'''
+typescript = '''
+/** Índice de `alvo` em `itens` (ordenado) ou -1. O(log n). */
+export function buscaBinaria<T>(itens: readonly T[], alvo: T): number {
+  let lo = 0;
+  let hi = itens.length - 1;
+  while (lo <= hi) {
+    const meio = (lo + hi) >>> 1;
+    if (itens[meio] === alvo) return meio;
+    if (itens[meio] < alvo) lo = meio + 1;
+    else hi = meio - 1;
+  }
+  return -1;
+}
+'''
+go = '''
+// buscaBinaria retorna o índice de alvo em itens (ordenado) ou -1. O(log n).
+// Na biblioteca padrão: slices.BinarySearch(itens, alvo).
+func buscaBinaria(itens []int, alvo int) int {
+	lo, hi := 0, len(itens)-1
+	for lo <= hi {
+		meio := lo + (hi-lo)/2
+		switch {
+		case itens[meio] == alvo:
+			return meio
+		case itens[meio] < alvo:
+			lo = meio + 1
+		default:
+			hi = meio - 1
+		}
+	}
+	return -1
+}
+'''
+rust = '''
+/// Índice de `alvo` em `itens` (ordenado). Na std: `itens.binary_search(&alvo).ok()`.
+fn busca_binaria<T: Ord>(itens: &[T], alvo: &T) -> Option<usize> {
+    let (mut lo, mut hi) = (0usize, itens.len());
+    while lo < hi {
+        let meio = lo + (hi - lo) / 2;
+        match itens[meio].cmp(alvo) {
+            std::cmp::Ordering::Equal => return Some(meio),
+            std::cmp::Ordering::Less => lo = meio + 1,
+            std::cmp::Ordering::Greater => hi = meio,
+        }
+    }
+    None
+}
+'''
+java = '''
+/** Índice de alvo em itens (ordenado) ou -1. Na JDK: Arrays.binarySearch. */
+static int buscaBinaria(int[] itens, int alvo) {
+    int lo = 0;
+    int hi = itens.length - 1;
+    while (lo <= hi) {
+        int meio = (lo + hi) >>> 1;
+        if (itens[meio] == alvo) {
+            return meio;
+        }
+        if (itens[meio] < alvo) {
+            lo = meio + 1;
+        } else {
+            hi = meio - 1;
+        }
+    }
+    return -1;
+}
+'''
+csharp = '''
+/// <summary>Índice de alvo em itens (ordenado) ou -1. Na BCL: Array.BinarySearch.</summary>
+static int BuscaBinaria(int[] itens, int alvo)
+{
+    int lo = 0, hi = itens.Length - 1;
+    while (lo <= hi)
+    {
+        int meio = lo + (hi - lo) / 2;
+        if (itens[meio] == alvo) return meio;
+        if (itens[meio] < alvo) lo = meio + 1;
+        else hi = meio - 1;
+    }
+    return -1;
+}
+'''
+c = '''
+/* Índice de alvo em itens[0..n) (ordenado) ou -1. O(log n). */
+long busca_binaria(const int *itens, size_t n, int alvo) {
+    size_t lo = 0, hi = n;
+    while (lo < hi) {
+        size_t meio = lo + (hi - lo) / 2;
+        if (itens[meio] == alvo) {
+            return (long)meio;
+        }
+        if (itens[meio] < alvo) {
+            lo = meio + 1;
+        } else {
+            hi = meio;
+        }
+    }
+    return -1;
+}
+'''
+cpp = '''
+#include <algorithm>
+#include <vector>
+
+// Índice de alvo em itens (ordenado) ou -1, usando std::lower_bound. O(log n).
+long busca_binaria(const std::vector<int>& itens, int alvo) {
+    auto it = std::lower_bound(itens.begin(), itens.end(), alvo);
+    return (it != itens.end() && *it == alvo) ? static_cast<long>(it - itens.begin()) : -1;
+}
+'''
+powershell = '''
+function Find-BinarySearch {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int[]]$Itens,
+        [Parameter(Mandatory)][int]$Alvo
+    )
+    # Na .NET: [Array]::BinarySearch($Itens, $Alvo)
+    $lo = 0
+    $hi = $Itens.Count - 1
+    while ($lo -le $hi) {
+        $meio = [math]::Floor(($lo + $hi) / 2)
+        if ($Itens[$meio] -eq $Alvo) { return $meio }
+        if ($Itens[$meio] -lt $Alvo) { $lo = $meio + 1 } else { $hi = $meio - 1 }
+    }
+    return -1
+}
+'''
+lua = '''
+-- Índice (1-based) de alvo em itens (ordenado) ou nil. O(log n).
+local function busca_binaria(itens, alvo)
+  local lo, hi = 1, #itens
+  while lo <= hi do
+    local meio = (lo + hi) // 2
+    if itens[meio] == alvo then
+      return meio
+    elseif itens[meio] < alvo then
+      lo = meio + 1
+    else
+      hi = meio - 1
+    end
+  end
+  return nil
+end
+'''
+
+[pattern.test]
+powershell = '''
+if ((Find-BinarySearch -Itens 1,3,5,7 -Alvo 5) -ne 2 -or (Find-BinarySearch -Itens 1,3 -Alvo 4) -ne -1) { throw 'falhou' }
+'''
+python = '''
+xs = [1, 3, 5, 7, 9]
+assert [busca_binaria(xs, x) for x in xs] == [0, 1, 2, 3, 4]
+assert busca_binaria(xs, 4) == -1 and busca_binaria([], 1) == -1
+'''
+javascript = '''
+const xs = [1, 3, 5, 7, 9];
+if (xs.map((x) => buscaBinaria(xs, x)).join() !== "0,1,2,3,4" || buscaBinaria(xs, 4) !== -1) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.quicksort"
+title = "Quicksort"
+keywords = "quicksort quick sort ordenar ordenacao rapida particao pivo"
+require = ["quicksort", "quick"]
+tags = ["algorithm", "sort"]
+
+[pattern.code]
+python = '''
+import random
+
+
+def quicksort(itens: list) -> list:
+    """Nova lista ordenada. O(n log n) em média; pivô aleatório evita o pior caso em entradas ordenadas."""
+    if len(itens) <= 1:
+        return list(itens)
+    pivo = random.choice(itens)
+    menores = [x for x in itens if x < pivo]
+    iguais = [x for x in itens if x == pivo]
+    maiores = [x for x in itens if x > pivo]
+    return quicksort(menores) + iguais + quicksort(maiores)
+'''
+javascript = '''
+/** Ordena no lugar (Lomuto com pivô do meio). Para uso geral prefira arr.sort((a, b) => a - b). */
+function quicksort(arr, lo = 0, hi = arr.length - 1) {
+  while (lo < hi) {
+    const p = particionar(arr, lo, hi);
+    // recursão na menor metade: pilha O(log n)
+    if (p - lo < hi - p) {
+      quicksort(arr, lo, p - 1);
+      lo = p + 1;
+    } else {
+      quicksort(arr, p + 1, hi);
+      hi = p - 1;
+    }
+  }
+  return arr;
+}
+
+function particionar(arr, lo, hi) {
+  const meio = (lo + hi) >>> 1;
+  [arr[meio], arr[hi]] = [arr[hi], arr[meio]];
+  const pivo = arr[hi];
+  let i = lo;
+  for (let j = lo; j < hi; j++) {
+    if (arr[j] < pivo) {
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      i++;
+    }
+  }
+  [arr[i], arr[hi]] = [arr[hi], arr[i]];
+  return i;
+}
+'''
+go = '''
+// quicksort ordena no lugar. Para uso geral prefira slices.Sort(itens).
+func quicksort(itens []int) {
+	if len(itens) < 2 {
+		return
+	}
+	pivo := itens[len(itens)/2]
+	i, j := 0, len(itens)-1
+	for i <= j {
+		for itens[i] < pivo {
+			i++
+		}
+		for itens[j] > pivo {
+			j--
+		}
+		if i <= j {
+			itens[i], itens[j] = itens[j], itens[i]
+			i++
+			j--
+		}
+	}
+	quicksort(itens[:j+1])
+	quicksort(itens[i:])
+}
+'''
+rust = '''
+/// Ordena no lugar (Hoare). Para uso geral prefira `itens.sort_unstable()`.
+fn quicksort<T: PartialOrd + Copy>(itens: &mut [T]) {
+    if itens.len() < 2 {
+        return;
+    }
+    let pivo = itens[itens.len() / 2];
+    let (mut i, mut j) = (0usize, itens.len() - 1);
+    loop {
+        while itens[i] < pivo {
+            i += 1;
+        }
+        while itens[j] > pivo {
+            j -= 1;
+        }
+        if i >= j {
+            break;
+        }
+        itens.swap(i, j);
+        i += 1;
+        j -= 1;
+    }
+    let (esq, dir) = itens.split_at_mut(j + 1);
+    quicksort(esq);
+    quicksort(dir);
+}
+'''
+java = '''
+/** Ordena no lugar. Para uso geral prefira Arrays.sort(itens). */
+static void quicksort(int[] a, int lo, int hi) {
+    while (lo < hi) {
+        int pivo = a[lo + (hi - lo) / 2];
+        int i = lo;
+        int j = hi;
+        while (i <= j) {
+            while (a[i] < pivo) i++;
+            while (a[j] > pivo) j--;
+            if (i <= j) {
+                int t = a[i];
+                a[i] = a[j];
+                a[j] = t;
+                i++;
+                j--;
+            }
+        }
+        if (j - lo < hi - i) {
+            quicksort(a, lo, j);
+            lo = i;
+        } else {
+            quicksort(a, i, hi);
+            hi = j;
+        }
+    }
+}
+'''
+c = '''
+/* Ordena itens[lo..hi] no lugar. Para uso geral prefira qsort() da <stdlib.h>. */
+void quicksort(int *a, long lo, long hi) {
+    while (lo < hi) {
+        int pivo = a[lo + (hi - lo) / 2];
+        long i = lo, j = hi;
+        while (i <= j) {
+            while (a[i] < pivo) i++;
+            while (a[j] > pivo) j--;
+            if (i <= j) {
+                int t = a[i];
+                a[i] = a[j];
+                a[j] = t;
+                i++;
+                j--;
+            }
+        }
+        if (j - lo < hi - i) {
+            quicksort(a, lo, j);
+            lo = i;
+        } else {
+            quicksort(a, i, hi);
+            hi = j;
+        }
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+import random
+xs = [random.randint(-50, 50) for _ in range(300)]
+assert quicksort(xs) == sorted(xs) and quicksort([]) == []
+'''
+javascript = '''
+const xs = Array.from({ length: 300 }, () => Math.floor(Math.random() * 100) - 50);
+const esperado = [...xs].sort((a, b) => a - b);
+if (quicksort([...xs]).join() !== esperado.join() || quicksort([]).length !== 0) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.mergesort"
+title = "Merge sort"
+keywords = "merge sort mergesort ordenar ordenacao intercalacao estavel"
+require = ["mergesort", "merge"]
+tags = ["algorithm", "sort"]
+
+[pattern.code]
+python = '''
+def merge_sort(itens: list) -> list:
+    """Nova lista ordenada, estável. O(n log n) tempo, O(n) memória."""
+    if len(itens) <= 1:
+        return list(itens)
+    meio = len(itens) // 2
+    esq, dir_ = merge_sort(itens[:meio]), merge_sort(itens[meio:])
+    saida, i, j = [], 0, 0
+    while i < len(esq) and j < len(dir_):
+        if esq[i] <= dir_[j]:
+            saida.append(esq[i])
+            i += 1
+        else:
+            saida.append(dir_[j])
+            j += 1
+    saida.extend(esq[i:])
+    saida.extend(dir_[j:])
+    return saida
+'''
+javascript = '''
+/** Nova lista ordenada, estável. O(n log n). */
+function mergeSort(itens) {
+  if (itens.length <= 1) return [...itens];
+  const meio = itens.length >>> 1;
+  const esq = mergeSort(itens.slice(0, meio));
+  const dir = mergeSort(itens.slice(meio));
+  const saida = [];
+  let i = 0;
+  let j = 0;
+  while (i < esq.length && j < dir.length) {
+    saida.push(esq[i] <= dir[j] ? esq[i++] : dir[j++]);
+  }
+  return saida.concat(esq.slice(i), dir.slice(j));
+}
+'''
+go = '''
+// mergeSort devolve uma nova fatia ordenada (estável). O(n log n).
+func mergeSort(itens []int) []int {
+	if len(itens) <= 1 {
+		return append([]int(nil), itens...)
+	}
+	meio := len(itens) / 2
+	esq, dir := mergeSort(itens[:meio]), mergeSort(itens[meio:])
+	saida := make([]int, 0, len(itens))
+	i, j := 0, 0
+	for i < len(esq) && j < len(dir) {
+		if esq[i] <= dir[j] {
+			saida = append(saida, esq[i])
+			i++
+		} else {
+			saida = append(saida, dir[j])
+			j++
+		}
+	}
+	saida = append(saida, esq[i:]...)
+	return append(saida, dir[j:]...)
+}
+'''
+rust = '''
+/// Nova Vec ordenada (estável). Na std, `sort()` já é um merge sort adaptativo.
+fn merge_sort<T: PartialOrd + Clone>(itens: &[T]) -> Vec<T> {
+    if itens.len() <= 1 {
+        return itens.to_vec();
+    }
+    let meio = itens.len() / 2;
+    let (esq, dir) = (merge_sort(&itens[..meio]), merge_sort(&itens[meio..]));
+    let mut saida = Vec::with_capacity(itens.len());
+    let (mut i, mut j) = (0, 0);
+    while i < esq.len() && j < dir.len() {
+        if esq[i] <= dir[j] {
+            saida.push(esq[i].clone());
+            i += 1;
+        } else {
+            saida.push(dir[j].clone());
+            j += 1;
+        }
+    }
+    saida.extend_from_slice(&esq[i..]);
+    saida.extend_from_slice(&dir[j..]);
+    saida
+}
+'''
+java = '''
+/** Nova lista ordenada (estável). Na JDK: list.sort(null) usa TimSort. */
+static int[] mergeSort(int[] a) {
+    if (a.length <= 1) {
+        return a.clone();
+    }
+    int meio = a.length / 2;
+    int[] esq = mergeSort(java.util.Arrays.copyOfRange(a, 0, meio));
+    int[] dir = mergeSort(java.util.Arrays.copyOfRange(a, meio, a.length));
+    int[] saida = new int[a.length];
+    int i = 0, j = 0, k = 0;
+    while (i < esq.length && j < dir.length) {
+        saida[k++] = esq[i] <= dir[j] ? esq[i++] : dir[j++];
+    }
+    while (i < esq.length) saida[k++] = esq[i++];
+    while (j < dir.length) saida[k++] = dir[j++];
+    return saida;
+}
+'''
+
+[pattern.test]
+python = '''
+import random
+xs = [random.randint(-50, 50) for _ in range(300)]
+assert merge_sort(xs) == sorted(xs) and merge_sort([1]) == [1]
+'''
+javascript = '''
+const xs = Array.from({ length: 300 }, () => Math.floor(Math.random() * 100) - 50);
+if (mergeSort(xs).join() !== [...xs].sort((a, b) => a - b).join()) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.insertion_sort"
+title = "Insertion sort"
+keywords = "insertion sort insercao ordenar ordenacao pequena quase ordenada"
+require = ["insertion", "insercao"]
+tags = ["algorithm", "sort", "educational"]
+
+[pattern.code]
+python = '''
+def insertion_sort(itens: list) -> list:
+    """Nova lista ordenada. O(n²) no pior caso, O(n) se já quase ordenada."""
+    saida = list(itens)
+    for i in range(1, len(saida)):
+        atual, j = saida[i], i - 1
+        while j >= 0 and saida[j] > atual:
+            saida[j + 1] = saida[j]
+            j -= 1
+        saida[j + 1] = atual
+    return saida
+'''
+javascript = '''
+function insertionSort(itens) {
+  const a = [...itens];
+  for (let i = 1; i < a.length; i++) {
+    const atual = a[i];
+    let j = i - 1;
+    while (j >= 0 && a[j] > atual) {
+      a[j + 1] = a[j];
+      j--;
+    }
+    a[j + 1] = atual;
+  }
+  return a;
+}
+'''
+c = '''
+void insertion_sort(int *a, size_t n) {
+    for (size_t i = 1; i < n; i++) {
+        int atual = a[i];
+        size_t j = i;
+        while (j > 0 && a[j - 1] > atual) {
+            a[j] = a[j - 1];
+            j--;
+        }
+        a[j] = atual;
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+assert insertion_sort([5, 2, 9, 1, 5]) == [1, 2, 5, 5, 9] and insertion_sort([]) == []
+'''
+javascript = '''
+if (insertionSort([5, 2, 9, 1, 5]).join() !== "1,2,5,5,9") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.bubble_sort"
+title = "Bubble sort (didático)"
+keywords = "bubble sort bolha ordenar ordenacao didatico"
+require = ["bubble", "bolha"]
+tags = ["algorithm", "sort", "educational"]
+
+[pattern.code]
+python = '''
+def bubble_sort(itens: list) -> list:
+    """Didático: O(n²). Em código real use sorted(itens)."""
+    a = list(itens)
+    for fim in range(len(a) - 1, 0, -1):
+        trocou = False
+        for i in range(fim):
+            if a[i] > a[i + 1]:
+                a[i], a[i + 1] = a[i + 1], a[i]
+                trocou = True
+        if not trocou:  # já ordenada: termina cedo
+            break
+    return a
+'''
+javascript = '''
+// Didático: O(n²). Em código real use [...itens].sort((a, b) => a - b).
+function bubbleSort(itens) {
+  const a = [...itens];
+  for (let fim = a.length - 1; fim > 0; fim--) {
+    let trocou = false;
+    for (let i = 0; i < fim; i++) {
+      if (a[i] > a[i + 1]) {
+        [a[i], a[i + 1]] = [a[i + 1], a[i]];
+        trocou = true;
+      }
+    }
+    if (!trocou) break;
+  }
+  return a;
+}
+'''
+c = '''
+/* Didático: O(n²). Em código real use qsort(). */
+void bubble_sort(int *a, size_t n) {
+    for (size_t fim = n; fim > 1; fim--) {
+        int trocou = 0;
+        for (size_t i = 0; i + 1 < fim; i++) {
+            if (a[i] > a[i + 1]) {
+                int t = a[i];
+                a[i] = a[i + 1];
+                a[i + 1] = t;
+                trocou = 1;
+            }
+        }
+        if (!trocou) {
+            break;
+        }
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+assert bubble_sort([3, 1, 2]) == [1, 2, 3] and bubble_sort([1, 2, 3]) == [1, 2, 3]
+'''
+javascript = '''
+if (bubbleSort([3, 1, 2]).join() !== "1,2,3") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.heapsort"
+title = "Heapsort"
+keywords = "heapsort heap sort ordenar ordenacao monte"
+require = ["heapsort"]
+tags = ["algorithm", "sort"]
+
+[pattern.code]
+python = '''
+import heapq
+
+
+def heapsort(itens: list) -> list:
+    """Nova lista ordenada. O(n log n), usando o heap mínimo da biblioteca padrão."""
+    heap = list(itens)
+    heapq.heapify(heap)
+    return [heapq.heappop(heap) for _ in range(len(heap))]
+'''
+c = '''
+static void descer(int *a, size_t n, size_t i) {
+    for (;;) {
+        size_t maior = i, e = 2 * i + 1, d = 2 * i + 2;
+        if (e < n && a[e] > a[maior]) maior = e;
+        if (d < n && a[d] > a[maior]) maior = d;
+        if (maior == i) return;
+        int t = a[i];
+        a[i] = a[maior];
+        a[maior] = t;
+        i = maior;
+    }
+}
+
+/* Ordena no lugar. O(n log n), memória O(1). */
+void heapsort(int *a, size_t n) {
+    for (size_t i = n / 2; i-- > 0;) {
+        descer(a, n, i);
+    }
+    for (size_t fim = n; fim-- > 1;) {
+        int t = a[0];
+        a[0] = a[fim];
+        a[fim] = t;
+        descer(a, fim, 0);
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+assert heapsort([4, 1, 3, 9, 7]) == [1, 3, 4, 7, 9]
+'''
+
+[[pattern]]
+id = "algo.counting_sort"
+title = "Counting sort"
+keywords = "counting sort contagem ordenar ordenacao inteiros intervalo pequeno linear"
+require = ["counting", "contagem"]
+tags = ["algorithm", "sort"]
+
+[pattern.code]
+python = '''
+def counting_sort(itens: list[int]) -> list[int]:
+    """O(n + k) para inteiros num intervalo pequeno k = max - min."""
+    if not itens:
+        return []
+    menor, maior = min(itens), max(itens)
+    contagem = [0] * (maior - menor + 1)
+    for x in itens:
+        contagem[x - menor] += 1
+    saida = []
+    for deslocamento, vezes in enumerate(contagem):
+        saida.extend([deslocamento + menor] * vezes)
+    return saida
+'''
+
+[pattern.test]
+python = '''
+assert counting_sort([3, -1, 2, 3, 0]) == [-1, 0, 2, 3, 3] and counting_sort([]) == []
+'''
+
+[[pattern]]
+id = "algo.top_k"
+title = "Top K maiores elementos"
+keywords = "top k n maiores menores ranking heap elementos mais frequentes"
+require = ["top", "maiores", "ranking"]
+tags = ["algorithm", "heap"]
+
+[pattern.code]
+python = '''
+import heapq
+from collections import Counter
+
+
+def top_k(itens, k: int, chave=None) -> list:
+    """Os k maiores em O(n log k), sem ordenar tudo."""
+    return heapq.nlargest(k, itens, key=chave)
+
+
+def mais_frequentes(itens, k: int) -> list[tuple]:
+    """[(valor, contagem)] dos k mais frequentes."""
+    return Counter(itens).most_common(k)
+'''
+javascript = '''
+/** Os k maiores (para k pequeno basta ordenar uma cópia). */
+function topK(itens, k, chave = (x) => x) {
+  return [...itens].sort((a, b) => chave(b) - chave(a)).slice(0, k);
+}
+
+function maisFrequentes(itens, k) {
+  const contagem = new Map();
+  for (const x of itens) contagem.set(x, (contagem.get(x) ?? 0) + 1);
+  return [...contagem.entries()].sort((a, b) => b[1] - a[1]).slice(0, k);
+}
+'''
+
+[pattern.test]
+python = '''
+assert top_k([5, 1, 9, 3], 2) == [9, 5] and mais_frequentes("aabbbc", 1) == [("b", 3)]
+'''
+javascript = '''
+if (topK([5, 1, 9, 3], 2).join() !== "9,5" || maisFrequentes([..."aabbbc"], 1)[0][0] !== "b") throw new Error("falhou");
+'''

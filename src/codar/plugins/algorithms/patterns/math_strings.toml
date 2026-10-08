@@ -1,0 +1,1374 @@
+# Matemática e strings: versões iterativas (sem estouro de pilha), seguras para Unicode e com entradas validadas.
+
+[[pattern]]
+id = "algo.fibonacci"
+title = "Fibonacci"
+keywords = "fibonacci fib sequencia numero n-esimo termo"
+require = ["fibonacci"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+def fibonacci(n: int) -> int:
+    """n-ésimo termo (fibonacci(0) = 0). O(n) tempo, O(1) memória; inteiros Python não estouram."""
+    if n < 0:
+        raise ValueError("n deve ser >= 0")
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+'''
+javascript = '''
+/** n-ésimo termo como BigInt (sem perder precisão acima de 2^53). */
+function fibonacci(n) {
+  if (!Number.isInteger(n) || n < 0) throw new RangeError("n deve ser inteiro >= 0");
+  let a = 0n;
+  let b = 1n;
+  for (let i = 0; i < n; i++) [a, b] = [b, a + b];
+  return a;
+}
+'''
+typescript = '''
+export function fibonacci(n: number): bigint {
+  if (!Number.isInteger(n) || n < 0) throw new RangeError("n deve ser inteiro >= 0");
+  let a = 0n;
+  let b = 1n;
+  for (let i = 0; i < n; i++) [a, b] = [b, a + b];
+  return a;
+}
+'''
+go = '''
+import "math/big"
+
+// fibonacci devolve o n-ésimo termo com precisão arbitrária.
+func fibonacci(n int) *big.Int {
+	a, b := big.NewInt(0), big.NewInt(1)
+	for i := 0; i < n; i++ {
+		a.Add(a, b)
+		a, b = b, a
+	}
+	return a
+}
+'''
+rust = '''
+/// n-ésimo termo; None se estourar u128 (n > 186).
+fn fibonacci(n: u32) -> Option<u128> {
+    let (mut a, mut b) = (0u128, 1u128);
+    for _ in 0..n {
+        let prox = a.checked_add(b)?;
+        a = b;
+        b = prox;
+    }
+    Some(a)
+}
+'''
+java = '''
+/** n-ésimo termo com precisão arbitrária. */
+static java.math.BigInteger fibonacci(int n) {
+    if (n < 0) {
+        throw new IllegalArgumentException("n deve ser >= 0");
+    }
+    java.math.BigInteger a = java.math.BigInteger.ZERO, b = java.math.BigInteger.ONE;
+    for (int i = 0; i < n; i++) {
+        java.math.BigInteger prox = a.add(b);
+        a = b;
+        b = prox;
+    }
+    return a;
+}
+'''
+csharp = '''
+static System.Numerics.BigInteger Fibonacci(int n)
+{
+    ArgumentOutOfRangeException.ThrowIfNegative(n);
+    System.Numerics.BigInteger a = 0, b = 1;
+    for (int i = 0; i < n; i++) (a, b) = (b, a + b);
+    return a;
+}
+'''
+c = '''
+#include <stdint.h>
+
+/* n-ésimo termo; válido até n = 93 (limite de uint64_t). */
+uint64_t fibonacci(unsigned n) {
+    uint64_t a = 0, b = 1;
+    for (unsigned i = 0; i < n; i++) {
+        uint64_t prox = a + b;
+        a = b;
+        b = prox;
+    }
+    return a;
+}
+'''
+powershell = '''
+function Get-Fibonacci {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidateRange(0, 100000)][int]$N)
+    $a = [bigint]0
+    $b = [bigint]1
+    for ($i = 0; $i -lt $N; $i++) {
+        $a, $b = $b, ($a + $b)
+    }
+    $a
+}
+'''
+bash = '''
+fibonacci() {
+  local n="$1" a=0 b=1 i prox
+  for (( i = 0; i < n; i++ )); do
+    prox=$(( a + b ))
+    a=$b
+    b=$prox
+  done
+  echo "$a"  # aritmética de 64 bits: válido até n = 92
+}
+'''
+lua = '''
+local function fibonacci(n)
+  local a, b = 0, 1
+  for _ = 1, n do
+    a, b = b, a + b
+  end
+  return a
+end
+'''
+
+[pattern.test]
+powershell = '''
+if ((Get-Fibonacci -N 90) -ne [bigint]::Parse('2880067194370816120')) { throw 'falhou' }
+'''
+python = '''
+assert [fibonacci(i) for i in range(8)] == [0, 1, 1, 2, 3, 5, 8, 13] and fibonacci(90) == 2880067194370816120
+'''
+javascript = '''
+if (fibonacci(90) !== 2880067194370816120n || fibonacci(7) !== 13n) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.factorial"
+title = "Fatorial"
+keywords = "fatorial factorial n! produto"
+require = ["fatorial", "factorial"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+import math
+
+
+def fatorial(n: int) -> int:
+    """n! (math.factorial é implementado em C e aceita inteiros grandes)."""
+    if n < 0:
+        raise ValueError("n deve ser >= 0")
+    return math.factorial(n)
+'''
+javascript = '''
+function fatorial(n) {
+  if (!Number.isInteger(n) || n < 0) throw new RangeError("n deve ser inteiro >= 0");
+  let r = 1n;
+  for (let i = 2n; i <= BigInt(n); i++) r *= i;
+  return r;
+}
+'''
+go = '''
+import "math/big"
+
+func fatorial(n int64) *big.Int {
+	return new(big.Int).MulRange(1, n)
+}
+'''
+rust = '''
+fn fatorial(n: u32) -> Option<u128> {
+    (1..=n as u128).try_fold(1u128, |acc, x| acc.checked_mul(x))
+}
+'''
+powershell = '''
+function Get-Fatorial {
+    param([Parameter(Mandatory)][ValidateRange(0, 10000)][int]$N)
+    $r = [bigint]1
+    for ($i = 2; $i -le $N; $i++) { $r *= $i }
+    $r
+}
+'''
+
+[pattern.test]
+powershell = '''
+if ((Get-Fatorial 20) -ne [bigint]::Parse('2432902008176640000')) { throw 'falhou' }
+'''
+python = '''
+assert fatorial(0) == 1 and fatorial(5) == 120 and fatorial(20) == 2432902008176640000
+'''
+javascript = '''
+if (fatorial(5) !== 120n || fatorial(0) !== 1n) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.is_prime"
+title = "Verificar número primo"
+keywords = "primo primos prime primalidade verificar numero divisores"
+require = ["primo", "prime", "primalidade"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+def eh_primo(n: int) -> bool:
+    """Divisão por tentativa com 6k ± 1. O(√n)."""
+    if n < 2:
+        return False
+    if n < 4:
+        return True
+    if n % 2 == 0 or n % 3 == 0:
+        return False
+    i = 5
+    while i * i <= n:
+        if n % i == 0 or n % (i + 2) == 0:
+            return False
+        i += 6
+    return True
+'''
+javascript = '''
+function ehPrimo(n) {
+  if (!Number.isInteger(n) || n < 2) return false;
+  if (n < 4) return true;
+  if (n % 2 === 0 || n % 3 === 0) return false;
+  for (let i = 5; i * i <= n; i += 6) {
+    if (n % i === 0 || n % (i + 2) === 0) return false;
+  }
+  return true;
+}
+'''
+typescript = '''
+export function ehPrimo(n: number): boolean {
+  if (!Number.isInteger(n) || n < 2) return false;
+  if (n < 4) return true;
+  if (n % 2 === 0 || n % 3 === 0) return false;
+  for (let i = 5; i * i <= n; i += 6) {
+    if (n % i === 0 || n % (i + 2) === 0) return false;
+  }
+  return true;
+}
+'''
+go = '''
+func ehPrimo(n int) bool {
+	if n < 2 {
+		return false
+	}
+	if n < 4 {
+		return true
+	}
+	if n%2 == 0 || n%3 == 0 {
+		return false
+	}
+	for i := 5; i*i <= n; i += 6 {
+		if n%i == 0 || n%(i+2) == 0 {
+			return false
+		}
+	}
+	return true
+}
+'''
+rust = '''
+fn eh_primo(n: u64) -> bool {
+    if n < 2 {
+        return false;
+    }
+    if n < 4 {
+        return true;
+    }
+    if n % 2 == 0 || n % 3 == 0 {
+        return false;
+    }
+    let mut i = 5u64;
+    while i * i <= n {
+        if n % i == 0 || n % (i + 2) == 0 {
+            return false;
+        }
+        i += 6;
+    }
+    true
+}
+'''
+java = '''
+static boolean ehPrimo(long n) {
+    if (n < 2) return false;
+    if (n < 4) return true;
+    if (n % 2 == 0 || n % 3 == 0) return false;
+    for (long i = 5; i * i <= n; i += 6) {
+        if (n % i == 0 || n % (i + 2) == 0) return false;
+    }
+    return true;
+}
+'''
+csharp = '''
+static bool EhPrimo(long n)
+{
+    if (n < 2) return false;
+    if (n < 4) return true;
+    if (n % 2 == 0 || n % 3 == 0) return false;
+    for (long i = 5; i * i <= n; i += 6)
+    {
+        if (n % i == 0 || n % (i + 2) == 0) return false;
+    }
+    return true;
+}
+'''
+c = '''
+#include <stdbool.h>
+
+bool eh_primo(long long n) {
+    if (n < 2) return false;
+    if (n < 4) return true;
+    if (n % 2 == 0 || n % 3 == 0) return false;
+    for (long long i = 5; i * i <= n; i += 6) {
+        if (n % i == 0 || n % (i + 2) == 0) return false;
+    }
+    return true;
+}
+'''
+powershell = '''
+function Test-Primo {
+    param([Parameter(Mandatory)][long]$N)
+    if ($N -lt 2) { return $false }
+    if ($N -lt 4) { return $true }
+    if ($N % 2 -eq 0 -or $N % 3 -eq 0) { return $false }
+    for ($i = 5; $i * $i -le $N; $i += 6) {
+        if ($N % $i -eq 0 -or $N % ($i + 2) -eq 0) { return $false }
+    }
+    return $true
+}
+'''
+lua = '''
+local function eh_primo(n)
+  if n < 2 then return false end
+  if n < 4 then return true end
+  if n % 2 == 0 or n % 3 == 0 then return false end
+  local i = 5
+  while i * i <= n do
+    if n % i == 0 or n % (i + 2) == 0 then return false end
+    i = i + 6
+  end
+  return true
+end
+'''
+
+[pattern.test]
+powershell = '''
+if (-not (Test-Primo 7919) -or (Test-Primo 91)) { throw 'falhou' }
+'''
+python = '''
+assert [n for n in range(30) if eh_primo(n)] == [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] and eh_primo(7919)
+assert not eh_primo(-7) and not eh_primo(91)
+'''
+javascript = '''
+const p = []; for (let n = 0; n < 30; n++) if (ehPrimo(n)) p.push(n);
+if (p.join() !== "2,3,5,7,11,13,17,19,23,29" || ehPrimo(91)) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.sieve"
+title = "Crivo de Eratóstenes (primos até N)"
+keywords = "crivo eratostenes sieve primos ate n lista de primos"
+require = ["crivo", "sieve", "eratostenes", "eratosthenes"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+def primos_ate(n: int) -> list[int]:
+    """Todos os primos <= n. O(n log log n)."""
+    if n < 2:
+        return []
+    eh = bytearray([1]) * (n + 1)
+    eh[0] = eh[1] = 0
+    for i in range(2, int(n ** 0.5) + 1):
+        if eh[i]:
+            eh[i * i :: i] = bytes(len(range(i * i, n + 1, i)))
+    return [i for i, v in enumerate(eh) if v]
+'''
+javascript = '''
+function primosAte(n) {
+  if (n < 2) return [];
+  const eh = new Uint8Array(n + 1).fill(1);
+  eh[0] = eh[1] = 0;
+  for (let i = 2; i * i <= n; i++) {
+    if (eh[i]) for (let j = i * i; j <= n; j += i) eh[j] = 0;
+  }
+  return [...eh.keys()].filter((i) => eh[i]);
+}
+'''
+go = '''
+func primosAte(n int) []int {
+	if n < 2 {
+		return nil
+	}
+	composto := make([]bool, n+1)
+	var primos []int
+	for i := 2; i <= n; i++ {
+		if composto[i] {
+			continue
+		}
+		primos = append(primos, i)
+		for j := i * i; j <= n; j += i {
+			composto[j] = true
+		}
+	}
+	return primos
+}
+'''
+c = '''
+#include <stdlib.h>
+#include <string.h>
+
+/* Preenche primos[] (capacidade n) e devolve quantos encontrou, ou -1 sem memória. */
+long primos_ate(long n, long *primos) {
+    if (n < 2) return 0;
+    char *composto = calloc((size_t)n + 1, 1);
+    if (composto == NULL) return -1;
+    long qtd = 0;
+    for (long i = 2; i <= n; i++) {
+        if (composto[i]) continue;
+        primos[qtd++] = i;
+        for (long j = i * i; j <= n; j += i) composto[j] = 1;
+    }
+    free(composto);
+    return qtd;
+}
+'''
+
+[pattern.test]
+python = '''
+assert primos_ate(30) == [2, 3, 5, 7, 11, 13, 17, 19, 23, 29] and primos_ate(1) == [] and len(primos_ate(10000)) == 1229
+'''
+javascript = '''
+if (primosAte(30).join() !== "2,3,5,7,11,13,17,19,23,29" || primosAte(10000).length !== 1229) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.gcd_lcm"
+title = "MDC e MMC (Euclides)"
+keywords = "mdc mmc gcd lcm maximo divisor comum minimo multiplo comum euclides"
+require = ["mdc", "mmc", "gcd", "lcm", "euclides"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+import math
+
+
+def mdc(a: int, b: int) -> int:
+    return math.gcd(a, b)
+
+
+def mmc(a: int, b: int) -> int:
+    return math.lcm(a, b)
+'''
+javascript = '''
+function mdc(a, b) {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  while (b) [a, b] = [b, a % b];
+  return a;
+}
+
+function mmc(a, b) {
+  return a && b ? Math.abs(a * b) / mdc(a, b) : 0;
+}
+'''
+go = '''
+func mdc(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func mmc(a, b int) int {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	return a / mdc(a, b) * b
+}
+'''
+rust = '''
+fn mdc(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
+}
+
+fn mmc(a: u64, b: u64) -> u64 {
+    if a == 0 || b == 0 { 0 } else { a / mdc(a, b) * b }
+}
+'''
+c = '''
+long mdc(long a, long b) {
+    while (b != 0) {
+        long t = a % b;
+        a = b;
+        b = t;
+    }
+    return a < 0 ? -a : a;
+}
+
+long mmc(long a, long b) {
+    return (a == 0 || b == 0) ? 0 : a / mdc(a, b) * b;
+}
+'''
+
+[pattern.test]
+python = '''
+assert mdc(12, 18) == 6 and mmc(4, 6) == 12 and mdc(0, 5) == 5
+'''
+javascript = '''
+if (mdc(12, 18) !== 6 || mmc(4, 6) !== 12 || mdc(0, 5) !== 5) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.mod_pow"
+title = "Potência modular rápida"
+keywords = "potencia modular exponenciacao rapida modpow pow mod quadrados sucessivos"
+require = ["potencia", "power", "exponenciacao", "modpow"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+def potencia_mod(base: int, exp: int, mod: int) -> int:
+    """(base ** exp) % mod em O(log exp). Equivale ao embutido pow(base, exp, mod)."""
+    resultado, base = 1, base % mod
+    while exp > 0:
+        if exp & 1:
+            resultado = resultado * base % mod
+        base = base * base % mod
+        exp >>= 1
+    return resultado
+'''
+javascript = '''
+function potenciaMod(base, exp, mod) {
+  let r = 1n;
+  let b = BigInt(base) % BigInt(mod);
+  let e = BigInt(exp);
+  const m = BigInt(mod);
+  while (e > 0n) {
+    if (e & 1n) r = (r * b) % m;
+    b = (b * b) % m;
+    e >>= 1n;
+  }
+  return r;
+}
+'''
+go = '''
+import "math/big"
+
+func potenciaMod(base, exp, mod int64) int64 {
+	return new(big.Int).Exp(big.NewInt(base), big.NewInt(exp), big.NewInt(mod)).Int64()
+}
+'''
+
+[pattern.test]
+python = '''
+assert potencia_mod(2, 10, 1000) == 24 and potencia_mod(3, 200, 13) == pow(3, 200, 13)
+'''
+javascript = '''
+if (potenciaMod(2, 10, 1000) !== 24n) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.palindrome"
+title = "Verificar palíndromo"
+keywords = "palindromo palindrome verificar texto frase inverso igual"
+require = ["palindromo", "palindrome"]
+tags = ["algorithm", "string"]
+
+[pattern.code]
+python = '''
+import unicodedata
+
+
+def eh_palindromo(texto: str) -> bool:
+    """Ignora acentos, maiúsculas, espaços e pontuação ("Socorram-me, subi no ônibus em Marrocos")."""
+    sem_acento = unicodedata.normalize("NFKD", texto)
+    letras = [c.lower() for c in sem_acento if c.isalnum()]
+    return letras == letras[::-1]
+'''
+javascript = '''
+function ehPalindromo(texto) {
+  const letras = texto
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  return letras === [...letras].reverse().join("");
+}
+'''
+go = '''
+import (
+	"unicode"
+)
+
+func ehPalindromo(texto string) bool {
+	var r []rune
+	for _, c := range texto {
+		if unicode.IsLetter(c) || unicode.IsDigit(c) {
+			r = append(r, unicode.ToLower(c))
+		}
+	}
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		if r[i] != r[j] {
+			return false
+		}
+	}
+	return true
+}
+'''
+powershell = '''
+function Test-Palindromo {
+    param([Parameter(Mandatory)][string]$Texto)
+    $normal = $Texto.Normalize([Text.NormalizationForm]::FormD)
+    $letras = ($normal.ToCharArray() | Where-Object {
+            [char]::IsLetterOrDigit($_) -and
+            [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne 'NonSpacingMark'
+        }) -join ''
+    $letras = $letras.ToLowerInvariant()
+    $inverso = -join $letras.ToCharArray()[($letras.Length - 1)..0]
+    $letras -eq $inverso
+}
+'''
+
+[pattern.test]
+powershell = '''
+if (-not (Test-Palindromo 'Socorram-me, subi no ônibus em Marrocos') -or (Test-Palindromo 'abc')) { throw 'falhou' }
+'''
+python = '''
+assert eh_palindromo("Socorram-me, subi no ônibus em Marrocos") and eh_palindromo("A man, a plan, a canal: Panama")
+assert not eh_palindromo("abc")
+'''
+javascript = '''
+if (!ehPalindromo("Socorram-me, subi no ônibus em Marrocos") || ehPalindromo("abc")) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.anagram"
+title = "Verificar anagramas / agrupar anagramas"
+keywords = "anagrama anagramas anagram mesmas letras agrupar palavras"
+require = ["anagrama", "anagram"]
+tags = ["algorithm", "string"]
+
+[pattern.code]
+python = '''
+from collections import Counter, defaultdict
+
+
+def sao_anagramas(a: str, b: str) -> bool:
+    limpar = lambda s: Counter(c for c in s.lower() if not c.isspace())  # noqa: E731
+    return limpar(a) == limpar(b)
+
+
+def agrupar_anagramas(palavras: list[str]) -> list[list[str]]:
+    grupos = defaultdict(list)
+    for p in palavras:
+        grupos["".join(sorted(p.lower()))].append(p)
+    return list(grupos.values())
+'''
+javascript = '''
+const chave = (s) => [...s.toLowerCase().replace(/\s/g, "")].sort().join("");
+
+function saoAnagramas(a, b) {
+  return chave(a) === chave(b);
+}
+
+function agruparAnagramas(palavras) {
+  const grupos = new Map();
+  for (const p of palavras) {
+    const k = chave(p);
+    grupos.set(k, [...(grupos.get(k) ?? []), p]);
+  }
+  return [...grupos.values()];
+}
+'''
+go = '''
+import (
+	"slices"
+	"strings"
+)
+
+func chaveAnagrama(s string) string {
+	r := []rune(strings.ToLower(strings.ReplaceAll(s, " ", "")))
+	slices.Sort(r)
+	return string(r)
+}
+
+func saoAnagramas(a, b string) bool {
+	return chaveAnagrama(a) == chaveAnagrama(b)
+}
+'''
+
+[pattern.test]
+python = '''
+assert sao_anagramas("Roma", "amor") and not sao_anagramas("abc", "abd")
+assert sorted(map(sorted, agrupar_anagramas(["eat", "tea", "tan", "ate", "nat"]))) == [["ate", "eat", "tea"], ["nat", "tan"]]
+'''
+javascript = '''
+if (!saoAnagramas("Roma", "amor") || agruparAnagramas(["eat", "tea", "tan"]).length !== 2) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.reverse_string"
+title = "Inverter string (seguro para Unicode)"
+keywords = "inverter string texto reverse ao contrario invertida caracteres"
+require = ["inverter", "reverse", "inverso", "invertida"]
+tags = ["algorithm", "string"]
+
+[pattern.code]
+python = '''
+def inverter(texto: str) -> str:
+    return texto[::-1]
+'''
+javascript = '''
+// Array.from respeita pares substitutos (emoji); split("") os quebraria.
+const inverter = (texto) => Array.from(texto).reverse().join("");
+'''
+typescript = '''
+export const inverter = (texto: string): string => Array.from(texto).reverse().join("");
+'''
+go = '''
+// inverter opera sobre runes (não bytes) para não corromper UTF-8.
+func inverter(texto string) string {
+	r := []rune(texto)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+'''
+rust = '''
+fn inverter(texto: &str) -> String {
+    texto.chars().rev().collect()
+}
+'''
+java = '''
+static String inverter(String texto) {
+    return new StringBuilder(texto).reverse().toString();
+}
+'''
+csharp = '''
+static string Inverter(string texto)
+{
+    var elementos = System.Globalization.StringInfo.GetTextElementEnumerator(texto);
+    var partes = new List<string>();
+    while (elementos.MoveNext()) partes.Add(elementos.GetTextElement());
+    partes.Reverse();
+    return string.Concat(partes);
+}
+'''
+c = '''
+#include <string.h>
+
+/* Inverte no lugar (bytes ASCII; para UTF-8 use uma biblioteca de Unicode). */
+void inverter(char *s) {
+    size_t n = strlen(s);
+    for (size_t i = 0; i < n / 2; i++) {
+        char t = s[i];
+        s[i] = s[n - 1 - i];
+        s[n - 1 - i] = t;
+    }
+}
+'''
+powershell = '''
+function Get-Invertido {
+    param([Parameter(Mandatory, ValueFromPipeline)][string]$Texto)
+    process {
+        $chars = $Texto.ToCharArray()
+        [array]::Reverse($chars)
+        -join $chars
+    }
+}
+'''
+bash = '''
+inverter() {
+  printf '%s' "$1" | rev
+}
+'''
+
+[pattern.test]
+powershell = '''
+if (('abc' | Get-Invertido) -ne 'cba') { throw 'falhou' }
+'''
+python = '''
+assert inverter("ação") == "oãça" and inverter("") == ""
+'''
+javascript = '''
+if (inverter("abc😀") !== "😀cba") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.fizzbuzz"
+title = "FizzBuzz"
+keywords = "fizzbuzz fizz buzz exercicio divisivel 3 5"
+require = ["fizzbuzz"]
+tags = ["algorithm", "educational"]
+
+[pattern.code]
+python = '''
+def fizzbuzz(n: int) -> list[str]:
+    return ["FizzBuzz" if i % 15 == 0 else "Fizz" if i % 3 == 0 else "Buzz" if i % 5 == 0 else str(i)
+            for i in range(1, n + 1)]
+
+
+if __name__ == "__main__":
+    print("\n".join(fizzbuzz(100)))
+'''
+javascript = '''
+const fizzbuzz = (n) =>
+  Array.from({ length: n }, (_, k) => {
+    const i = k + 1;
+    return i % 15 === 0 ? "FizzBuzz" : i % 3 === 0 ? "Fizz" : i % 5 === 0 ? "Buzz" : String(i);
+  });
+
+console.log(fizzbuzz(100).join("\n"));
+'''
+go = '''
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+func main() {
+	for i := 1; i <= 100; i++ {
+		s := ""
+		if i%3 == 0 {
+			s += "Fizz"
+		}
+		if i%5 == 0 {
+			s += "Buzz"
+		}
+		if s == "" {
+			s = strconv.Itoa(i)
+		}
+		fmt.Println(s)
+	}
+}
+'''
+rust = '''
+fn main() {
+    for i in 1..=100 {
+        match (i % 3, i % 5) {
+            (0, 0) => println!("FizzBuzz"),
+            (0, _) => println!("Fizz"),
+            (_, 0) => println!("Buzz"),
+            _ => println!("{i}"),
+        }
+    }
+}
+'''
+java = '''
+public class FizzBuzz {
+    public static void main(String[] args) {
+        for (int i = 1; i <= 100; i++) {
+            System.out.println(i % 15 == 0 ? "FizzBuzz" : i % 3 == 0 ? "Fizz" : i % 5 == 0 ? "Buzz" : String.valueOf(i));
+        }
+    }
+}
+'''
+csharp = '''
+for (int i = 1; i <= 100; i++)
+{
+    Console.WriteLine((i % 3, i % 5) switch
+    {
+        (0, 0) => "FizzBuzz",
+        (0, _) => "Fizz",
+        (_, 0) => "Buzz",
+        _ => i.ToString(),
+    });
+}
+'''
+c = '''
+#include <stdio.h>
+
+int main(void) {
+    for (int i = 1; i <= 100; i++) {
+        if (i % 15 == 0) puts("FizzBuzz");
+        else if (i % 3 == 0) puts("Fizz");
+        else if (i % 5 == 0) puts("Buzz");
+        else printf("%d\n", i);
+    }
+    return 0;
+}
+'''
+powershell = '''
+1..100 | ForEach-Object {
+    if ($_ % 15 -eq 0) { 'FizzBuzz' }
+    elseif ($_ % 3 -eq 0) { 'Fizz' }
+    elseif ($_ % 5 -eq 0) { 'Buzz' }
+    else { $_ }
+}
+'''
+bash = '''
+for (( i = 1; i <= 100; i++ )); do
+  if (( i % 15 == 0 )); then echo "FizzBuzz"
+  elif (( i % 3 == 0 )); then echo "Fizz"
+  elif (( i % 5 == 0 )); then echo "Buzz"
+  else echo "$i"
+  fi
+done
+'''
+lua = '''
+for i = 1, 100 do
+  if i % 15 == 0 then print("FizzBuzz")
+  elseif i % 3 == 0 then print("Fizz")
+  elseif i % 5 == 0 then print("Buzz")
+  else print(i) end
+end
+'''
+
+[pattern.test]
+python = '''
+r = fizzbuzz(15)
+assert r[2] == "Fizz" and r[4] == "Buzz" and r[14] == "FizzBuzz" and r[0] == "1"
+'''
+
+[[pattern]]
+id = "algo.roman_numerals"
+title = "Números romanos (converter de/para)"
+keywords = "numeros romanos roman numerals converter inteiro romano"
+require = ["romanos", "roman", "romano"]
+tags = ["algorithm", "string"]
+
+[pattern.code]
+python = '''
+_VALORES = [(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+            (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")]
+
+
+def para_romano(n: int) -> str:
+    if not 0 < n < 4000:
+        raise ValueError("romanos clássicos vão de 1 a 3999")
+    partes = []
+    for valor, simbolo in _VALORES:
+        qtd, n = divmod(n, valor)
+        partes.append(simbolo * qtd)
+    return "".join(partes)
+
+
+def de_romano(s: str) -> int:
+    simbolos = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    for i, ch in enumerate(s.upper()):
+        valor = simbolos[ch]
+        proximo = simbolos.get(s.upper()[i + 1], 0) if i + 1 < len(s) else 0
+        total += -valor if valor < proximo else valor
+    if para_romano(total) != s.upper():
+        raise ValueError(f"numeral romano inválido: {s}")
+    return total
+'''
+javascript = '''
+const VALORES = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+  [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+
+function paraRomano(n) {
+  if (!Number.isInteger(n) || n <= 0 || n >= 4000) throw new RangeError("1 a 3999");
+  let s = "";
+  for (const [valor, simbolo] of VALORES) {
+    while (n >= valor) {
+      s += simbolo;
+      n -= valor;
+    }
+  }
+  return s;
+}
+
+function deRomano(s) {
+  const v = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+  const u = s.toUpperCase();
+  let total = 0;
+  for (let i = 0; i < u.length; i++) {
+    const atual = v[u[i]];
+    if (atual === undefined) throw new Error(`símbolo inválido: ${u[i]}`);
+    total += atual < (v[u[i + 1]] ?? 0) ? -atual : atual;
+  }
+  if (paraRomano(total) !== u) throw new Error(`numeral romano inválido: ${s}`);
+  return total;
+}
+'''
+
+[pattern.test]
+python = '''
+assert para_romano(1994) == "MCMXCIV" and de_romano("MCMXCIV") == 1994 and de_romano("iv") == 4
+try:
+    de_romano("IIII")
+    raise AssertionError("aceitou inválido")
+except ValueError:
+    pass
+'''
+javascript = '''
+if (paraRomano(1994) !== "MCMXCIV" || deRomano("MMXXVI") !== 2026) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.balanced_brackets"
+title = "Parênteses/colchetes balanceados"
+keywords = "parenteses balanceados colchetes chaves validar expressao pilha brackets balanced"
+require = ["balanceados", "balanced", "parenteses", "brackets"]
+tags = ["algorithm", "string", "stack"]
+
+[pattern.code]
+python = '''
+def balanceado(texto: str) -> bool:
+    pares = {")": "(", "]": "[", "}": "{"}
+    pilha = []
+    for ch in texto:
+        if ch in "([{":
+            pilha.append(ch)
+        elif ch in pares:
+            if not pilha or pilha.pop() != pares[ch]:
+                return False
+    return not pilha
+'''
+javascript = '''
+function balanceado(texto) {
+  const pares = { ")": "(", "]": "[", "}": "{" };
+  const pilha = [];
+  for (const ch of texto) {
+    if ("([{".includes(ch)) pilha.push(ch);
+    else if (ch in pares && pilha.pop() !== pares[ch]) return false;
+  }
+  return pilha.length === 0;
+}
+'''
+go = '''
+func balanceado(texto string) bool {
+	pares := map[rune]rune{')': '(', ']': '[', '}': '{'}
+	var pilha []rune
+	for _, ch := range texto {
+		switch ch {
+		case '(', '[', '{':
+			pilha = append(pilha, ch)
+		case ')', ']', '}':
+			if len(pilha) == 0 || pilha[len(pilha)-1] != pares[ch] {
+				return false
+			}
+			pilha = pilha[:len(pilha)-1]
+		}
+	}
+	return len(pilha) == 0
+}
+'''
+java = '''
+static boolean balanceado(String texto) {
+    var pilha = new java.util.ArrayDeque<Character>();
+    for (char ch : texto.toCharArray()) {
+        switch (ch) {
+            case '(', '[', '{' -> pilha.push(ch);
+            case ')' -> { if (pilha.isEmpty() || pilha.pop() != '(') return false; }
+            case ']' -> { if (pilha.isEmpty() || pilha.pop() != '[') return false; }
+            case '}' -> { if (pilha.isEmpty() || pilha.pop() != '{') return false; }
+            default -> { }
+        }
+    }
+    return pilha.isEmpty();
+}
+'''
+
+[pattern.test]
+python = '''
+assert balanceado("f(a[1], {b: 2})") and not balanceado("(]") and not balanceado("((") and balanceado("")
+'''
+javascript = '''
+if (!balanceado("f(a[1], {b: 2})") || balanceado("(]") || balanceado("((")) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.max_subarray"
+title = "Subarray de soma máxima (Kadane)"
+keywords = "kadane subarray soma maxima maximum subarray contiguo sequencia"
+require = ["kadane", "subarray"]
+tags = ["algorithm", "dp"]
+
+[pattern.code]
+python = '''
+def soma_maxima(itens: list[int]) -> tuple[int, int, int]:
+    """(soma, início, fim) do subarray contíguo de maior soma. O(n)."""
+    if not itens:
+        raise ValueError("lista vazia")
+    melhor, atual = itens[0], itens[0]
+    ini = melhor_ini = melhor_fim = 0
+    for i in range(1, len(itens)):
+        if atual < 0:
+            atual, ini = itens[i], i
+        else:
+            atual += itens[i]
+        if atual > melhor:
+            melhor, melhor_ini, melhor_fim = atual, ini, i
+    return melhor, melhor_ini, melhor_fim
+'''
+javascript = '''
+function somaMaxima(itens) {
+  let melhor = itens[0];
+  let atual = itens[0];
+  for (let i = 1; i < itens.length; i++) {
+    atual = Math.max(itens[i], atual + itens[i]);
+    melhor = Math.max(melhor, atual);
+  }
+  return melhor;
+}
+'''
+go = '''
+func somaMaxima(itens []int) int {
+	melhor, atual := itens[0], itens[0]
+	for _, x := range itens[1:] {
+		atual = max(x, atual+x)
+		melhor = max(melhor, atual)
+	}
+	return melhor
+}
+'''
+
+[pattern.test]
+python = '''
+assert soma_maxima([-2, 1, -3, 4, -1, 2, 1, -5, 4]) == (6, 3, 6) and soma_maxima([-3, -1]) == (-1, 1, 1)
+'''
+javascript = '''
+if (somaMaxima([-2, 1, -3, 4, -1, 2, 1, -5, 4]) !== 6) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.two_sum"
+title = "Two sum (par que soma o alvo)"
+keywords = "two sum par numeros somam alvo target indices hash mapa complemento"
+require = ["two", "pair", "target"]
+tags = ["algorithm", "hash"]
+
+[pattern.code]
+python = '''
+def dois_que_somam(nums: list[int], alvo: int) -> tuple[int, int] | None:
+    """Índices (i, j) com nums[i] + nums[j] == alvo em O(n), via dicionário de complementos."""
+    vistos: dict[int, int] = {}
+    for j, x in enumerate(nums):
+        if alvo - x in vistos:
+            return vistos[alvo - x], j
+        vistos[x] = j
+    return None
+'''
+javascript = '''
+function doisQueSomam(nums, alvo) {
+  const vistos = new Map();
+  for (let j = 0; j < nums.length; j++) {
+    const i = vistos.get(alvo - nums[j]);
+    if (i !== undefined) return [i, j];
+    vistos.set(nums[j], j);
+  }
+  return null;
+}
+'''
+go = '''
+func doisQueSomam(nums []int, alvo int) (int, int, bool) {
+	vistos := make(map[int]int, len(nums))
+	for j, x := range nums {
+		if i, ok := vistos[alvo-x]; ok {
+			return i, j, true
+		}
+		vistos[x] = j
+	}
+	return 0, 0, false
+}
+'''
+java = '''
+static int[] doisQueSomam(int[] nums, int alvo) {
+    var vistos = new java.util.HashMap<Integer, Integer>();
+    for (int j = 0; j < nums.length; j++) {
+        Integer i = vistos.get(alvo - nums[j]);
+        if (i != null) {
+            return new int[] {i, j};
+        }
+        vistos.put(nums[j], j);
+    }
+    return null;
+}
+'''
+
+[pattern.test]
+python = '''
+assert dois_que_somam([2, 7, 11, 15], 9) == (0, 1) and dois_que_somam([1, 2], 7) is None
+'''
+javascript = '''
+if (doisQueSomam([2, 7, 11, 15], 9).join() !== "0,1") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.sliding_window"
+title = "Janela deslizante (soma máxima de k elementos e maior substring sem repetição)"
+keywords = "janela deslizante sliding window soma k consecutivos substring sem repeticao caracteres"
+require = ["janela", "window", "deslizante", "sliding"]
+tags = ["algorithm"]
+
+[pattern.code]
+python = '''
+def maior_soma_k(nums: list[int], k: int) -> int:
+    if not 0 < k <= len(nums):
+        raise ValueError("k inválido")
+    soma = melhor = sum(nums[:k])
+    for i in range(k, len(nums)):
+        soma += nums[i] - nums[i - k]
+        melhor = max(melhor, soma)
+    return melhor
+
+
+def maior_substring_sem_repeticao(s: str) -> str:
+    ultimo, ini, melhor = {}, 0, (0, 0)
+    for i, ch in enumerate(s):
+        if ultimo.get(ch, -1) >= ini:
+            ini = ultimo[ch] + 1
+        ultimo[ch] = i
+        if i + 1 - ini > melhor[1] - melhor[0]:
+            melhor = (ini, i + 1)
+    return s[melhor[0]:melhor[1]]
+'''
+javascript = '''
+function maiorSomaK(nums, k) {
+  let soma = nums.slice(0, k).reduce((a, b) => a + b, 0);
+  let melhor = soma;
+  for (let i = k; i < nums.length; i++) {
+    soma += nums[i] - nums[i - k];
+    melhor = Math.max(melhor, soma);
+  }
+  return melhor;
+}
+'''
+
+[pattern.test]
+python = '''
+assert maior_soma_k([1, 4, 2, 10, 2, 3, 1, 0, 20], 4) == 24 and maior_substring_sem_repeticao("abcabcbb") == "abc"
+'''
+javascript = '''
+if (maiorSomaK([1, 4, 2, 10, 2, 3, 1, 0, 20], 4) !== 24) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.word_frequency"
+title = "Frequência de palavras"
+keywords = "frequencia palavras contar ocorrencias texto mais comuns word count"
+require = ["frequencia", "frequency", "ocorrencias"]
+tags = ["algorithm", "text"]
+slots = { path = "arquivo.txt" }
+
+[pattern.code]
+python = '''
+import re
+from collections import Counter
+
+
+def frequencia_palavras(texto: str, top: int | None = None) -> list[tuple[str, int]]:
+    palavras = re.findall(r"\w+", texto.lower())
+    return Counter(palavras).most_common(top)
+'''
+javascript = '''
+function frequenciaPalavras(texto, top = Infinity) {
+  const contagem = new Map();
+  for (const p of texto.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []) {
+    contagem.set(p, (contagem.get(p) ?? 0) + 1);
+  }
+  return [...contagem].sort((a, b) => b[1] - a[1]).slice(0, top);
+}
+'''
+go = '''
+import (
+	"sort"
+	"strings"
+	"unicode"
+)
+
+func frequenciaPalavras(texto string) []struct {
+	Palavra string
+	Qtd     int
+} {
+	contagem := map[string]int{}
+	for _, p := range strings.FieldsFunc(strings.ToLower(texto), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		contagem[p]++
+	}
+	out := make([]struct {
+		Palavra string
+		Qtd     int
+	}, 0, len(contagem))
+	for p, q := range contagem {
+		out = append(out, struct {
+			Palavra string
+			Qtd     int
+		}{p, q})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Qtd > out[j].Qtd })
+	return out
+}
+'''
+powershell = '''
+function Get-FrequenciaPalavras {
+    param(
+        [Parameter(Mandatory)][string]$Texto,
+        [int]$Top = 10
+    )
+    [regex]::Matches($Texto.ToLowerInvariant(), '\w+') |
+        Group-Object -Property Value -NoElement |
+        Sort-Object -Property Count -Descending |
+        Select-Object -First $Top -Property Name, Count
+}
+'''
+bash = '''
+# Top 10 palavras de um arquivo (minúsculas, sem pontuação)
+tr -cs '[:alnum:]' '\n' < "{{path}}" | tr '[:upper:]' '[:lower:]' | sort | uniq -c | sort -rn | head -n 10
+'''
+
+[pattern.test]
+powershell = '''
+$r = Get-FrequenciaPalavras -Texto 'O gato e o rato. O fim!' -Top 1
+if ($r.Name -ne 'o' -or $r.Count -ne 3) { throw 'falhou' }
+'''
+python = '''
+assert frequencia_palavras("O gato e o rato. O fim!", 1) == [("o", 3)]
+'''
+javascript = '''
+if (frequenciaPalavras("O gato e o rato. O fim!", 1)[0][0] !== "o") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.base_conversion"
+title = "Conversão entre bases numéricas"
+keywords = "converter base binario hexadecimal octal decimal numerica conversao bases"
+require = ["base", "binario", "hexadecimal", "octal"]
+tags = ["algorithm", "math"]
+
+[pattern.code]
+python = '''
+DIGITOS = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+
+def para_base(n: int, base: int) -> str:
+    """Inteiro -> texto na base 2..36 (bin(), oct(), hex() cobrem 2, 8 e 16)."""
+    if not 2 <= base <= 36:
+        raise ValueError("base entre 2 e 36")
+    if n == 0:
+        return "0"
+    sinal, n = ("-", -n) if n < 0 else ("", n)
+    partes = []
+    while n:
+        n, r = divmod(n, base)
+        partes.append(DIGITOS[r])
+    return sinal + "".join(reversed(partes))
+
+
+def de_base(texto: str, base: int) -> int:
+    return int(texto, base)
+'''
+javascript = '''
+const paraBase = (n, base) => BigInt(n).toString(base);
+const deBase = (texto, base) => parseInt(texto, base);
+'''
+
+[pattern.test]
+python = '''
+assert para_base(255, 16) == "ff" and para_base(-5, 2) == "-101" and de_base("777", 8) == 511
+'''

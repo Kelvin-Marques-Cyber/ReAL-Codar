@@ -1,0 +1,4 @@
+[plugin]
+name = "brasil"
+version = "1.0.0"
+description = "Utilidades brasileiras: CPF, CNPJ, CEP (ViaCEP), moeda BRL, datas pt-BR"

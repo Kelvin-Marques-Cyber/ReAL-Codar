@@ -1,0 +1,635 @@
+# Grafos: representação por lista de adjacência (dict/Map/map), sem recursão profunda (pilha explícita).
+
+[[pattern]]
+id = "algo.bfs"
+title = "Busca em largura (BFS) e menor caminho sem pesos"
+keywords = "bfs busca largura breadth first grafo grafos menor caminho shortest path sem peso fila"
+require = ["bfs", "largura", "breadth"]
+tags = ["algorithm", "graph"]
+
+[pattern.code]
+python = '''
+from collections import deque
+
+
+def bfs_caminho(grafo: dict, inicio, fim) -> list | None:
+    """Menor caminho (em número de arestas) de inicio a fim, ou None. O(V + E)."""
+    anterior = {inicio: None}
+    fila = deque([inicio])
+    while fila:
+        no = fila.popleft()
+        if no == fim:
+            caminho = []
+            while no is not None:
+                caminho.append(no)
+                no = anterior[no]
+            return caminho[::-1]
+        for vizinho in grafo.get(no, ()):
+            if vizinho not in anterior:
+                anterior[vizinho] = no
+                fila.append(vizinho)
+    return None
+'''
+javascript = '''
+/** Menor caminho (em arestas) de inicio a fim em grafo Map<no, nos[]>, ou null. O(V + E). */
+function bfsCaminho(grafo, inicio, fim) {
+  const anterior = new Map([[inicio, null]]);
+  const fila = [inicio];
+  for (let i = 0; i < fila.length; i++) {
+    const no = fila[i];
+    if (no === fim) {
+      const caminho = [];
+      for (let n = no; n !== null; n = anterior.get(n)) caminho.push(n);
+      return caminho.reverse();
+    }
+    for (const viz of grafo.get(no) ?? []) {
+      if (!anterior.has(viz)) {
+        anterior.set(viz, no);
+        fila.push(viz);
+      }
+    }
+  }
+  return null;
+}
+'''
+go = '''
+// bfsCaminho devolve o menor caminho (em arestas) de inicio a fim, ou nil. O(V + E).
+func bfsCaminho(grafo map[string][]string, inicio, fim string) []string {
+	anterior := map[string]string{inicio: ""}
+	fila := []string{inicio}
+	for len(fila) > 0 {
+		no := fila[0]
+		fila = fila[1:]
+		if no == fim {
+			var caminho []string
+			for n := no; n != ""; n = anterior[n] {
+				caminho = append([]string{n}, caminho...)
+			}
+			return caminho
+		}
+		for _, viz := range grafo[no] {
+			if _, visto := anterior[viz]; !visto {
+				anterior[viz] = no
+				fila = append(fila, viz)
+			}
+		}
+	}
+	return nil
+}
+'''
+java = '''
+/** Menor caminho (em arestas) de inicio a fim, ou lista vazia. O(V + E). */
+static java.util.List<String> bfsCaminho(java.util.Map<String, java.util.List<String>> grafo, String inicio, String fim) {
+    var anterior = new java.util.HashMap<String, String>();
+    anterior.put(inicio, null);
+    var fila = new java.util.ArrayDeque<String>();
+    fila.add(inicio);
+    while (!fila.isEmpty()) {
+        String no = fila.poll();
+        if (no.equals(fim)) {
+            var caminho = new java.util.LinkedList<String>();
+            for (String n = no; n != null; n = anterior.get(n)) {
+                caminho.addFirst(n);
+            }
+            return caminho;
+        }
+        for (String viz : grafo.getOrDefault(no, java.util.List.of())) {
+            if (!anterior.containsKey(viz)) {
+                anterior.put(viz, no);
+                fila.add(viz);
+            }
+        }
+    }
+    return java.util.List.of();
+}
+'''
+rust = '''
+use std::collections::{HashMap, VecDeque};
+
+/// Menor caminho (em arestas) de `inicio` a `fim`, ou None. O(V + E).
+fn bfs_caminho<'a>(grafo: &HashMap<&'a str, Vec<&'a str>>, inicio: &'a str, fim: &'a str) -> Option<Vec<&'a str>> {
+    let mut anterior: HashMap<&str, Option<&str>> = HashMap::from([(inicio, None)]);
+    let mut fila = VecDeque::from([inicio]);
+    while let Some(no) = fila.pop_front() {
+        if no == fim {
+            let mut caminho = vec![no];
+            let mut atual = no;
+            while let Some(Some(prev)) = anterior.get(atual) {
+                caminho.push(prev);
+                atual = prev;
+            }
+            caminho.reverse();
+            return Some(caminho);
+        }
+        for &viz in grafo.get(no).into_iter().flatten() {
+            if !anterior.contains_key(viz) {
+                anterior.insert(viz, Some(no));
+                fila.push_back(viz);
+            }
+        }
+    }
+    None
+}
+'''
+
+[pattern.test]
+python = '''
+g = {"a": ["b", "c"], "b": ["d"], "c": ["d", "e"], "d": ["f"], "e": ["f"]}
+assert bfs_caminho(g, "a", "f") in (["a", "b", "d", "f"], ["a", "c", "d", "f"], ["a", "c", "e", "f"])
+assert bfs_caminho(g, "f", "a") is None and bfs_caminho(g, "a", "a") == ["a"]
+'''
+javascript = '''
+const g = new Map([["a", ["b", "c"]], ["b", ["d"]], ["c", ["d"]], ["d", ["f"]]]);
+const c = bfsCaminho(g, "a", "f");
+if (c.length !== 4 || c[0] !== "a" || c[3] !== "f" || bfsCaminho(g, "f", "a") !== null) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.dfs"
+title = "Busca em profundidade (DFS) iterativa"
+keywords = "dfs busca profundidade depth first grafo grafos alcancaveis componentes pilha visitar"
+require = ["dfs", "profundidade", "depth"]
+tags = ["algorithm", "graph"]
+
+[pattern.code]
+python = '''
+def dfs(grafo: dict, inicio) -> list:
+    """Ordem de visita a partir de inicio. Pilha explícita: sem RecursionError em grafos grandes."""
+    visitados, ordem, pilha = set(), [], [inicio]
+    while pilha:
+        no = pilha.pop()
+        if no in visitados:
+            continue
+        visitados.add(no)
+        ordem.append(no)
+        pilha.extend(reversed(grafo.get(no, ())))
+    return ordem
+'''
+javascript = '''
+function dfs(grafo, inicio) {
+  const visitados = new Set();
+  const ordem = [];
+  const pilha = [inicio];
+  while (pilha.length) {
+    const no = pilha.pop();
+    if (visitados.has(no)) continue;
+    visitados.add(no);
+    ordem.push(no);
+    const vizinhos = grafo.get(no) ?? [];
+    for (let i = vizinhos.length - 1; i >= 0; i--) pilha.push(vizinhos[i]);
+  }
+  return ordem;
+}
+'''
+go = '''
+func dfs(grafo map[string][]string, inicio string) []string {
+	visitados := map[string]bool{}
+	var ordem []string
+	pilha := []string{inicio}
+	for len(pilha) > 0 {
+		no := pilha[len(pilha)-1]
+		pilha = pilha[:len(pilha)-1]
+		if visitados[no] {
+			continue
+		}
+		visitados[no] = true
+		ordem = append(ordem, no)
+		viz := grafo[no]
+		for i := len(viz) - 1; i >= 0; i-- {
+			pilha = append(pilha, viz[i])
+		}
+	}
+	return ordem
+}
+'''
+
+[pattern.test]
+python = '''
+g = {1: [2, 3], 2: [4], 3: [4], 4: []}
+assert dfs(g, 1) == [1, 2, 4, 3]
+'''
+javascript = '''
+const g = new Map([[1, [2, 3]], [2, [4]], [3, [4]], [4, []]]);
+if (dfs(g, 1).join() !== "1,2,4,3") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.dijkstra"
+title = "Dijkstra (menor caminho com pesos)"
+keywords = "dijkstra menor caminho pesos grafo ponderado shortest path weighted distancia rota heap"
+require = ["dijkstra", "ponderado", "weighted", "pesos"]
+tags = ["algorithm", "graph"]
+
+[pattern.code]
+python = '''
+import heapq
+
+
+def dijkstra(grafo: dict, inicio) -> tuple[dict, dict]:
+    """grafo = {no: [(vizinho, peso), ...]} com pesos >= 0.
+    Devolve (distancias, anterior); reconstrua o caminho seguindo `anterior`. O((V + E) log V)."""
+    dist = {inicio: 0}
+    anterior = {}
+    heap = [(0, inicio)]
+    while heap:
+        d, no = heapq.heappop(heap)
+        if d > dist.get(no, float("inf")):
+            continue  # entrada obsoleta no heap
+        for viz, peso in grafo.get(no, ()):
+            nd = d + peso
+            if nd < dist.get(viz, float("inf")):
+                dist[viz] = nd
+                anterior[viz] = no
+                heapq.heappush(heap, (nd, viz))
+    return dist, anterior
+
+
+def caminho(anterior: dict, inicio, fim) -> list:
+    if fim != inicio and fim not in anterior:
+        return []
+    c = [fim]
+    while c[-1] != inicio:
+        c.append(anterior[c[-1]])
+    return c[::-1]
+'''
+javascript = '''
+/** grafo: Map<no, [vizinho, peso][]> (pesos >= 0). Devolve {dist, anterior}. Heap binário mínimo embutido. */
+function dijkstra(grafo, inicio) {
+  const dist = new Map([[inicio, 0]]);
+  const anterior = new Map();
+  const heap = [[0, inicio]];
+  const subir = (i) => {
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const tirar = () => {
+    const topo = heap[0];
+    const ultimo = heap.pop();
+    if (heap.length) {
+      heap[0] = ultimo;
+      let i = 0;
+      for (;;) {
+        const e = 2 * i + 1;
+        const d = e + 1;
+        let m = i;
+        if (e < heap.length && heap[e][0] < heap[m][0]) m = e;
+        if (d < heap.length && heap[d][0] < heap[m][0]) m = d;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
+      }
+    }
+    return topo;
+  };
+  while (heap.length) {
+    const [d, no] = tirar();
+    if (d > (dist.get(no) ?? Infinity)) continue;
+    for (const [viz, peso] of grafo.get(no) ?? []) {
+      const nd = d + peso;
+      if (nd < (dist.get(viz) ?? Infinity)) {
+        dist.set(viz, nd);
+        anterior.set(viz, no);
+        heap.push([nd, viz]);
+        subir(heap.length - 1);
+      }
+    }
+  }
+  return { dist, anterior };
+}
+'''
+go = '''
+import "container/heap"
+
+type aresta struct {
+	para string
+	peso int
+}
+
+type item struct {
+	no   string
+	dist int
+}
+
+type filaPrioridade []item
+
+func (f filaPrioridade) Len() int            { return len(f) }
+func (f filaPrioridade) Less(i, j int) bool  { return f[i].dist < f[j].dist }
+func (f filaPrioridade) Swap(i, j int)       { f[i], f[j] = f[j], f[i] }
+func (f *filaPrioridade) Push(x any)         { *f = append(*f, x.(item)) }
+func (f *filaPrioridade) Pop() any           { v := (*f)[len(*f)-1]; *f = (*f)[:len(*f)-1]; return v }
+
+// dijkstra devolve as menores distâncias a partir de inicio (pesos >= 0).
+func dijkstra(grafo map[string][]aresta, inicio string) map[string]int {
+	dist := map[string]int{inicio: 0}
+	fila := &filaPrioridade{{inicio, 0}}
+	for fila.Len() > 0 {
+		atual := heap.Pop(fila).(item)
+		if d, ok := dist[atual.no]; ok && atual.dist > d {
+			continue
+		}
+		for _, a := range grafo[atual.no] {
+			nd := atual.dist + a.peso
+			if d, ok := dist[a.para]; !ok || nd < d {
+				dist[a.para] = nd
+				heap.Push(fila, item{a.para, nd})
+			}
+		}
+	}
+	return dist
+}
+'''
+rust = '''
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
+
+/// Menores distâncias a partir de `inicio`; grafo: no -> [(vizinho, peso)].
+fn dijkstra(grafo: &HashMap<usize, Vec<(usize, u64)>>, inicio: usize) -> HashMap<usize, u64> {
+    let mut dist = HashMap::from([(inicio, 0u64)]);
+    let mut heap = BinaryHeap::from([Reverse((0u64, inicio))]);
+    while let Some(Reverse((d, no))) = heap.pop() {
+        if d > *dist.get(&no).unwrap_or(&u64::MAX) {
+            continue;
+        }
+        for &(viz, peso) in grafo.get(&no).into_iter().flatten() {
+            let nd = d + peso;
+            if nd < *dist.get(&viz).unwrap_or(&u64::MAX) {
+                dist.insert(viz, nd);
+                heap.push(Reverse((nd, viz)));
+            }
+        }
+    }
+    dist
+}
+'''
+java = '''
+/** Menores distâncias a partir de inicio. grafo: no -> lista de {vizinho, peso}. */
+static java.util.Map<Integer, Integer> dijkstra(java.util.Map<Integer, java.util.List<int[]>> grafo, int inicio) {
+    var dist = new java.util.HashMap<Integer, Integer>();
+    dist.put(inicio, 0);
+    var fila = new java.util.PriorityQueue<int[]>(java.util.Comparator.comparingInt(a -> a[1]));
+    fila.add(new int[] {inicio, 0});
+    while (!fila.isEmpty()) {
+        int[] atual = fila.poll();
+        if (atual[1] > dist.getOrDefault(atual[0], Integer.MAX_VALUE)) {
+            continue;
+        }
+        for (int[] aresta : grafo.getOrDefault(atual[0], java.util.List.of())) {
+            int nd = atual[1] + aresta[1];
+            if (nd < dist.getOrDefault(aresta[0], Integer.MAX_VALUE)) {
+                dist.put(aresta[0], nd);
+                fila.add(new int[] {aresta[0], nd});
+            }
+        }
+    }
+    return dist;
+}
+'''
+csharp = '''
+/// <summary>Menores distâncias a partir de inicio. grafo: no -> (vizinho, peso).</summary>
+static Dictionary<int, int> Dijkstra(Dictionary<int, List<(int Viz, int Peso)>> grafo, int inicio)
+{
+    var dist = new Dictionary<int, int> { [inicio] = 0 };
+    var fila = new PriorityQueue<int, int>();
+    fila.Enqueue(inicio, 0);
+    while (fila.TryDequeue(out int no, out int d))
+    {
+        if (d > dist.GetValueOrDefault(no, int.MaxValue)) continue;
+        foreach (var (viz, peso) in grafo.GetValueOrDefault(no, new()))
+        {
+            int nd = d + peso;
+            if (nd < dist.GetValueOrDefault(viz, int.MaxValue))
+            {
+                dist[viz] = nd;
+                fila.Enqueue(viz, nd);
+            }
+        }
+    }
+    return dist;
+}
+'''
+
+[pattern.test]
+python = '''
+g = {"a": [("b", 4), ("c", 1)], "c": [("b", 2), ("d", 7)], "b": [("d", 1)]}
+dist, ant = dijkstra(g, "a")
+assert dist == {"a": 0, "c": 1, "b": 3, "d": 4} and caminho(ant, "a", "d") == ["a", "c", "b", "d"]
+assert caminho(ant, "a", "z") == []
+'''
+javascript = '''
+const g = new Map([["a", [["b", 4], ["c", 1]]], ["c", [["b", 2], ["d", 7]]], ["b", [["d", 1]]]]);
+const { dist } = dijkstra(g, "a");
+if (dist.get("d") !== 4 || dist.get("b") !== 3) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "algo.topological_sort"
+title = "Ordenação topológica (Kahn)"
+keywords = "ordenacao topologica topological sort kahn dependencias dag grafo aciclico ordem build tarefas"
+require = ["topologica", "topological", "dependencias"]
+tags = ["algorithm", "graph"]
+
+[pattern.code]
+python = '''
+from collections import deque
+
+
+def ordem_topologica(deps: dict) -> list:
+    """deps = {tarefa: [pré-requisitos]}. Levanta ValueError se houver ciclo. O(V + E)."""
+    nos = set(deps) | {p for ps in deps.values() for p in ps}
+    entrada = {n: 0 for n in nos}
+    saida = {n: [] for n in nos}
+    for tarefa, pres in deps.items():
+        for p in pres:
+            saida[p].append(tarefa)
+            entrada[tarefa] += 1
+    fila = deque(sorted(n for n in nos if entrada[n] == 0))
+    ordem = []
+    while fila:
+        n = fila.popleft()
+        ordem.append(n)
+        for m in saida[n]:
+            entrada[m] -= 1
+            if entrada[m] == 0:
+                fila.append(m)
+    if len(ordem) != len(nos):
+        raise ValueError("dependência circular")
+    return ordem
+'''
+javascript = '''
+/** deps: { tarefa: [pré-requisitos] }. Lança erro se houver ciclo. */
+function ordemTopologica(deps) {
+  const nos = new Set(Object.keys(deps));
+  for (const ps of Object.values(deps)) ps.forEach((p) => nos.add(p));
+  const entrada = new Map([...nos].map((n) => [n, 0]));
+  const saida = new Map([...nos].map((n) => [n, []]));
+  for (const [tarefa, pres] of Object.entries(deps)) {
+    for (const p of pres) {
+      saida.get(p).push(tarefa);
+      entrada.set(tarefa, entrada.get(tarefa) + 1);
+    }
+  }
+  const fila = [...nos].filter((n) => entrada.get(n) === 0).sort();
+  const ordem = [];
+  while (fila.length) {
+    const n = fila.shift();
+    ordem.push(n);
+    for (const m of saida.get(n)) {
+      entrada.set(m, entrada.get(m) - 1);
+      if (entrada.get(m) === 0) fila.push(m);
+    }
+  }
+  if (ordem.length !== nos.size) throw new Error("dependência circular");
+  return ordem;
+}
+'''
+go = '''
+import "errors"
+
+// ordemTopologica recebe deps[tarefa] = pré-requisitos e devolve uma ordem válida (erro se houver ciclo).
+func ordemTopologica(deps map[string][]string) ([]string, error) {
+	entrada := map[string]int{}
+	saida := map[string][]string{}
+	for tarefa, pres := range deps {
+		if _, ok := entrada[tarefa]; !ok {
+			entrada[tarefa] = 0
+		}
+		for _, p := range pres {
+			if _, ok := entrada[p]; !ok {
+				entrada[p] = 0
+			}
+			saida[p] = append(saida[p], tarefa)
+			entrada[tarefa]++
+		}
+	}
+	var fila, ordem []string
+	for n, g := range entrada {
+		if g == 0 {
+			fila = append(fila, n)
+		}
+	}
+	for len(fila) > 0 {
+		n := fila[0]
+		fila = fila[1:]
+		ordem = append(ordem, n)
+		for _, m := range saida[n] {
+			entrada[m]--
+			if entrada[m] == 0 {
+				fila = append(fila, m)
+			}
+		}
+	}
+	if len(ordem) != len(entrada) {
+		return nil, errors.New("dependência circular")
+	}
+	return ordem, nil
+}
+'''
+
+[pattern.test]
+python = '''
+o = ordem_topologica({"app": ["lib", "util"], "lib": ["util"], "util": []})
+assert o.index("util") < o.index("lib") < o.index("app")
+try:
+    ordem_topologica({"a": ["b"], "b": ["a"]})
+    raise AssertionError("ciclo não detectado")
+except ValueError:
+    pass
+'''
+javascript = '''
+const o = ordemTopologica({ app: ["lib", "util"], lib: ["util"], util: [] });
+if (!(o.indexOf("util") < o.indexOf("lib") && o.indexOf("lib") < o.indexOf("app"))) throw new Error("falhou");
+let ciclo = false;
+try { ordemTopologica({ a: ["b"], b: ["a"] }); } catch { ciclo = true; }
+if (!ciclo) throw new Error("ciclo não detectado");
+'''
+
+[[pattern]]
+id = "algo.astar"
+title = "A* em grade (pathfinding)"
+keywords = "a star astar pathfinding caminho grade grid mapa jogo heuristica manhattan obstaculos"
+require = ["astar", "pathfinding", "star"]
+tags = ["algorithm", "graph", "games"]
+
+[pattern.code]
+python = '''
+import heapq
+
+
+def a_estrela(grade: list[str], inicio: tuple[int, int], fim: tuple[int, int]) -> list[tuple[int, int]] | None:
+    """grade: linhas de texto, '#' = parede. Movimento em 4 direções, heurística de Manhattan."""
+    linhas, colunas = len(grade), len(grade[0])
+
+    def h(p):
+        return abs(p[0] - fim[0]) + abs(p[1] - fim[1])
+
+    aberto = [(h(inicio), 0, inicio)]
+    custo = {inicio: 0}
+    anterior = {}
+    while aberto:
+        _, g, atual = heapq.heappop(aberto)
+        if atual == fim:
+            caminho = [atual]
+            while atual in anterior:
+                atual = anterior[atual]
+                caminho.append(atual)
+            return caminho[::-1]
+        if g > custo[atual]:
+            continue
+        r, c = atual
+        for viz in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+            vr, vc = viz
+            if 0 <= vr < linhas and 0 <= vc < colunas and grade[vr][vc] != "#":
+                ng = g + 1
+                if ng < custo.get(viz, float("inf")):
+                    custo[viz] = ng
+                    anterior[viz] = atual
+                    heapq.heappush(aberto, (ng + h(viz), ng, viz))
+    return None
+'''
+
+[pattern.test]
+python = '''
+grade = ["....", ".##.", "...."]
+c = a_estrela(grade, (0, 0), (2, 3))
+assert c[0] == (0, 0) and c[-1] == (2, 3) and len(c) == 6
+assert a_estrela([".#", "#."], (0, 0), (1, 1)) is None
+'''
+
+[[pattern]]
+id = "algo.kruskal"
+title = "Árvore geradora mínima (Kruskal)"
+keywords = "arvore geradora minima minimum spanning tree mst kruskal union find custo rede"
+require = ["kruskal", "mst", "geradora", "spanning"]
+tags = ["algorithm", "graph"]
+
+[pattern.code]
+python = '''
+def kruskal(n: int, arestas: list[tuple[int, int, float]]) -> tuple[float, list]:
+    """Vértices 0..n-1, arestas (u, v, peso). Devolve (custo total, arestas escolhidas)."""
+    pai = list(range(n))
+
+    def raiz(x: int) -> int:
+        while pai[x] != x:
+            pai[x] = pai[pai[x]]  # compressão de caminho
+            x = pai[x]
+        return x
+
+    total, escolhidas = 0.0, []
+    for u, v, peso in sorted(arestas, key=lambda a: a[2]):
+        ru, rv = raiz(u), raiz(v)
+        if ru != rv:
+            pai[ru] = rv
+            total += peso
+            escolhidas.append((u, v, peso))
+    return total, escolhidas
+'''
+
+[pattern.test]
+python = '''
+total, arestas = kruskal(4, [(0, 1, 1), (1, 2, 2), (0, 2, 3), (2, 3, 1)])
+assert total == 4 and len(arestas) == 3
+'''

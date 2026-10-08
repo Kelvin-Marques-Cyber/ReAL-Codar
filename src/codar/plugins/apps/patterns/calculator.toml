@@ -1,0 +1,808 @@
+# Calculadora com boas práticas: sem eval, tabela de despacho, validação de entrada,
+# divisão por zero, estouro e raiz de negativo tratados, Ctrl+D sem traceback, lógica (calcular) separada
+# da interface (main) para ser testável. Entrada natural: a conta inteira numa linha ("2 + 3").
+
+[[pattern]]
+id = "app.calculator"
+title = "Calculadora interativa"
+keywords = "calculadora calculator calcular operacoes aritmeticas somar subtrair multiplicar dividir"
+require = ["calculadora"]
+tags = ["app", "best-practice", "cli"]
+
+[pattern.code]
+python = '''
+import math
+import operator
+import re
+
+OPERACOES = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
+    "%": operator.mod,
+    "^": operator.pow,
+    "**": operator.pow,
+}
+# Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+CONTA = re.compile(r"\s*([-+]?\d*[.,]?\d+)\s*(\*\*|[-+*/%^])\s*([-+]?\d*[.,]?\d+)\s*")
+
+
+def calcular(a: float, op: str, b: float) -> float:
+    """Aplica a operação; ValueError para operador inválido, divisão por zero ou resultado fora dos reais."""
+    if op not in OPERACOES:
+        raise ValueError(f"operador inválido: {op!r}")
+    if (op in ("/", "%") and b == 0) or (op in ("^", "**") and a == 0 and b < 0):
+        raise ValueError("divisão por zero")
+    try:
+        resultado = OPERACOES[op](a, b)
+    except OverflowError:  # 10 ^ 400
+        raise ValueError("resultado grande demais") from None
+    if isinstance(resultado, complex):  # (-8) ^ 0.5
+        raise ValueError("resultado não é um número real")
+    if not math.isfinite(resultado):
+        raise ValueError("resultado grande demais")
+    return resultado + 0.0  # -0.0 vira 0.0
+
+
+def interpretar(linha: str) -> tuple[float, str, float]:
+    """'2,5 * 4' -> (2.5, '*', 4.0); ValueError se a linha não for uma conta."""
+    m = CONTA.fullmatch(linha)
+    if m is None:
+        raise ValueError("digite uma conta como 2 + 3")
+    a, op, b = m.groups()
+    return float(a.replace(",", ".")), op, float(b.replace(",", "."))
+
+
+def main() -> None:
+    print("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)")
+    while True:
+        try:
+            linha = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):  # Ctrl+D / Ctrl+C encerram sem traceback
+            print()
+            break
+        if linha.lower() in ("q", "sair", "exit"):
+            break
+        if not linha:
+            continue
+        try:
+            print(f"= {calcular(*interpretar(linha)):.12g}")
+        except ValueError as erro:
+            print(f"Erro: {erro}")
+
+
+if __name__ == "__main__":
+    main()
+'''
+javascript = '''
+import * as readline from "node:readline";
+
+const OPERACOES = {
+  "+": (a, b) => a + b,
+  "-": (a, b) => a - b,
+  "*": (a, b) => a * b,
+  "/": (a, b) => a / b,
+  "%": (a, b) => a % b,
+  "^": (a, b) => a ** b,
+  "**": (a, b) => a ** b,
+};
+// Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+const CONTA = /^\s*([-+]?\d*[.,]?\d+)\s*(\*\*|[-+*/%^])\s*([-+]?\d*[.,]?\d+)\s*$/;
+
+export function calcular(a, op, b) {
+  // Object.hasOwn evita que "constructor" ou "toString" sejam aceitos como operadores.
+  if (!Object.hasOwn(OPERACOES, op)) throw new Error(`operador inválido: ${op}`);
+  const potencia = op === "^" || op === "**";
+  if (((op === "/" || op === "%") && b === 0) || (potencia && a === 0 && b < 0)) {
+    throw new Error("divisão por zero");
+  }
+  const r = OPERACOES[op](a, b);
+  if (Number.isNaN(r)) throw new Error("resultado não é um número real");
+  if (!Number.isFinite(r)) throw new Error("resultado grande demais");
+  return r;
+}
+
+export function interpretar(linha) {
+  const m = CONTA.exec(linha);
+  if (!m) throw new Error("digite uma conta como 2 + 3");
+  return [Number(m[1].replace(",", ".")), m[2], Number(m[3].replace(",", "."))];
+}
+
+// 12 algarismos significativos: 0.1 + 0.2 -> 0.3
+const formatar = (n) => String(Number(n.toPrecision(12)));
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
+console.log("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)");
+rl.prompt();
+for await (const bruta of rl) {
+  const linha = bruta.trim();
+  if (["q", "sair", "exit"].includes(linha.toLowerCase())) break;
+  if (linha) {
+    try {
+      console.log(`= ${formatar(calcular(...interpretar(linha)))}`);
+    } catch (err) {
+      console.log(`Erro: ${err.message}`);
+    }
+  }
+  rl.prompt();
+}
+rl.close();
+'''
+typescript = '''
+import * as readline from "node:readline";
+
+type Operacao = (a: number, b: number) => number;
+
+const OPERACOES: Record<string, Operacao> = {
+  "+": (a, b) => a + b,
+  "-": (a, b) => a - b,
+  "*": (a, b) => a * b,
+  "/": (a, b) => a / b,
+  "%": (a, b) => a % b,
+  "^": (a, b) => a ** b,
+  "**": (a, b) => a ** b,
+};
+// Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+const CONTA = /^\s*([-+]?\d*[.,]?\d+)\s*(\*\*|[-+*/%^])\s*([-+]?\d*[.,]?\d+)\s*$/;
+
+export function calcular(a: number, op: string, b: number): number {
+  if (!Object.hasOwn(OPERACOES, op)) throw new Error(`operador inválido: ${op}`);
+  const potencia = op === "^" || op === "**";
+  if (((op === "/" || op === "%") && b === 0) || (potencia && a === 0 && b < 0)) {
+    throw new Error("divisão por zero");
+  }
+  const r = OPERACOES[op](a, b);
+  if (Number.isNaN(r)) throw new Error("resultado não é um número real");
+  if (!Number.isFinite(r)) throw new Error("resultado grande demais");
+  return r;
+}
+
+export function interpretar(linha: string): [number, string, number] {
+  const m = CONTA.exec(linha);
+  if (!m) throw new Error("digite uma conta como 2 + 3");
+  return [Number(m[1].replace(",", ".")), m[2], Number(m[3].replace(",", "."))];
+}
+
+// 12 algarismos significativos: 0.1 + 0.2 -> 0.3
+const formatar = (n: number): string => String(Number(n.toPrecision(12)));
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
+console.log("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)");
+rl.prompt();
+for await (const bruta of rl) {
+  const linha = bruta.trim();
+  if (["q", "sair", "exit"].includes(linha.toLowerCase())) break;
+  if (linha) {
+    try {
+      console.log(`= ${formatar(calcular(...interpretar(linha)))}`);
+    } catch (err) {
+      console.log(`Erro: ${(err as Error).message}`);
+    }
+  }
+  rl.prompt();
+}
+rl.close();
+'''
+go = '''
+package main
+
+import (
+	"bufio"
+	"errors"
+	"fmt"
+	"math"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+var conta = regexp.MustCompile(`^\s*([-+]?\d*[.,]?\d+)\s*(\*\*|[-+*/%^])\s*([-+]?\d*[.,]?\d+)\s*$`)
+
+var operacoes = map[string]func(a, b float64) float64{
+	"+":  func(a, b float64) float64 { return a + b },
+	"-":  func(a, b float64) float64 { return a - b },
+	"*":  func(a, b float64) float64 { return a * b },
+	"/":  func(a, b float64) float64 { return a / b },
+	"%":  math.Mod,
+	"^":  math.Pow,
+	"**": math.Pow,
+}
+
+func calcular(a float64, op string, b float64) (float64, error) {
+	fn, ok := operacoes[op]
+	if !ok {
+		return 0, fmt.Errorf("operador inválido: %q", op)
+	}
+	potencia := op == "^" || op == "**"
+	if ((op == "/" || op == "%") && b == 0) || (potencia && a == 0 && b < 0) {
+		return 0, errors.New("divisão por zero")
+	}
+	r := fn(a, b)
+	if math.IsNaN(r) {
+		return 0, errors.New("resultado não é um número real")
+	}
+	if math.IsInf(r, 0) {
+		return 0, errors.New("resultado grande demais")
+	}
+	return r + 0, nil // -0 vira 0
+}
+
+func avaliar(linha string) (float64, error) {
+	m := conta.FindStringSubmatch(linha)
+	if m == nil {
+		return 0, errors.New("digite uma conta como 2 + 3")
+	}
+	a, errA := strconv.ParseFloat(strings.Replace(m[1], ",", ".", 1), 64)
+	b, errB := strconv.ParseFloat(strings.Replace(m[3], ",", ".", 1), 64)
+	if err := errors.Join(errA, errB); err != nil {
+		return 0, err
+	}
+	return calcular(a, m[2], b)
+}
+
+func main() {
+	fmt.Println("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)")
+	entrada := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("> ")
+		if !entrada.Scan() { // fim da entrada (Ctrl+D)
+			fmt.Println()
+			return
+		}
+		linha := strings.TrimSpace(entrada.Text())
+		if l := strings.ToLower(linha); l == "q" || l == "sair" || l == "exit" {
+			return
+		}
+		if linha == "" {
+			continue
+		}
+		r, err := avaliar(linha)
+		if err != nil {
+			fmt.Println("Erro:", err)
+			continue
+		}
+		fmt.Println("=", strconv.FormatFloat(r, 'g', 12, 64))
+	}
+}
+'''
+rust = '''
+use std::io::{self, BufRead, Write};
+
+fn calcular(a: f64, op: &str, b: f64) -> Result<f64, String> {
+    let r = match op {
+        "/" | "%" if b == 0.0 => return Err("divisão por zero".into()),
+        "^" | "**" if a == 0.0 && b < 0.0 => return Err("divisão por zero".into()),
+        "+" => a + b,
+        "-" => a - b,
+        "*" => a * b,
+        "/" => a / b,
+        "%" => a % b,
+        "^" | "**" => a.powf(b),
+        _ => return Err(format!("operador inválido: {op}")),
+    };
+    if r.is_nan() {
+        Err("resultado não é um número real".into())
+    } else if r.is_infinite() {
+        Err("resultado grande demais".into())
+    } else {
+        Ok(r)
+    }
+}
+
+/// "2,5 * 4" -> (2.5, "*", 4.0). O operador é o primeiro símbolo depois do primeiro dígito: "-2 - -3".
+fn interpretar(linha: &str) -> Result<(f64, &str, f64), String> {
+    let erro = || "digite uma conta como 2 + 3".to_string();
+    let texto = linha.trim();
+    let inicio = texto.find(|c: char| c.is_ascii_digit()).ok_or_else(erro)?;
+    let pos = inicio + texto[inicio..].find(|c: char| "+-*/%^".contains(c)).ok_or_else(erro)?;
+    let tam = if texto[pos..].starts_with("**") { 2 } else { 1 };
+    let numero = |s: &str| s.trim().replace(',', ".").parse::<f64>().map_err(|_| erro());
+    Ok((numero(&texto[..pos])?, &texto[pos..pos + tam], numero(&texto[pos + tam..])?))
+}
+
+/// Até 10 casas decimais, sem zeros sobrando: 0.1 + 0.2 -> 0.3
+fn formatar(r: f64) -> String {
+    let s = format!("{r:.10}");
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    if s == "-0" { "0".to_string() } else { s.to_string() }
+}
+
+fn main() {
+    println!("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)");
+    let mut linhas = io::stdin().lock().lines();
+    loop {
+        print!("> ");
+        io::stdout().flush().ok();
+        let Some(Ok(linha)) = linhas.next() else {
+            println!(); // fim da entrada (Ctrl+D)
+            break;
+        };
+        let linha = linha.trim();
+        if ["q", "sair", "exit"].contains(&linha.to_lowercase().as_str()) {
+            break;
+        }
+        if linha.is_empty() {
+            continue;
+        }
+        match interpretar(linha).and_then(|(a, op, b)| calcular(a, op, b)) {
+            Ok(r) => println!("= {}", formatar(r)),
+            Err(e) => println!("Erro: {e}"),
+        }
+    }
+}
+'''
+java = '''
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.util.Map;
+import java.util.Scanner;
+import java.util.function.DoubleBinaryOperator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class Calculadora {
+    private static final Map<String, DoubleBinaryOperator> OPERACOES = Map.of(
+        "+", (a, b) -> a + b,
+        "-", (a, b) -> a - b,
+        "*", (a, b) -> a * b,
+        "/", (a, b) -> a / b,
+        "%", (a, b) -> a % b,
+        "^", Math::pow,
+        "**", Math::pow
+    );
+    // Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+    private static final Pattern CONTA =
+        Pattern.compile("\\s*([-+]?\\d*[.,]?\\d+)\\s*(\\*\\*|[-+*/%^])\\s*([-+]?\\d*[.,]?\\d+)\\s*");
+
+    static double calcular(double a, String op, double b) {
+        DoubleBinaryOperator fn = OPERACOES.get(op);
+        if (fn == null) {
+            throw new IllegalArgumentException("operador inválido: " + op);
+        }
+        boolean potencia = op.equals("^") || op.equals("**");
+        if (((op.equals("/") || op.equals("%")) && b == 0) || (potencia && a == 0 && b < 0)) {
+            throw new IllegalArgumentException("divisão por zero");
+        }
+        double r = fn.applyAsDouble(a, b);
+        if (Double.isNaN(r)) {
+            throw new IllegalArgumentException("resultado não é um número real");
+        }
+        if (Double.isInfinite(r)) {
+            throw new IllegalArgumentException("resultado grande demais");
+        }
+        return r;
+    }
+
+    static double avaliar(String linha) {
+        Matcher m = CONTA.matcher(linha);
+        if (!m.matches()) {
+            throw new IllegalArgumentException("digite uma conta como 2 + 3");
+        }
+        double a = Double.parseDouble(m.group(1).replace(',', '.'));
+        double b = Double.parseDouble(m.group(3).replace(',', '.'));
+        return calcular(a, m.group(2), b);
+    }
+
+    /** 12 algarismos significativos, sem notação científica: 0.1 + 0.2 -> 0.3 */
+    static String formatar(double r) {
+        return BigDecimal.valueOf(r).round(new MathContext(12)).stripTrailingZeros().toPlainString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)");
+        try (Scanner sc = new Scanner(System.in)) {
+            while (true) {
+                System.out.print("> ");
+                if (!sc.hasNextLine()) { // fim da entrada (Ctrl+D)
+                    System.out.println();
+                    break;
+                }
+                String linha = sc.nextLine().trim();
+                if (linha.equalsIgnoreCase("q") || linha.equalsIgnoreCase("sair") || linha.equalsIgnoreCase("exit")) {
+                    break;
+                }
+                if (linha.isEmpty()) {
+                    continue;
+                }
+                try {
+                    System.out.println("= " + formatar(avaliar(linha)));
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Erro: " + e.getMessage());
+                }
+            }
+        }
+    }
+}
+'''
+csharp = '''
+using System.Globalization;
+using System.Text.RegularExpressions;
+
+var operacoes = new Dictionary<string, Func<double, double, double>>
+{
+    ["+"] = (a, b) => a + b,
+    ["-"] = (a, b) => a - b,
+    ["*"] = (a, b) => a * b,
+    ["/"] = (a, b) => a / b,
+    ["%"] = (a, b) => a % b,
+    ["^"] = Math.Pow,
+    ["**"] = Math.Pow,
+};
+// Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+var conta = new Regex(@"^\s*([-+]?[0-9]*[.,]?[0-9]+)\s*(\*\*|[-+*/%^])\s*([-+]?[0-9]*[.,]?[0-9]+)\s*$");
+
+double Calcular(double a, string op, double b)
+{
+    if (!operacoes.TryGetValue(op, out var fn))
+    {
+        throw new ArgumentException($"operador inválido: {op}");
+    }
+    if (((op is "/" or "%") && b == 0) || ((op is "^" or "**") && a == 0 && b < 0))
+    {
+        throw new ArgumentException("divisão por zero");
+    }
+    var r = fn(a, b);
+    if (double.IsNaN(r))
+    {
+        throw new ArgumentException("resultado não é um número real");
+    }
+    if (double.IsInfinity(r))
+    {
+        throw new ArgumentException("resultado grande demais");
+    }
+    return r + 0.0; // -0 vira 0
+}
+
+double Avaliar(string linha)
+{
+    var m = conta.Match(linha);
+    if (!m.Success)
+    {
+        throw new ArgumentException("digite uma conta como 2 + 3");
+    }
+    double Numero(string s) => double.Parse(s.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture);
+    return Calcular(Numero(m.Groups[1].Value), m.Groups[2].Value, Numero(m.Groups[3].Value));
+}
+
+Console.WriteLine("Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)");
+while (true)
+{
+    Console.Write("> ");
+    var linha = Console.ReadLine()?.Trim();
+    if (linha is null) // fim da entrada (Ctrl+D / Ctrl+Z)
+    {
+        Console.WriteLine();
+        break;
+    }
+    if (linha.ToLowerInvariant() is "q" or "sair" or "exit")
+    {
+        break;
+    }
+    if (linha.Length == 0)
+    {
+        continue;
+    }
+    try
+    {
+        Console.WriteLine($"= {Avaliar(linha).ToString("G12", CultureInfo.InvariantCulture)}");
+    }
+    catch (ArgumentException e)
+    {
+        Console.WriteLine($"Erro: {e.Message}");
+    }
+}
+'''
+powershell = '''
+$Operacoes = @{
+    '+'  = { param($a, $b) $a + $b }
+    '-'  = { param($a, $b) $a - $b }
+    '*'  = { param($a, $b) $a * $b }
+    '/'  = { param($a, $b) $a / $b }
+    '%'  = { param($a, $b) $a % $b }
+    '^'  = { param($a, $b) [math]::Pow($a, $b) }
+    '**' = { param($a, $b) [math]::Pow($a, $b) }
+}
+# Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10" (vírgula ou ponto decimal).
+$PadraoConta = '^\s*([-+]?[0-9]*[.,]?[0-9]+)\s*(\*\*|[-+*/%^])\s*([-+]?[0-9]*[.,]?[0-9]+)\s*$'
+$Cultura = [cultureinfo]::InvariantCulture
+
+function Invoke-Calculo {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][double]$A,
+        [Parameter(Mandatory)][string]$Operador,
+        [Parameter(Mandatory)][double]$B
+    )
+    if (-not $Operacoes.ContainsKey($Operador)) {
+        throw "operador inválido: $Operador"
+    }
+    if ((($Operador -in '/', '%') -and $B -eq 0) -or (($Operador -in '^', '**') -and $A -eq 0 -and $B -lt 0)) {
+        throw 'divisão por zero'
+    }
+    $r = [double](& $Operacoes[$Operador] $A $B)
+    if ([double]::IsNaN($r)) { throw 'resultado não é um número real' }
+    if ([double]::IsInfinity($r)) { throw 'resultado grande demais' }
+    $r + 0.0  # -0 vira 0
+}
+
+function ConvertFrom-Conta {
+    param([Parameter(Mandatory)][string]$Linha)
+    if (-not ($Linha -match $PadraoConta)) {
+        throw 'digite uma conta como 2 + 3'
+    }
+    [pscustomobject]@{
+        A        = [double]::Parse($Matches[1].Replace(',', '.'), $Cultura)
+        Operador = $Matches[2]
+        B        = [double]::Parse($Matches[3].Replace(',', '.'), $Cultura)
+    }
+}
+
+Write-Output 'Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)'
+while ($true) {
+    [Console]::Write('> ')
+    $linha = [Console]::In.ReadLine()  # $null no fim da entrada (Ctrl+D / Ctrl+Z)
+    if ($null -eq $linha) {
+        Write-Output ''
+        break
+    }
+    $linha = $linha.Trim()
+    if ($linha -in 'q', 'sair', 'exit') { break }
+    if (-not $linha) { continue }
+    try {
+        $conta = ConvertFrom-Conta -Linha $linha
+        $r = Invoke-Calculo -A $conta.A -Operador $conta.Operador -B $conta.B
+        Write-Output "= $($r.ToString('G12', $Cultura))"
+    }
+    catch {
+        Write-Output "Erro: $($_.Exception.Message)"
+    }
+}
+'''
+bash = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Uma operação por linha: "2 + 3", "-1,5 * 4", "2 ^ 10". As contas usam awk, que vem em qualquer Linux
+# (o bc não vem instalado em imagens mínimas como o Ubuntu Server).
+readonly NUM='[-+]?[0-9]*[.,]?[0-9]+'
+
+calcular() {
+  local a="$1" op="$2" b="$3"
+  if [[ "$op" == '**' ]]; then
+    op='^'
+  fi
+  case "$op" in
+    +|-|'*'|/|%|^) ;;
+    *) echo "operador inválido: $op"; return 1 ;;
+  esac
+  awk -v a="$a" -v op="$op" -v b="$b" 'BEGIN {
+    if (((op == "/" || op == "%") && b == 0) || (op == "^" && a == 0 && b < 0)) { print "divisão por zero"; exit 1 }
+    if (op == "^" && a < 0 && b != int(b)) { print "resultado não é um número real"; exit 1 }
+    r = op == "+" ? a + b : op == "-" ? a - b : op == "*" ? a * b : op == "/" ? a / b : op == "%" ? a % b : a ^ b
+    if (r > 1.7976931348623157e308 || r < -1.7976931348623157e308) { print "resultado grande demais"; exit 1 }
+    printf "%.12g\n", r + 0
+  }'
+}
+
+echo "Calculadora — digite uma conta como 2 + 3 (operadores: + - * / % ^; q para sair)"
+while IFS= read -rp "> " linha; do
+  linha="${linha//[[:space:]]/}"  # "2 + 3" -> "2+3"
+  case "${linha,,}" in
+    q|sair|exit) break ;;
+    '') continue ;;
+  esac
+  if [[ "$linha" =~ ^($NUM)(\*\*|[-+*/%^])($NUM)$ ]]; then
+    a="${BASH_REMATCH[1]//,/.}" op="${BASH_REMATCH[2]}" b="${BASH_REMATCH[3]//,/.}"
+    if resultado="$(calcular "$a" "$op" "$b")"; then
+      echo "= $resultado"
+    else
+      echo "Erro: $resultado"
+    fi
+  else
+    echo "Erro: digite uma conta como 2 + 3"
+  fi
+done
+'''
+
+[pattern.test]
+# Teste de uso real: a sessão abaixo é digitada no programa e a saída precisa conter cada trecho, em ordem.
+stdin = """2 + 3
+10 / 4
+2,5 * 2
+-2 - -3
+0 * -5
+10 / 0
+0 ^ -1
+2 ^ 10
+-8 ^ 0.5
+10 ^ 400
+abc
+0.1 + 0.2
+1000000 + 1
+q
+"""
+expect = ["= 5", "= 2.5", "= 5", "= 1", "= 0\n", "Erro: divisão por zero", "Erro: divisão por zero", "= 1024",
+          "Erro: resultado não é um número real", "Erro: resultado grande demais", "Erro: digite uma conta",
+          "= 0.3", "= 1000001"]
+
+[[pattern]]
+id = "algo.safe_eval"
+title = "Avaliar expressão matemática sem eval"
+keywords = "avaliar expressao matematica segura parser calculadora expression evaluate safe sem eval shunting yard"
+require = ["expressao", "expression"]
+tags = ["security", "parser", "best-practice"]
+
+[pattern.code]
+python = '''
+import ast
+import math
+import operator
+
+_BINARIOS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_UNARIOS = {ast.USub: operator.neg, ast.UAdd: operator.pos}
+
+
+def avaliar(expressao: str) -> float:
+    """Avalia + - * / % ** (ou ^) e parênteses sem executar código arbitrário (nada de eval).
+
+    Tudo é calculado em float: com inteiros, algo curto como ((9**99)**99)**99 travaria o processo.
+    Levanta ValueError para entrada inválida, divisão por zero ou resultado fora dos reais.
+    """
+    if len(expressao) > 200:
+        raise ValueError("expressão longa demais")
+    try:
+        arvore = ast.parse(expressao.replace("^", "**"), mode="eval")
+    except SyntaxError:
+        raise ValueError("expressão malformada") from None
+
+    def visitar(no: ast.AST) -> float:
+        if isinstance(no, ast.Expression):
+            return visitar(no.body)
+        if isinstance(no, ast.Constant) and type(no.value) in (int, float):  # True/False não são números aqui
+            return float(no.value)
+        if isinstance(no, ast.BinOp) and type(no.op) in _BINARIOS:
+            resultado = _BINARIOS[type(no.op)](visitar(no.left), visitar(no.right))
+            if isinstance(resultado, complex):  # (-8) ** 0.5
+                raise ValueError("resultado não é um número real")
+            return resultado
+        if isinstance(no, ast.UnaryOp) and type(no.op) in _UNARIOS:
+            return _UNARIOS[type(no.op)](visitar(no.operand))
+        raise ValueError(f"elemento não permitido: {type(no).__name__}")
+
+    try:
+        resultado = visitar(arvore)
+    except ZeroDivisionError:
+        raise ValueError("divisão por zero") from None
+    except OverflowError:
+        raise ValueError("resultado grande demais") from None
+    if not math.isfinite(resultado):
+        raise ValueError("resultado grande demais")
+    return resultado
+'''
+javascript = '''
+// Avaliador de expressões (+ - * / % ^ ou ** e parênteses) com shunting-yard: sem eval nem new Function.
+// "neg" é o menos unário: abaixo de ^ (-2^2 = -4, como na matemática) e acima de * e / (2 * -3 = -6).
+const PRECEDENCIA = { "+": 1, "-": 1, "*": 2, "/": 2, "%": 2, neg: 2.5, "^": 3 };
+const APLICAR = {
+  "+": (a, b) => a + b,
+  "-": (a, b) => a - b,
+  "*": (a, b) => a * b,
+  "/": (a, b) => {
+    if (b === 0) throw new Error("divisão por zero");
+    return a / b;
+  },
+  "%": (a, b) => {
+    if (b === 0) throw new Error("divisão por zero");
+    return a % b;
+  },
+  "^": (a, b) => {
+    if (a === 0 && b < 0) throw new Error("divisão por zero");
+    return a ** b;
+  },
+};
+
+export function avaliar(expressao) {
+  if (expressao.length > 200) throw new Error("expressão longa demais");
+  const tokens = expressao.match(/\d+(?:\.\d+)?|\*\*|[-+*/%^()]/g) ?? [];
+  if (tokens.join("") !== expressao.replace(/\s+/g, "")) throw new Error("caractere inválido na expressão");
+  const saida = [];
+  const ops = [];
+  const reduzir = () => {
+    const op = ops.pop();
+    const b = saida.pop();
+    if (b === undefined) throw new Error("expressão malformada");
+    if (op === "neg") {
+      saida.push(-b);
+      return;
+    }
+    const a = saida.pop();
+    if (a === undefined) throw new Error("expressão malformada");
+    saida.push(APLICAR[op](a, b));
+  };
+  let anterior = null;
+  for (const token of tokens) {
+    const t = token === "**" ? "^" : token;
+    if (/^\d/.test(t)) {
+      saida.push(Number(t));
+    } else if (t === "(") {
+      ops.push(t);
+    } else if (t === ")") {
+      while (ops.length && ops.at(-1) !== "(") reduzir();
+      if (ops.pop() !== "(") throw new Error("parênteses desbalanceados");
+    } else if (t === "-" && (anterior === null || anterior === "(" || Object.hasOwn(PRECEDENCIA, anterior))) {
+      ops.push("neg"); // operador prefixo: entra na pilha sem desempilhar nada
+    } else {
+      // ^ é associativo à direita (2^3^2 = 2^9); os demais, à esquerda
+      while (ops.length && ops.at(-1) !== "(" &&
+        (PRECEDENCIA[ops.at(-1)] > PRECEDENCIA[t] || (PRECEDENCIA[ops.at(-1)] === PRECEDENCIA[t] && t !== "^"))) {
+        reduzir();
+      }
+      ops.push(t);
+    }
+    anterior = t;
+  }
+  while (ops.length) {
+    if (ops.at(-1) === "(") throw new Error("parênteses desbalanceados");
+    reduzir();
+  }
+  if (saida.length !== 1) throw new Error("expressão malformada");
+  const r = saida[0];
+  if (Number.isNaN(r)) throw new Error("resultado não é um número real");
+  if (!Number.isFinite(r)) throw new Error("resultado grande demais");
+  return r;
+}
+'''
+
+[pattern.test]
+python = '''
+assert avaliar("2 + 3 * 4") == 14
+assert avaliar("(2 + 3) * 4") == 20
+assert avaliar("2 * -3") == -6
+assert avaliar("-2 ** 2") == -4
+assert avaliar("2 ^ 10") == 1024
+assert avaliar("2 ** 3 ** 2") == 512
+assert avaliar("7 % 3") == 1
+for ruim in ["1 / 0", "0 ** -1", "(-8) ** 0.5", "(-8) ** 0.5 % 2", "__import__('os')", "1 +", "True + 1",
+             "9 ** 99 ** 99", "((9 ** 99) ** 99) ** 99", "2" * 201, "abc", "[1]", "x.y"]:
+    try:
+        avaliar(ruim)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(f"deveria falhar: {ruim}")
+'''
+javascript = '''
+const confere = (expr, esperado) => {
+  const r = avaliar(expr);
+  if (r !== esperado) throw new Error(`${expr} = ${r}, esperado ${esperado}`);
+};
+confere("2 + 3 * 4", 14);
+confere("(2 + 3) * 4", 20);
+confere("2 * -3", -6);
+confere("-2 ^ 2", -4);
+confere("2 ** 10", 1024);
+confere("2 ^ 3 ^ 2", 512);
+confere("2 ^ -1", 0.5);
+confere("--3", 3);
+confere("7 % 3", 1);
+for (const ruim of ["1 / 0", "0 ^ -1", "(-8) ^ 0.5", "1 +", "(1", "1)", "abc", "2; process.exit(1)", "1 2",
+  "2".repeat(201)]) {
+  let falhou = false;
+  try {
+    avaliar(ruim);
+  } catch {
+    falhou = true;
+  }
+  if (!falhou) throw new Error(`deveria falhar: ${ruim}`);
+}
+'''

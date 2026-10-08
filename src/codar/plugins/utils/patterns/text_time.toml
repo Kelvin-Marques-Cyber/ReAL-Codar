@@ -1,0 +1,845 @@
+# Texto, datas, identificadores e codificação. Datas sempre com fuso explícito (UTC) para evitar bugs de horário de verão.
+
+[[pattern]]
+id = "util.uuid"
+title = "Gerar UUID"
+keywords = "uuid guid identificador unico gerar id aleatorio v4 v7"
+require = ["uuid", "guid"]
+tags = ["id"]
+
+[pattern.code]
+python = '''
+import uuid
+
+identificador = str(uuid.uuid4())
+'''
+javascript = '''
+// Disponível no Node 19+ e em navegadores modernos (globalThis.crypto).
+const identificador = crypto.randomUUID();
+'''
+typescript = '''
+const identificador: string = crypto.randomUUID();
+'''
+go = '''
+import (
+	"crypto/rand"
+	"fmt"
+)
+
+// novoUUID gera um UUID v4 sem dependências externas (ou use github.com/google/uuid).
+func novoUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // versão 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variante RFC 4122
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+'''
+java = '''
+String identificador = java.util.UUID.randomUUID().toString();
+'''
+csharp = '''
+// .NET 9+: Guid.CreateVersion7() gera ids ordenáveis por tempo (bons para chaves de banco).
+var identificador = Guid.NewGuid().ToString();
+'''
+powershell = '''
+$identificador = [guid]::NewGuid().ToString()
+'''
+bash = '''
+identificador="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen)"
+'''
+rust = '''
+// Cargo.toml: uuid = { version = "1", features = ["v4"] }
+let identificador = uuid::Uuid::new_v4().to_string();
+'''
+
+[pattern.test]
+python = '''
+assert len(identificador) == 36 and identificador.count("-") == 4
+'''
+javascript = '''
+if (!/^[0-9a-f-]{36}$/.test(identificador)) throw new Error("falhou");
+'''
+powershell = '''
+if ($identificador.Length -ne 36) { throw 'falhou' }
+'''
+
+[[pattern]]
+id = "util.now_iso"
+title = "Data e hora atual (ISO 8601, UTC e local)"
+keywords = "data hora atual agora now timestamp iso 8601 utc formatar data atual"
+require = ["data", "date", "hora", "time", "timestamp", "agora", "now"]
+tags = ["datetime"]
+
+[pattern.code]
+python = '''
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+agora_utc = datetime.now(timezone.utc)
+agora_sp = datetime.now(ZoneInfo("America/Sao_Paulo"))
+print(agora_utc.isoformat(timespec="seconds"))  # 2026-10-02T13:17:05+00:00
+print(agora_sp.strftime("%d/%m/%Y %H:%M"))
+'''
+javascript = '''
+const agora = new Date();
+console.log(agora.toISOString()); // UTC, ex.: 2026-10-02T13:17:05.123Z
+console.log(agora.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }));
+'''
+go = '''
+import (
+	"fmt"
+	"time"
+)
+
+func imprimirAgora() error {
+	agora := time.Now().UTC()
+	fmt.Println(agora.Format(time.RFC3339))
+	sp, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		return err
+	}
+	fmt.Println(agora.In(sp).Format("02/01/2006 15:04"))
+	return nil
+}
+'''
+rust = '''
+use std::time::{SystemTime, UNIX_EPOCH};
+
+// Sem dependências: segundos desde a época Unix. Para formatar datas use o crate `chrono` ou `jiff`.
+let segundos = SystemTime::now().duration_since(UNIX_EPOCH).expect("relógio antes de 1970").as_secs();
+'''
+java = '''
+var agoraUtc = java.time.Instant.now();
+var agoraSp = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
+System.out.println(agoraUtc);
+System.out.println(agoraSp.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+'''
+csharp = '''
+var agoraUtc = DateTimeOffset.UtcNow;
+Console.WriteLine(agoraUtc.ToString("O"));
+Console.WriteLine(DateTime.Now.ToString("dd/MM/yyyy HH:mm", new System.Globalization.CultureInfo("pt-BR")));
+'''
+powershell = '''
+(Get-Date).ToUniversalTime().ToString('o')
+Get-Date -Format 'dd/MM/yyyy HH:mm'
+'''
+bash = '''
+date -u +%Y-%m-%dT%H:%M:%SZ
+TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M'
+'''
+
+[[pattern]]
+id = "util.date_diff"
+title = "Diferença entre datas (dias, idade)"
+keywords = "diferenca entre datas dias idade anos intervalo data diff calcular idade nascimento"
+require = ["diferenca", "diff", "idade", "age", "intervalo"]
+tags = ["datetime"]
+
+[pattern.code]
+python = '''
+from datetime import date
+
+
+def dias_entre(inicio: date, fim: date) -> int:
+    return (fim - inicio).days
+
+
+def idade(nascimento: date, hoje: date | None = None) -> int:
+    hoje = hoje or date.today()
+    return hoje.year - nascimento.year - ((hoje.month, hoje.day) < (nascimento.month, nascimento.day))
+'''
+javascript = '''
+const DIA_MS = 86_400_000;
+
+function diasEntre(inicio, fim) {
+  // Date.UTC evita erros de 1 dia em mudanças de horário de verão.
+  const utc = (d) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((utc(fim) - utc(inicio)) / DIA_MS);
+}
+
+function idade(nascimento, hoje = new Date()) {
+  let anos = hoje.getFullYear() - nascimento.getFullYear();
+  const m = hoje.getMonth() - nascimento.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) anos--;
+  return anos;
+}
+'''
+go = '''
+import "time"
+
+func diasEntre(inicio, fim time.Time) int {
+	return int(fim.Sub(inicio).Hours() / 24)
+}
+
+func idade(nascimento, hoje time.Time) int {
+	anos := hoje.Year() - nascimento.Year()
+	if hoje.YearDay() < nascimento.YearDay() {
+		anos--
+	}
+	return anos
+}
+'''
+csharp = '''
+static int DiasEntre(DateOnly inicio, DateOnly fim) => fim.DayNumber - inicio.DayNumber;
+
+static int Idade(DateOnly nascimento, DateOnly hoje)
+{
+    int anos = hoje.Year - nascimento.Year;
+    if (hoje < nascimento.AddYears(anos)) anos--;
+    return anos;
+}
+'''
+powershell = '''
+$dias = (New-TimeSpan -Start (Get-Date '2026-01-01') -End (Get-Date '2026-10-02')).Days
+'''
+
+[pattern.test]
+python = '''
+from datetime import date
+assert dias_entre(date(2026, 1, 1), date(2026, 3, 1)) == 59 and idade(date(2000, 10, 3), date(2026, 10, 2)) == 25
+'''
+javascript = '''
+if (diasEntre(new Date(2026, 0, 1), new Date(2026, 2, 1)) !== 59 || idade(new Date(2000, 9, 3), new Date(2026, 9, 2)) !== 25) throw new Error("falhou");
+'''
+powershell = '''
+if ($dias -ne 274) { throw "falhou: $dias" }
+'''
+
+[[pattern]]
+id = "util.parse_date"
+title = "Converter texto em data (parse) e formatar"
+keywords = "converter texto data parse string para data formato dd/mm/yyyy strptime formatar"
+require = ["parse", "converter", "convert", "formatar", "format"]
+tags = ["datetime"]
+
+slots = { text = "02/10/2026" }
+[pattern.code]
+python = '''
+from datetime import datetime
+
+data = datetime.strptime("{{text}}", "%d/%m/%Y")  # ValueError se o formato não bater
+iso = datetime.fromisoformat("2026-10-02T13:17:05+00:00")
+print(data.strftime("%Y-%m-%d"))
+'''
+javascript = '''
+function parseDataBR(texto) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(texto);
+  if (!m) throw new Error(`data inválida: ${texto}`);
+  const [, d, mes, a] = m.map(Number);
+  const data = new Date(a, mes - 1, d);
+  if (data.getMonth() !== mes - 1) throw new Error(`data inexistente: ${texto}`); // ex.: 31/02
+  return data;
+}
+'''
+go = '''
+import "time"
+
+func parseDataBR(texto string) (time.Time, error) {
+	// Layout de referência do Go: 02/01/2006 = dd/mm/aaaa
+	return time.Parse("02/01/2006", texto)
+}
+'''
+csharp = '''
+var data = DateTime.ParseExact("{{text}}", "dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+'''
+powershell = '''
+$data = [datetime]::ParseExact('{{text}}', 'dd/MM/yyyy', [cultureinfo]::InvariantCulture)
+$data.ToString('yyyy-MM-dd')
+'''
+
+[pattern.test]
+python = '''
+assert data.year == 2026 and data.month == 10 and data.day == 2
+'''
+javascript = '''
+if (parseDataBR("02/10/2026").getMonth() !== 9) throw new Error("falhou");
+let invalida = false; try { parseDataBR("31/02/2026"); } catch { invalida = true; }
+if (!invalida) throw new Error("aceitou 31/02");
+'''
+
+[[pattern]]
+id = "util.random"
+title = "Número aleatório num intervalo e embaralhar"
+keywords = "numero aleatorio random intervalo sortear embaralhar shuffle escolher item aleatorio"
+require = ["aleatorio", "random", "sortear", "embaralhar", "shuffle"]
+tags = ["random"]
+
+[pattern.code]
+python = '''
+import random
+
+n = random.randint(1, 100)          # inclusive nas duas pontas
+item = random.choice(["a", "b", "c"])
+cartas = list(range(10))
+random.shuffle(cartas)               # no lugar
+# Para tokens, senhas ou sorteios com valor: use o módulo secrets (criptográfico).
+'''
+javascript = '''
+// Inteiro em [min, max]. Para segurança use crypto.getRandomValues.
+const aleatorio = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+function embaralhar(itens) {
+  const a = [...itens];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1)); // Fisher-Yates: distribuição uniforme
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+'''
+go = '''
+import "math/rand/v2"
+
+func aleatorio(min, max int) int {
+	return min + rand.IntN(max-min+1)
+}
+
+func embaralhar[T any](itens []T) {
+	rand.Shuffle(len(itens), func(i, j int) { itens[i], itens[j] = itens[j], itens[i] })
+}
+'''
+csharp = '''
+int n = Random.Shared.Next(1, 101); // limite superior exclusivo
+var cartas = Enumerable.Range(0, 10).ToArray();
+Random.Shared.Shuffle(cartas);      // .NET 8+
+'''
+powershell = '''
+$n = Get-Random -Minimum 1 -Maximum 101   # Maximum é exclusivo
+$cartas = 0..9 | Get-Random -Shuffle      # PowerShell 7.1+
+'''
+bash = '''
+n=$(( RANDOM % 100 + 1 ))      # 1..100 (RANDOM vai até 32767)
+shuf -i 1-100 -n 1             # alternativa com coreutils
+'''
+
+[pattern.test]
+python = '''
+assert 1 <= n <= 100 and sorted(cartas) == list(range(10))
+'''
+javascript = '''
+const e = embaralhar([1, 2, 3, 4]);
+if (e.length !== 4 || [...e].sort().join() !== "1,2,3,4") throw new Error("falhou");
+const x = aleatorio(1, 6); if (x < 1 || x > 6) throw new Error("fora do intervalo");
+'''
+
+[[pattern]]
+id = "util.slugify"
+title = "Slugify (texto para URL amigável)"
+keywords = "slug slugify url amigavel remover acentos texto para url permalink"
+require = ["slug", "slugify", "permalink"]
+tags = ["text"]
+
+[pattern.code]
+python = '''
+import re
+import unicodedata
+
+
+def slugify(texto: str) -> str:
+    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", sem_acento.lower()).strip("-")
+'''
+javascript = '''
+const slugify = (texto) =>
+  texto.normalize("NFKD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+'''
+go = '''
+import (
+	"strings"
+	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
+)
+
+func slugify(texto string) string {
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	semAcento, _, _ := transform.String(t, strings.ToLower(texto))
+	var b strings.Builder
+	hifen := false
+	for _, r := range semAcento {
+		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			b.WriteRune(r)
+			hifen = false
+		} else if !hifen && b.Len() > 0 {
+			b.WriteByte('-')
+			hifen = true
+		}
+	}
+	return strings.TrimSuffix(b.String(), "-")
+}
+'''
+powershell = '''
+function ConvertTo-Slug {
+    param([Parameter(Mandatory, ValueFromPipeline)][string]$Texto)
+    process {
+        $normal = $Texto.Normalize([Text.NormalizationForm]::FormD)
+        $semAcento = -join ($normal.ToCharArray() | Where-Object {
+                [Globalization.CharUnicodeInfo]::GetUnicodeCategory($_) -ne 'NonSpacingMark' })
+        ($semAcento.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+    }
+}
+'''
+
+[pattern.test]
+python = '''
+assert slugify("Olá, Mundo! Ação 2026") == "ola-mundo-acao-2026"
+'''
+javascript = '''
+if (slugify("Olá, Mundo! Ação 2026") !== "ola-mundo-acao-2026") throw new Error("falhou");
+'''
+powershell = '''
+if (('Olá, Mundo! Ação 2026' | ConvertTo-Slug) -ne 'ola-mundo-acao-2026') { throw 'falhou' }
+'''
+
+[[pattern]]
+id = "util.base64"
+title = "Codificar/decodificar Base64"
+keywords = "base64 codificar decodificar encode decode texto binario"
+require = ["base64"]
+tags = ["encoding"]
+
+[pattern.code]
+python = '''
+import base64
+
+codificado = base64.b64encode("olá".encode("utf-8")).decode("ascii")
+texto = base64.b64decode(codificado).decode("utf-8")
+url_safe = base64.urlsafe_b64encode(b"\xff\xfe").rstrip(b"=").decode()
+'''
+javascript = '''
+const codificado = Buffer.from("olá", "utf8").toString("base64");
+const texto = Buffer.from(codificado, "base64").toString("utf8");
+const urlSafe = Buffer.from([0xff, 0xfe]).toString("base64url");
+'''
+go = '''
+import "encoding/base64"
+
+func base64Ida(texto string) string { return base64.StdEncoding.EncodeToString([]byte(texto)) }
+
+func base64Volta(cod string) (string, error) {
+	b, err := base64.StdEncoding.DecodeString(cod)
+	return string(b), err
+}
+'''
+csharp = '''
+var codificado = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("olá"));
+var texto = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(codificado));
+'''
+java = '''
+var codificado = java.util.Base64.getEncoder().encodeToString("olá".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+var texto = new String(java.util.Base64.getDecoder().decode(codificado), java.nio.charset.StandardCharsets.UTF_8);
+'''
+powershell = '''
+$codificado = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('olá'))
+$texto = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($codificado))
+'''
+bash = '''
+codificado=$(printf '%s' 'olá' | base64 -w0)
+texto=$(printf '%s' "$codificado" | base64 -d)
+'''
+
+[pattern.test]
+python = '''
+assert codificado == "b2zDoQ==" and texto == "olá" and url_safe == "__4"
+'''
+javascript = '''
+if (codificado !== "b2zDoQ==" || texto !== "olá" || urlSafe !== "__4") throw new Error("falhou");
+'''
+powershell = '''
+if ($codificado -ne 'b2zDoQ==' -or $texto -ne 'olá') { throw 'falhou' }
+'''
+bash = '''
+[[ "$codificado" == "b2zDoQ==" && "$texto" == "olá" ]] || { echo falhou >&2; exit 1; }
+'''
+
+[[pattern]]
+id = "util.url_encode"
+title = "Codificar URL e montar query string"
+keywords = "url encode codificar query string parametros escapar encodeURIComponent parse url"
+require = ["url", "query", "encode"]
+tags = ["encoding", "web"]
+
+[pattern.code]
+python = '''
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
+
+params = urlencode({"q": "café com leite", "pagina": 2})   # q=caf%C3%A9+com+leite&pagina=2
+caminho = quote("relatórios 2026/janeiro.pdf")
+partes = urlsplit("https://exemplo.com/busca?q=x&pagina=3")
+consulta = parse_qs(partes.query)                          # {'q': ['x'], 'pagina': ['3']}
+'''
+javascript = '''
+const url = new URL("https://exemplo.com/busca");
+url.searchParams.set("q", "café com leite");
+url.searchParams.set("pagina", "2");
+const pagina = Number(new URL("https://exemplo.com/busca?q=x&pagina=3").searchParams.get("pagina"));
+'''
+go = '''
+import "net/url"
+
+func montarURL() string {
+	u := url.URL{Scheme: "https", Host: "exemplo.com", Path: "/busca"}
+	q := url.Values{}
+	q.Set("q", "café com leite")
+	q.Set("pagina", "2")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+'''
+powershell = '''
+$q = [uri]::EscapeDataString('café com leite')
+$url = "https://exemplo.com/busca?q=$q&pagina=2"
+'''
+
+[pattern.test]
+python = '''
+assert params == "q=caf%C3%A9+com+leite&pagina=2" and consulta == {"q": ["x"], "pagina": ["3"]}
+'''
+javascript = '''
+if (url.toString() !== "https://exemplo.com/busca?q=caf%C3%A9+com+leite&pagina=2" || pagina !== 3) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.extract_emails"
+title = "Extrair e validar e-mails com regex"
+keywords = "extrair emails regex validar email expressao regular encontrar enderecos"
+require = ["email", "emails", "regex"]
+tags = ["text", "validation"]
+
+[pattern.code]
+python = '''
+import re
+
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def extrair_emails(texto: str) -> list[str]:
+    return list(dict.fromkeys(_EMAIL.findall(texto)))
+
+
+def email_valido(email: str) -> bool:
+    """Validação sintática pragmática (a única prova real é enviar um e-mail de confirmação)."""
+    return len(email) <= 254 and _EMAIL.fullmatch(email) is not None
+'''
+javascript = '''
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+
+const extrairEmails = (texto) => [...new Set(texto.match(EMAIL) ?? [])];
+const emailValido = (email) => email.length <= 254 && /^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$/.test(email);
+'''
+go = '''
+import "regexp"
+
+var reEmail = regexp.MustCompile(`[\w.+-]+@[\w-]+(?:\.[\w-]+)+`)
+
+func extrairEmails(texto string) []string {
+	return reEmail.FindAllString(texto, -1)
+}
+'''
+csharp = '''
+static bool EmailValido(string email) =>
+    email.Length <= 254 && System.Text.RegularExpressions.Regex.IsMatch(email, @"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$");
+'''
+powershell = '''
+function Get-Emails {
+    param([Parameter(Mandatory)][string]$Texto)
+    [regex]::Matches($Texto, '[\w.+-]+@[\w-]+(?:\.[\w-]+)+') | ForEach-Object Value | Select-Object -Unique
+}
+'''
+
+[pattern.test]
+python = '''
+assert extrair_emails("a: x@y.com, b: z.w+1@sub.dominio.org; x@y.com") == ["x@y.com", "z.w+1@sub.dominio.org"]
+assert email_valido("user@example.com") and not any(email_valido(e) for e in ("invalid@", "@x.com", "a b@c.com", "a@b"))
+'''
+javascript = '''
+if (extrairEmails("x@y.com e x@y.com").length !== 1 || emailValido("a@b") || !emailValido("user@example.com")) throw new Error("falhou");
+'''
+powershell = '''
+if (@(Get-Emails 'a: x@y.com, b: x@y.com').Count -ne 1) { throw 'falhou' }
+'''
+
+[[pattern]]
+id = "util.measure_time"
+title = "Medir tempo de execução"
+keywords = "medir tempo execucao cronometrar benchmark duracao elapsed performance quanto tempo"
+require = ["medir", "measure", "cronometrar", "tempo", "elapsed", "benchmark"]
+tags = ["performance"]
+
+[pattern.code]
+python = '''
+import time
+from contextlib import contextmanager
+
+
+@contextmanager
+def cronometro(rotulo: str = "bloco"):
+    """with cronometro("consulta"): ...  — perf_counter é monotônico e de alta resolução."""
+    inicio = time.perf_counter()
+    try:
+        yield
+    finally:
+        print(f"{rotulo}: {(time.perf_counter() - inicio) * 1000:.2f} ms")
+'''
+javascript = '''
+async function cronometrar(rotulo, fn) {
+  const inicio = performance.now();
+  try {
+    return await fn();
+  } finally {
+    console.log(`${rotulo}: ${(performance.now() - inicio).toFixed(2)} ms`);
+  }
+}
+'''
+go = '''
+import (
+	"log"
+	"time"
+)
+
+// Uso: defer cronometro("consulta")()
+func cronometro(rotulo string) func() {
+	inicio := time.Now()
+	return func() { log.Printf("%s: %s", rotulo, time.Since(inicio)) }
+}
+'''
+rust = '''
+let inicio = std::time::Instant::now();
+// ... trabalho ...
+println!("levou {:?}", inicio.elapsed());
+'''
+java = '''
+long inicio = System.nanoTime();
+// ... trabalho ...
+System.out.printf("levou %.2f ms%n", (System.nanoTime() - inicio) / 1e6);
+'''
+csharp = '''
+var relogio = System.Diagnostics.Stopwatch.StartNew();
+// ... trabalho ...
+Console.WriteLine($"levou {relogio.Elapsed.TotalMilliseconds:F2} ms");
+'''
+powershell = '''
+$tempo = Measure-Command { Start-Sleep -Milliseconds 50 }
+"levou {0:N2} ms" -f $tempo.TotalMilliseconds
+'''
+bash = '''
+inicio=$(date +%s%N)
+sleep 0.05
+echo "levou $(( ($(date +%s%N) - inicio) / 1000000 )) ms"
+'''
+
+[pattern.test]
+python = '''
+with cronometro("teste"):
+    sum(range(1000))
+'''
+
+[[pattern]]
+id = "util.case_convert"
+title = "Converter entre camelCase, snake_case e kebab-case"
+keywords = "converter camelcase snake case kebab case pascal maiusculas nomes identificadores"
+require = ["camelcase", "snake", "kebab", "pascal", "case"]
+tags = ["text"]
+
+[pattern.code]
+python = '''
+import re
+
+
+def palavras(texto: str) -> list[str]:
+    texto = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", texto)
+    return [p.lower() for p in re.split(r"[\s_\-]+", texto) if p]
+
+
+def snake_case(texto: str) -> str:
+    return "_".join(palavras(texto))
+
+
+def camel_case(texto: str) -> str:
+    p = palavras(texto)
+    return p[0] + "".join(x.capitalize() for x in p[1:]) if p else ""
+
+
+def kebab_case(texto: str) -> str:
+    return "-".join(palavras(texto))
+'''
+javascript = '''
+const palavras = (t) => t.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[\s_-]+/).filter(Boolean).map((p) => p.toLowerCase());
+const snakeCase = (t) => palavras(t).join("_");
+const kebabCase = (t) => palavras(t).join("-");
+const camelCase = (t) => palavras(t).map((p, i) => (i ? p[0].toUpperCase() + p.slice(1) : p)).join("");
+'''
+
+[pattern.test]
+python = '''
+assert snake_case("nomeCompletoDoUsuario") == "nome_completo_do_usuario" and camel_case("nome_completo") == "nomeCompleto"
+assert kebab_case("Nome Completo") == "nome-completo"
+'''
+javascript = '''
+if (snakeCase("nomeCompleto") !== "nome_completo" || camelCase("nome-completo") !== "nomeCompleto") throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.json_pretty"
+title = "Formatar (pretty print) JSON"
+keywords = "formatar json pretty print indentar bonito legivel"
+require = ["json"]
+tags = ["json"]
+
+slots = { path = "dados.json" }
+[pattern.code]
+python = '''
+import json
+
+texto = json.dumps(dados, ensure_ascii=False, indent=2, sort_keys=True)
+'''
+javascript = '''
+const texto = JSON.stringify(dados, null, 2);
+'''
+go = '''
+import "encoding/json"
+
+func jsonBonito(v any) (string, error) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	return string(b), err
+}
+'''
+powershell = '''
+$texto = $dados | ConvertTo-Json -Depth 10
+'''
+bash = '''
+jq . "{{path}}"          # ou: python3 -m json.tool "{{path}}"
+'''
+
+[pattern.test]
+python_setup = '''
+dados = {"b": 1, "a": "ç"}
+'''
+python = '''
+assert texto == '{\n  "a": "ç",\n  "b": 1\n}'
+'''
+
+[[pattern]]
+id = "util.temperature"
+title = "Conversão de temperatura (Celsius, Fahrenheit, Kelvin)"
+keywords = "converter temperatura celsius fahrenheit kelvin graus"
+require = ["temperatura", "temperature", "celsius", "fahrenheit", "kelvin"]
+tags = ["math"]
+
+[pattern.code]
+python = '''
+def celsius_para_fahrenheit(c: float) -> float:
+    return c * 9 / 5 + 32
+
+
+def fahrenheit_para_celsius(f: float) -> float:
+    return (f - 32) * 5 / 9
+
+
+def celsius_para_kelvin(c: float) -> float:
+    if c < -273.15:
+        raise ValueError("abaixo do zero absoluto")
+    return c + 273.15
+'''
+javascript = '''
+const celsiusParaFahrenheit = (c) => (c * 9) / 5 + 32;
+const fahrenheitParaCelsius = (f) => ((f - 32) * 5) / 9;
+'''
+go = '''
+func celsiusParaFahrenheit(c float64) float64 { return c*9/5 + 32 }
+func fahrenheitParaCelsius(f float64) float64 { return (f - 32) * 5 / 9 }
+'''
+powershell = '''
+function ConvertTo-Fahrenheit([double]$Celsius) { $Celsius * 9 / 5 + 32 }
+function ConvertTo-Celsius([double]$Fahrenheit) { ($Fahrenheit - 32) * 5 / 9 }
+'''
+
+[pattern.test]
+python = '''
+assert celsius_para_fahrenheit(100) == 212 and fahrenheit_para_celsius(-40) == -40 and celsius_para_kelvin(0) == 273.15
+'''
+javascript = '''
+if (celsiusParaFahrenheit(0) !== 32 || fahrenheitParaCelsius(212) !== 100) throw new Error("falhou");
+'''
+powershell = '''
+if ((ConvertTo-Fahrenheit 100) -ne 212) { throw 'falhou' }
+'''
+
+[[pattern]]
+id = "util.digits"
+title = "Somar e manipular dígitos de um número"
+keywords = "soma digitos somar digitos numero algarismos inverter numero digito"
+require = ["digitos", "digits", "algarismos"]
+tags = ["math"]
+
+[pattern.code]
+python = '''
+def soma_digitos(n: int) -> int:
+    return sum(int(d) for d in str(abs(n)))
+
+
+def inverter_numero(n: int) -> int:
+    sinal = -1 if n < 0 else 1
+    return sinal * int(str(abs(n))[::-1])
+'''
+javascript = '''
+const somaDigitos = (n) => [...String(Math.abs(n))].reduce((s, d) => s + Number(d), 0);
+'''
+go = '''
+func somaDigitos(n int) int {
+	if n < 0 {
+		n = -n
+	}
+	soma := 0
+	for ; n > 0; n /= 10 {
+		soma += n % 10
+	}
+	return soma
+}
+'''
+
+[pattern.test]
+python = '''
+assert soma_digitos(1234) == 10 and soma_digitos(-56) == 11 and soma_digitos(0) == 0 and inverter_numero(-120) == -21
+'''
+javascript = '''
+if (somaDigitos(1234) !== 10 || somaDigitos(-56) !== 11) throw new Error("falhou");
+'''
+
+[[pattern]]
+id = "util.truncate"
+title = "Truncar texto com reticências"
+keywords = "truncar texto reticencias limitar tamanho resumo cortar string"
+require = ["truncar", "truncate", "cortar", "reticencias"]
+tags = ["text"]
+
+[pattern.code]
+python = '''
+def truncar(texto: str, limite: int, sufixo: str = "…") -> str:
+    """Corta no último espaço antes do limite para não quebrar palavras."""
+    if len(texto) <= limite:
+        return texto
+    corte = texto[: limite - len(sufixo)].rsplit(" ", 1)[0]
+    return corte.rstrip(" ,.;:") + sufixo
+'''
+javascript = '''
+function truncar(texto, limite, sufixo = "…") {
+  if (texto.length <= limite) return texto;
+  const corte = texto.slice(0, limite - sufixo.length);
+  const espaco = corte.lastIndexOf(" ");
+  return (espaco > 0 ? corte.slice(0, espaco) : corte).replace(/[ ,.;:]+$/, "") + sufixo;
+}
+'''
+
+[pattern.test]
+python = '''
+assert truncar("O rato roeu a roupa do rei de Roma", 15) == "O rato roeu a…" and truncar("curto", 10) == "curto"
+'''
+javascript = '''
+if (truncar("O rato roeu a roupa do rei de Roma", 15) !== "O rato roeu a…") throw new Error("falhou");
+'''

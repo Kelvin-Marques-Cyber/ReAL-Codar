@@ -1,0 +1,529 @@
+# Conselhos de projeto: cada um tem motivo, condições (when) e opções com passos executáveis.
+# Passos: run (shell; unless/if_tool/os/allow_fail) | backup | write (pattern/content) | append | json_set
+#         pm_add (instala com o gerenciador detectado) | pm_exec (npx/pnpm exec/bunx) | note
+
+# ------------------------------------------------------------------ Node: gerenciador de pacotes
+[[advice]]
+id = "node.pm.npm"
+title = "npm → pnpm ou Bun"
+category = "tooling"
+impact = "medium"
+reason = "O projeto usa npm (package-lock.json). pnpm e Bun instalam as mesmas dependências bem mais rápido e economizam disco, sem mudar o código."
+when = { exists = ["package.json", "package-lock.json"], missing = ["pnpm-lock.yaml", "bun.lock", "bun.lockb", "yarn.lock"] }
+
+[[advice.option]]
+id = "pnpm"
+label = "Migrar para pnpm"
+reason = "Store global por conteúdo (cada versão de pacote existe uma vez no disco), instalações tipicamente 2–3× mais rápidas que npm e node_modules estrito, que evita dependências fantasmas."
+steps = [
+  { run = "corepack enable pnpm", if_tool = "corepack", unless = "pnpm --version", allow_fail = true },
+  { run = "npm install -g pnpm", unless = "pnpm --version" },
+  { run = "pnpm import" },
+  { backup = "package-lock.json" },
+  { run = "pnpm install" },
+  { json_set = "package.json", key = "packageManager", value_cmd = "pnpm --version", format = "pnpm@{}" },
+]
+
+[[advice.option]]
+id = "bun"
+label = "Migrar para Bun"
+reason = "Instalação muito mais rápida (os benchmarks do projeto citam mais de 10× sobre npm) e runtime, test runner e bundler no mesmo binário. A compatibilidade com Node é alta, mas não total: rode seus testes depois."
+steps = [
+  { run = "npm install -g bun", unless = "bun --version" },
+  { run = "bun install" },
+  { backup = "package-lock.json" },
+  { json_set = "package.json", key = "packageManager", value_cmd = "bun --version", format = "bun@{}" },
+]
+
+[[advice]]
+id = "node.pm.yarn1"
+title = "Yarn clássico (v1) → pnpm"
+category = "tooling"
+impact = "medium"
+reason = "O Yarn 1 está em modo de manutenção. O pnpm importa o yarn.lock preservando as versões exatas."
+when = { exists = ["package.json", "yarn.lock"], missing = [".yarnrc.yml", "pnpm-lock.yaml"] }
+
+[[advice.option]]
+id = "pnpm"
+label = "Migrar para pnpm"
+reason = "Mesmas versões travadas, instalação mais rápida e node_modules estrito."
+steps = [
+  { run = "corepack enable pnpm", if_tool = "corepack", unless = "pnpm --version", allow_fail = true },
+  { run = "npm install -g pnpm", unless = "pnpm --version" },
+  { run = "pnpm import" },
+  { backup = "yarn.lock" },
+  { run = "pnpm install" },
+  { json_set = "package.json", key = "packageManager", value_cmd = "pnpm --version", format = "pnpm@{}" },
+]
+
+[[advice]]
+id = "node.lockfile"
+title = "Projeto Node sem lockfile"
+category = "reliability"
+impact = "high"
+reason = "Sem lockfile cada instalação pode trazer versões diferentes — builds não reprodutíveis e risco de dependência comprometida entrar sem revisão."
+when = { exists = ["package.json"], missing = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"] }
+
+[[advice.option]]
+id = "pnpm"
+label = "Gerar pnpm-lock.yaml"
+steps = [
+  { run = "npm install -g pnpm", unless = "pnpm --version" },
+  { run = "pnpm install --lockfile-only" },
+]
+
+[[advice.option]]
+id = "npm"
+label = "Gerar package-lock.json"
+steps = [{ run = "npm install --package-lock-only" }]
+
+[[advice]]
+id = "node.lint"
+title = "Sem linter/formatador no projeto JavaScript/TypeScript"
+category = "quality"
+impact = "medium"
+reason = "Um linter pega bugs comuns (variáveis não usadas, comparação frouxa) e um formatador elimina discussão de estilo em code review."
+when = { exists = ["package.json"], json_missing = { file = "package.json", keys = ["devDependencies.@biomejs/biome", "devDependencies.eslint", "dependencies.eslint", "devDependencies.prettier"] } }
+
+[[advice.option]]
+id = "biome"
+label = "Biome (lint + format num binário só)"
+reason = "Rápido (escrito em Rust), configuração mínima e substitui ESLint + Prettier na maioria dos projetos."
+steps = [
+  { pm_add = "@biomejs/biome", dev = true, exact = true },
+  { pm_exec = "biome init" },
+  { json_set = "package.json", key = "scripts.lint", value = "biome check ." },
+]
+
+[[advice.option]]
+id = "eslint"
+label = "ESLint + Prettier"
+reason = "Ecossistema maior de plugins (React, acessibilidade, segurança)."
+steps = [
+  { pm_add = "eslint @eslint/js prettier", dev = true },
+  { write = "eslint.config.js", pattern = "file.eslint" },
+  { json_set = "package.json", key = "scripts.lint", value = "eslint . && prettier --check ." },
+]
+
+[[advice]]
+id = "node.ts.strict"
+title = "TypeScript sem modo estrito"
+category = "quality"
+impact = "medium"
+reason = "Sem \"strict\": true o compilador aceita null/undefined e any implícitos — exatamente as classes de bug que o TypeScript deveria impedir."
+when = { exists = ["tsconfig.json"], json_not = { file = "tsconfig.json", key = "compilerOptions.strict", value = true } }
+
+[[advice.option]]
+id = "strict"
+label = "Ativar strict"
+reason = "Os erros que aparecerem apontam bugs reais; corrija-os ou marque exceções pontuais."
+steps = [{ json_set = "tsconfig.json", key = "compilerOptions.strict", value = true }]
+
+[[advice]]
+id = "node.version"
+title = "Versão do Node não fixada"
+category = "reliability"
+impact = "low"
+reason = "Sem .nvmrc/.node-version (ou engines) cada máquina e o CI podem usar um Node diferente."
+when = { exists = ["package.json"], missing = [".nvmrc", ".node-version", ".tool-versions"], json_missing = { file = "package.json", keys = ["engines.node"] }, tool_present = ["node"] }
+
+[[advice.option]]
+id = "nvmrc"
+label = "Criar .nvmrc com a versão principal atual"
+steps = [{ run = "node -p \"process.versions.node.split('.')[0]\" > .nvmrc" }]
+
+[[advice]]
+id = "node.tests"
+title = "Projeto Node sem script de testes"
+category = "quality"
+impact = "medium"
+reason = "Não há \"test\" em package.json; o CI e os colegas não têm como validar mudanças."
+when = { exists = ["package.json"], json_missing = { file = "package.json", keys = ["scripts.test"] } }
+
+[[advice.option]]
+id = "vitest"
+label = "Vitest"
+reason = "Rápido, compatível com a API do Jest e com suporte nativo a TypeScript/ESM."
+steps = [
+  { pm_add = "vitest", dev = true },
+  { json_set = "package.json", key = "scripts.test", value = "vitest run" },
+  { write = "tests/exemplo.test.js", pattern = "file.vitest.example" },
+]
+
+# ------------------------------------------------------------------ Python
+[[advice]]
+id = "python.uv"
+title = "requirements.txt sem lockfile → uv"
+category = "tooling"
+impact = "medium"
+reason = "pip + requirements.txt não trava dependências transitivas. O uv resolve e instala 10–100× mais rápido que o pip, gera um lockfile reprodutível (uv.lock) e gerencia o .venv."
+when = { exists = ["requirements.txt"], missing = ["uv.lock", "poetry.lock", "Pipfile.lock", "pdm.lock"] }
+
+[[advice.option]]
+id = "uv"
+label = "Migrar para uv"
+steps = [
+  { run = "python -m pip install --user uv", unless = "uv --version" },
+  { run = "uv init --bare", unless = "python -c \"import pathlib,sys; sys.exit(0 if pathlib.Path('pyproject.toml').exists() else 1)\"" },
+  { run = "uv add -r requirements.txt" },
+  { note = "use `uv run <comando>` ou ative o .venv criado; requirements.txt foi mantido" },
+]
+
+[[advice]]
+id = "python.venv"
+title = "Projeto Python sem ambiente virtual"
+category = "tooling"
+impact = "low"
+reason = "Instalar dependências no Python do sistema mistura projetos e pode quebrar ferramentas do SO."
+when = { lang = ["python"], any = ["requirements.txt", "pyproject.toml", "setup.py"], missing = [".venv", "venv", "uv.lock", "poetry.lock"] }
+
+[[advice.option]]
+id = "venv"
+label = "Criar .venv"
+steps = [
+  { run = "python -m venv .venv" },
+  { note = "ative com: source .venv/bin/activate (Linux/macOS) ou .venv\\Scripts\\Activate.ps1 (PowerShell)" },
+]
+
+[[advice]]
+id = "python.lint"
+title = "Sem linter no projeto Python"
+category = "quality"
+impact = "medium"
+reason = "O Ruff substitui flake8, isort, pyupgrade e parte do bandit (segurança) num único binário muito rápido."
+when = { lang = ["python"], missing = ["ruff.toml", ".ruff.toml", ".flake8", "setup.cfg"], toml_missing = { file = "pyproject.toml", keys = ["tool.ruff", "tool.flake8", "tool.pylint"] } }
+
+[[advice.option]]
+id = "ruff"
+label = "Configurar Ruff"
+steps = [
+  { write = "ruff.toml", pattern = "file.ruff" },
+  { run = "python -m pip install --user ruff", unless = "ruff --version" },
+  { run = "ruff check .", allow_fail = true },
+]
+
+[[advice]]
+id = "python.tests"
+title = "Projeto Python sem testes"
+category = "quality"
+impact = "medium"
+reason = "Nenhum arquivo test_*.py encontrado."
+when = { lang = ["python"], missing = ["tests/*", "test/*", "test_*.py", "*/test_*.py"] }
+
+[[advice.option]]
+id = "pytest"
+label = "Criar estrutura com pytest"
+steps = [
+  { write = "tests/test_smoke.py", pattern = "file.pytest.smoke" },
+  { run = "python -m pip install --user pytest", unless = "python -m pytest --version" },
+]
+
+[[advice]]
+id = "python.precommit"
+title = "Sem hooks de pre-commit"
+category = "quality"
+impact = "low"
+reason = "Hooks rodam o linter e detectam chaves privadas antes de cada commit."
+when = { lang = ["python"], exists = [".git"], missing = [".pre-commit-config.yaml"] }
+
+[[advice.option]]
+id = "precommit"
+label = "Configurar pre-commit"
+steps = [
+  { write = ".pre-commit-config.yaml", pattern = "file.precommit.python" },
+  { run = "python -m pip install --user pre-commit", unless = "pre-commit --version" },
+  { run = "pre-commit install" },
+]
+
+# ------------------------------------------------------------------ git / arquivos de projeto
+[[advice]]
+id = "git.init"
+title = "Projeto fora de controle de versão"
+category = "tooling"
+impact = "high"
+reason = "Sem git não há histórico, revisão nem como desfazer mudanças."
+when = { missing = [".git"], tool_present = ["git"] }
+
+[[advice.option]]
+id = "init"
+label = "Iniciar repositório git"
+steps = [{ run = "git init" }, { write = ".gitignore", pattern = "file.gitignore.generic" }]
+
+[[advice]]
+id = "gitignore.node"
+title = "Projeto Node sem .gitignore"
+category = "hygiene"
+impact = "high"
+reason = "node_modules, builds e .env acabariam no repositório."
+when = { exists = ["package.json"], missing = [".gitignore"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar .gitignore para Node"
+steps = [{ write = ".gitignore", pattern = "file.gitignore.node" }]
+
+[[advice]]
+id = "gitignore.python"
+title = "Projeto Python sem .gitignore"
+category = "hygiene"
+impact = "high"
+reason = "__pycache__, .venv e .env acabariam no repositório."
+when = { lang = ["python"], missing = [".gitignore", "package.json"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar .gitignore para Python"
+steps = [{ write = ".gitignore", pattern = "file.gitignore.python" }]
+
+[[advice]]
+id = "gitignore.go"
+title = "Projeto Go sem .gitignore"
+category = "hygiene"
+impact = "medium"
+reason = "Binários e artefatos de teste acabariam no repositório."
+when = { exists = ["go.mod"], missing = [".gitignore"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar .gitignore para Go"
+steps = [{ write = ".gitignore", pattern = "file.gitignore.go" }]
+
+[[advice]]
+id = "gitignore.rust"
+title = "Projeto Rust sem .gitignore"
+category = "hygiene"
+impact = "medium"
+reason = "O diretório target/ (gigabytes) acabaria no repositório."
+when = { exists = ["Cargo.toml"], missing = [".gitignore"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar .gitignore para Rust"
+steps = [{ write = ".gitignore", pattern = "file.gitignore.rust" }]
+
+[[advice]]
+id = "gitignore.env"
+title = ".env fora do .gitignore"
+category = "security"
+impact = "high"
+reason = "Há um arquivo .env no projeto e o .gitignore não o ignora: senhas e tokens podem ir para o repositório."
+when = { exists = [".env", ".gitignore"], lines_missing = { file = ".gitignore", lines = [".env"] } }
+
+[[advice.option]]
+id = "ignore"
+label = "Ignorar .env e criar .env.example"
+steps = [
+  { append = ".gitignore", lines = [".env", ".env.*", "!.env.example"] },
+  { write = ".env.example", from_env_keys = ".env" },
+]
+
+[[advice]]
+id = "gitignore.node_modules"
+title = "node_modules não está no .gitignore"
+category = "hygiene"
+impact = "high"
+reason = "node_modules costuma ter centenas de MB e não deve ser versionado."
+when = { exists = ["package.json", ".gitignore"], lines_missing = { file = ".gitignore", lines = ["node_modules"] } }
+
+[[advice.option]]
+id = "append"
+label = "Acrescentar node_modules/ ao .gitignore"
+steps = [{ append = ".gitignore", lines = ["node_modules/"] }]
+
+[[advice]]
+id = "project.readme"
+title = "Projeto sem README"
+category = "docs"
+impact = "low"
+reason = "Um README curto diz como instalar, rodar e testar — o primeiro arquivo que alguém abre."
+when = { missing = ["README*", "readme*"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar README.md"
+steps = [{ write = "README.md", pattern = "file.readme" }]
+
+[[advice]]
+id = "project.editorconfig"
+title = "Sem .editorconfig"
+category = "hygiene"
+impact = "low"
+reason = "Padroniza indentação, fim de linha e charset entre editores (VS Code, Neovim, JetBrains) sem plugin extra."
+when = { missing = [".editorconfig"], any = ["*.py", "*.js", "*.ts", "*.go", "*.rs", "*.ps1", "*.sh", "*.java", "*.cs"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar .editorconfig"
+steps = [{ write = ".editorconfig", pattern = "file.editorconfig" }]
+
+[[advice]]
+id = "docker.ignore"
+title = "Dockerfile sem .dockerignore"
+category = "performance"
+impact = "medium"
+reason = "Sem .dockerignore o contexto de build envia .git, node_modules e .env para o daemon do Docker: builds lentos e segredos na imagem."
+when = { exists = ["Dockerfile"], missing = [".dockerignore"] }
+
+[[advice.option]]
+id = "write"
+label = "Criar .dockerignore"
+steps = [{ write = ".dockerignore", pattern = "file.dockerignore" }]
+
+# ------------------------------------------------------------------ CI
+[[advice]]
+id = "ci.node"
+title = "Sem integração contínua (Node)"
+category = "quality"
+impact = "medium"
+reason = "Nenhum workflow em .github/workflows: testes e build não rodam automaticamente em cada push/PR."
+when = { exists = ["package.json", ".git"], missing = [".github/workflows/*"] }
+
+[[advice.option]]
+id = "github"
+label = "GitHub Actions (npm ci + test + build)"
+steps = [{ write = ".github/workflows/ci.yml", pattern = "file.ci.node" }]
+
+[[advice]]
+id = "ci.python"
+title = "Sem integração contínua (Python)"
+category = "quality"
+impact = "medium"
+reason = "Nenhum workflow em .github/workflows: os testes não rodam em cada push/PR."
+when = { lang = ["python"], exists = [".git"], missing = [".github/workflows/*", "package.json"] }
+
+[[advice.option]]
+id = "github"
+label = "GitHub Actions (pytest em 3.11–3.13)"
+steps = [{ write = ".github/workflows/ci.yml", pattern = "file.ci.python" }]
+
+[[advice]]
+id = "ci.go"
+title = "Sem integração contínua (Go)"
+category = "quality"
+impact = "medium"
+reason = "Nenhum workflow em .github/workflows."
+when = { exists = ["go.mod", ".git"], missing = [".github/workflows/*"] }
+
+[[advice.option]]
+id = "github"
+label = "GitHub Actions (vet + test -race)"
+steps = [{ write = ".github/workflows/ci.yml", pattern = "file.ci.go" }]
+
+[[advice]]
+id = "ci.rust"
+title = "Sem integração contínua (Rust)"
+category = "quality"
+impact = "medium"
+reason = "Nenhum workflow em .github/workflows."
+when = { exists = ["Cargo.toml", ".git"], missing = [".github/workflows/*"] }
+
+[[advice.option]]
+id = "github"
+label = "GitHub Actions (fmt + clippy + test)"
+steps = [{ write = ".github/workflows/ci.yml", pattern = "file.ci.rust" }]
+
+[[advice]]
+id = "ci.powershell"
+title = "Sem integração contínua (PowerShell)"
+category = "quality"
+impact = "medium"
+reason = "Scripts PowerShell sem análise estática nem testes automatizados em Windows e Linux."
+when = { lang = ["powershell"], exists = [".git"], missing = [".github/workflows/*"] }
+
+[[advice.option]]
+id = "github"
+label = "GitHub Actions (PSScriptAnalyzer + Pester, Windows e Linux)"
+steps = [{ write = ".github/workflows/ci.yml", pattern = "file.ci.powershell" }]
+
+# ------------------------------------------------------------------ PowerShell / shell / Go / Rust
+[[advice]]
+id = "powershell.analyzer"
+title = "Scripts PowerShell sem PSScriptAnalyzer"
+category = "quality"
+impact = "medium"
+reason = "O PSScriptAnalyzer é o linter oficial: detecta aliases em scripts, senhas em texto puro, Invoke-Expression e sintaxe incompatível com o Windows PowerShell 5.1."
+when = { lang = ["powershell"], missing = ["PSScriptAnalyzerSettings.psd1"] }
+
+[[advice.option]]
+id = "analyzer"
+label = "Configurar PSScriptAnalyzer"
+steps = [
+  { write = "PSScriptAnalyzerSettings.psd1", pattern = "file.psscriptanalyzer" },
+  { run = "pwsh -NoProfile -Command \"Install-Module PSScriptAnalyzer -Scope CurrentUser -Force\"", if_tool = "pwsh", unless = "pwsh -NoProfile -Command \"if (Get-Module -ListAvailable PSScriptAnalyzer) { exit 0 } else { exit 1 }\"" },
+  { run = "pwsh -NoProfile -Command \"Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1\"", if_tool = "pwsh", allow_fail = true },
+]
+
+[[advice]]
+id = "powershell.pester"
+title = "Scripts PowerShell sem testes Pester"
+category = "quality"
+impact = "medium"
+reason = "Nenhum arquivo *.Tests.ps1 encontrado."
+when = { lang = ["powershell"], missing = ["*.Tests.ps1", "*/*.Tests.ps1"] }
+
+[[advice.option]]
+id = "pester"
+label = "Criar teste Pester de exemplo"
+steps = [
+  { write = "tests/Exemplo.Tests.ps1", pattern = "file.pester.example" },
+  { run = "pwsh -NoProfile -Command \"Install-Module Pester -MinimumVersion 5.5 -Scope CurrentUser -Force -SkipPublisherCheck\"", if_tool = "pwsh", unless = "pwsh -NoProfile -Command \"if (Get-Module -ListAvailable Pester | Where-Object Version -ge '5.5') { exit 0 } else { exit 1 }\"" },
+]
+
+[[advice]]
+id = "powershell.manifest"
+title = "Módulo PowerShell sem manifesto (.psd1)"
+category = "quality"
+impact = "low"
+reason = "O manifesto declara versão, autor e funções exportadas — necessário para publicar e para carregar só o que é público."
+when = { any = ["*.psm1", "*/*.psm1"], missing = ["*.psd1", "*/*.psd1"] }
+
+[[advice.option]]
+id = "manifest"
+label = "Gerar manifesto com New-ModuleManifest"
+steps = [{ run = "pwsh -NoProfile -Command \"Get-ChildItem -Recurse -Filter *.psm1 | ForEach-Object { New-ModuleManifest -Path (Join-Path $_.DirectoryName ($_.BaseName + '.psd1')) -RootModule $_.Name -ModuleVersion '0.1.0' }\"", if_tool = "pwsh" }]
+
+[[advice]]
+id = "shell.shellcheck"
+title = "Scripts shell sem ShellCheck"
+category = "quality"
+impact = "medium"
+reason = "O ShellCheck encontra variáveis sem aspas, globbing acidental e armadilhas de portabilidade em scripts bash."
+when = { lang = ["bash"], missing = [".shellcheckrc"] }
+
+[[advice.option]]
+id = "shellcheck"
+label = "Configurar ShellCheck"
+steps = [
+  { write = ".shellcheckrc", pattern = "file.shellcheckrc" },
+  { note = "instale: sudo apt install shellcheck | sudo zypper install ShellCheck | sudo dnf install ShellCheck | brew install shellcheck" },
+  { run = "shellcheck $(git ls-files '*.sh' 2>/dev/null || ls *.sh)", if_tool = "shellcheck", os = "posix", allow_fail = true },
+]
+
+[[advice]]
+id = "go.lint"
+title = "Projeto Go sem golangci-lint"
+category = "quality"
+impact = "low"
+reason = "O golangci-lint agrega dezenas de analisadores (erros ignorados, gosec, bodyclose) numa execução rápida."
+when = { exists = ["go.mod"], missing = [".golangci.yml", ".golangci.yaml", ".golangci.toml"] }
+
+[[advice.option]]
+id = "golangci"
+label = "Configurar golangci-lint v2"
+steps = [
+  { write = ".golangci.yml", pattern = "file.golangci" },
+  { note = "instale: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest" },
+]
+
+[[advice]]
+id = "rust.toolchain"
+title = "Projeto Rust sem toolchain fixada"
+category = "reliability"
+impact = "low"
+reason = "rust-toolchain.toml garante o mesmo compilador, clippy e rustfmt em todas as máquinas e no CI."
+when = { exists = ["Cargo.toml"], missing = ["rust-toolchain.toml", "rust-toolchain"] }
+
+[[advice.option]]
+id = "stable"
+label = "Fixar canal stable com clippy e rustfmt"
+steps = [{ write = "rust-toolchain.toml", pattern = "file.rust_toolchain" }]

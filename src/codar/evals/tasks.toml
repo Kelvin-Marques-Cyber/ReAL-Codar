@@ -1,0 +1,188 @@
+# Tarefas de avaliação (pass@1, decodificação gulosa). Intenções em PT, como o usuário escreveria.
+# Cada teste roda num subprocesso isolado, com timeout e limite de memória.
+
+[[task]]
+id = "primo"
+intent = "função eh_primo(n) que retorna True se n for um número primo e False caso contrário"
+test = '''
+assert all(eh_primo(p) for p in (2, 3, 5, 97, 7919))
+assert not any(eh_primo(x) for x in (0, 1, 4, 91, -7, 7917))
+'''
+
+[[task]]
+id = "fatorial"
+intent = "função fatorial(n) iterativa que retorna o fatorial de n"
+test = '''
+assert fatorial(0) == 1 and fatorial(1) == 1 and fatorial(5) == 120 and fatorial(10) == 3628800
+'''
+
+[[task]]
+id = "inverter"
+intent = "função inverter(s) que retorna a string s invertida"
+test = '''
+assert inverter("abc") == "cba" and inverter("") == "" and inverter("ação") == "oãça"
+'''
+
+[[task]]
+id = "palindromo"
+intent = "função eh_palindromo(s) que verifica se o texto é palíndromo ignorando maiúsculas, espaços e pontuação"
+test = '''
+assert eh_palindromo("A man, a plan, a canal: Panama")
+assert eh_palindromo("Anotaram a data da maratona")
+assert not eh_palindromo("abc")
+'''
+
+[[task]]
+id = "vogais"
+intent = "função contar_vogais(s) que conta quantas vogais (a, e, i, o, u) existem no texto, sem diferenciar maiúsculas"
+test = '''
+assert contar_vogais("Hello World") == 3 and contar_vogais("AEIOU xyz") == 5 and contar_vogais("") == 0
+'''
+
+[[task]]
+id = "fibonacci"
+intent = "função fibonacci(n) eficiente que retorna o n-ésimo número de Fibonacci, com fibonacci(0) = 0 e fibonacci(1) = 1"
+test = '''
+assert [fibonacci(i) for i in range(8)] == [0, 1, 1, 2, 3, 5, 8, 13]
+assert fibonacci(30) == 832040 and fibonacci(90) == 2880067194370816120
+'''
+
+[[task]]
+id = "busca_binaria"
+intent = "função busca_binaria(lista, alvo) que retorna o índice do alvo numa lista ordenada ou -1 se não existir"
+test = '''
+xs = [1, 3, 5, 7, 9, 11]
+assert busca_binaria(xs, 7) == 3 and busca_binaria(xs, 1) == 0 and busca_binaria(xs, 11) == 5
+assert busca_binaria(xs, 4) == -1 and busca_binaria([], 3) == -1
+'''
+
+[[task]]
+id = "duplicados"
+intent = "função remover_duplicados(lista) que remove itens repetidos preservando a ordem original"
+test = '''
+assert remover_duplicados([3, 1, 3, 2, 1]) == [3, 1, 2] and remover_duplicados([]) == []
+'''
+
+[[task]]
+id = "mdc"
+intent = "função mdc(a, b) que calcula o máximo divisor comum com o algoritmo de Euclides"
+test = '''
+assert mdc(12, 18) == 6 and mdc(17, 5) == 1 and mdc(0, 5) == 5 and mdc(100, 75) == 25
+'''
+
+[[task]]
+id = "achatar"
+intent = "função achatar(lista) que achata recursivamente listas aninhadas em uma única lista"
+test = '''
+assert achatar([1, [2, [3, [4]]], 5]) == [1, 2, 3, 4, 5] and achatar([]) == [] and achatar([[], [1]]) == [1]
+'''
+
+[[task]]
+id = "frequencia"
+intent = "função frequencia_palavras(texto) que retorna um dicionário palavra -> quantidade, em minúsculas e ignorando pontuação"
+test = '''
+r = frequencia_palavras("O gato e o rato. O fim!")
+assert r["o"] == 3 and r["gato"] == 1 and r["fim"] == 1 and "fim!" not in r
+'''
+
+[[task]]
+id = "email"
+intent = "função validar_email(email) que retorna True se o e-mail tiver formato válido"
+test = '''
+assert validar_email("user@example.com") and validar_email("user.name+tag@sub.domain.org")
+assert not any(validar_email(e) for e in ("invalid@", "@x.com", "a b@c.com", "no-at.com", "a@b"))
+'''
+
+[[task]]
+id = "fahrenheit"
+intent = "função celsius_para_fahrenheit(c) que converte graus Celsius para Fahrenheit"
+test = '''
+assert abs(celsius_para_fahrenheit(0) - 32) < 1e-9 and abs(celsius_para_fahrenheit(100) - 212) < 1e-9
+assert abs(celsius_para_fahrenheit(-40) + 40) < 1e-9
+'''
+
+[[task]]
+id = "media"
+intent = "função media(numeros) que retorna a média aritmética da lista, ou 0 se a lista estiver vazia"
+test = '''
+assert media([1, 2, 3, 4]) == 2.5 and media([]) == 0 and media([7]) == 7
+'''
+
+[[task]]
+id = "segundo_maior"
+intent = "função segundo_maior(lista) que retorna o segundo maior valor distinto da lista ou None se não existir"
+test = '''
+assert segundo_maior([5, 1, 5, 3]) == 3 and segundo_maior([2]) is None and segundo_maior([4, 4]) is None
+assert segundo_maior([-1, -5, -3]) == -3
+'''
+
+[[task]]
+id = "ordenar_idade"
+intent = "função ordenar_por_idade(pessoas) que recebe uma lista de dicionários com a chave 'idade' e retorna uma nova lista ordenada pela idade crescente"
+test = '''
+p = [{"nome": "a", "idade": 30}, {"nome": "b", "idade": 20}, {"nome": "c", "idade": 25}]
+assert [x["nome"] for x in ordenar_por_idade(p)] == ["b", "c", "a"] and p[0]["nome"] == "a"
+'''
+
+[[task]]
+id = "agrupar"
+intent = "função agrupar_por(itens, chave) que agrupa uma lista de dicionários pelo valor da chave, retornando dict valor -> lista de itens"
+test = '''
+xs = [{"t": "a", "v": 1}, {"t": "b", "v": 2}, {"t": "a", "v": 3}]
+g = agrupar_por(xs, "t")
+assert [i["v"] for i in g["a"]] == [1, 3] and [i["v"] for i in g["b"]] == [2] and len(g) == 2
+'''
+
+[[task]]
+id = "blocos"
+intent = "função dividir_em_blocos(lista, n) que divide a lista em sublistas de tamanho n (a última pode ser menor)"
+test = '''
+assert dividir_em_blocos([1, 2, 3, 4, 5], 2) == [[1, 2], [3, 4], [5]] and dividir_em_blocos([], 3) == []
+'''
+
+[[task]]
+id = "cpf"
+intent = "função validar_cpf(cpf) que valida um CPF brasileiro (com ou sem pontuação) calculando os dígitos verificadores"
+test = '''
+assert validar_cpf("529.982.247-25") and validar_cpf("52998224725")
+assert not validar_cpf("111.111.111-11") and not validar_cpf("529.982.247-24") and not validar_cpf("123")
+'''
+
+[[task]]
+id = "soma_digitos"
+intent = "função soma_digitos(n) que retorna a soma dos dígitos de um inteiro (use o valor absoluto)"
+test = '''
+assert soma_digitos(1234) == 10 and soma_digitos(0) == 0 and soma_digitos(-56) == 11
+'''
+
+[[task]]
+id = "anagramas"
+intent = "função sao_anagramas(a, b) que verifica se duas palavras são anagramas, ignorando maiúsculas e espaços"
+test = '''
+assert sao_anagramas("Roma", "amor") and sao_anagramas("listen", "silent") and not sao_anagramas("abc", "abd")
+'''
+
+[[task]]
+id = "merge_sort"
+intent = "função merge_sort(lista) que retorna uma nova lista ordenada usando merge sort"
+test = '''
+import random
+rng = random.Random(7)
+xs = [rng.randint(-100, 100) for _ in range(200)]
+assert merge_sort(xs) == sorted(xs) and merge_sort([]) == [] and merge_sort([1]) == [1]
+'''
+
+[[task]]
+id = "contar_chars"
+intent = "função contar_caracteres(s) que retorna um dicionário com a contagem de cada caractere"
+test = '''
+assert dict(contar_caracteres("banana")) == {"b": 1, "a": 3, "n": 2} and dict(contar_caracteres("")) == {}
+'''
+
+[[task]]
+id = "rotacionar"
+intent = "função rotacionar(lista, k) que rotaciona a lista k posições para a direita"
+test = '''
+assert rotacionar([1, 2, 3, 4, 5], 2) == [4, 5, 1, 2, 3] and rotacionar([1, 2, 3, 4, 5], 7) == [4, 5, 1, 2, 3]
+assert rotacionar([], 3) == []
+'''

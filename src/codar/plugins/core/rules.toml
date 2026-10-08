@@ -1,0 +1,1093 @@
+# Regras estáticas (regex) — avaliadas sem IA, sobre o código com comentários mascarados.
+# scope: code (padrão; sem comentários) | nostrings (sem comentários nem conteúdo de strings) | all
+# in_loop = true: só dispara dentro de corpos de laço. severity: info | warning | error | critical
+
+# ------------------------------------------------------------------ genéricas
+[[rule]]
+id = "GEN002"
+pattern = 'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|schemas\.|www\.w3\.org|example\.)'
+severity = "info"
+category = "security"
+message = "URL sem TLS (http://)"
+suggestion = "use https:// para tráfego fora da máquina local"
+
+[[rule]]
+id = "SQL104"
+pattern = '(?i)\bSELECT\s+\*\s+FROM\b'
+severity = "info"
+category = "performance"
+message = "SELECT * traz colunas desnecessárias e quebra com mudanças de esquema"
+suggestion = "liste as colunas necessárias"
+
+[[rule]]
+id = "SQL109"
+pattern = '''(?i)["'`]\s*(SELECT|INSERT|UPDATE|DELETE)\b[^"'`]*["'`]\s*(\+|\.\s*\$|\|\|)'''
+langs = ["javascript", "typescript", "java", "csharp", "go", "php", "kotlin", "rust", "cpp", "c", "lua"]
+severity = "critical"
+category = "security"
+message = "SQL montado por concatenação (injeção de SQL)"
+suggestion = "use consultas parametrizadas / prepared statements"
+
+# ------------------------------------------------------------------ JavaScript / TypeScript
+[[rule]]
+id = "SQL010"
+pattern = '\.(query|execute|raw|prepare|run|all|get)\s*\(\s*`[^`]*\$\{'
+langs = ["javascript", "typescript"]
+severity = "critical"
+category = "security"
+message = "SQL com template string interpolada (injeção de SQL)"
+suggestion = "use placeholders: db.query('... WHERE id = $1', [id])"
+
+[[rule]]
+id = "CMD010"
+pattern = '''\b(exec|execSync)\s*\(\s*(`[^`]*\$\{|["'][^"']*["']\s*\+)'''
+langs = ["javascript", "typescript"]
+severity = "critical"
+category = "security"
+message = "Comando de shell montado com dados dinâmicos (injeção de comando)"
+suggestion = "use execFile/spawn com lista de argumentos"
+
+[[rule]]
+id = "INJ010"
+pattern = '\beval\s*\('
+langs = ["javascript", "typescript"]
+scope = "nostrings"
+severity = "critical"
+category = "security"
+message = "eval executa código arbitrário"
+suggestion = "use JSON.parse ou um parser específico"
+
+[[rule]]
+id = "INJ011"
+pattern = '\bnew\s+Function\s*\('
+langs = ["javascript", "typescript"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "new Function equivale a eval"
+
+[[rule]]
+id = "INJ012"
+pattern = '''\bset(Timeout|Interval)\s*\(\s*["'`]'''
+langs = ["javascript", "typescript"]
+severity = "warning"
+category = "security"
+message = "setTimeout/setInterval com string é avaliado como código"
+suggestion = "passe uma função"
+
+[[rule]]
+id = "XSS010"
+pattern = '\.(innerHTML|outerHTML)\s*\+?='
+langs = ["javascript", "typescript"]
+severity = "warning"
+category = "security"
+message = "Atribuição a innerHTML abre brecha para XSS"
+suggestion = "use textContent ou sanitize (DOMPurify)"
+
+[[rule]]
+id = "XSS011"
+pattern = '\bdocument\.write\s*\('
+langs = ["javascript", "typescript"]
+severity = "warning"
+category = "security"
+message = "document.write é inseguro e bloqueia a renderização"
+
+[[rule]]
+id = "XSS012"
+pattern = 'dangerouslySetInnerHTML|\bv-html\b'
+langs = ["javascript", "typescript", "html"]
+severity = "warning"
+category = "security"
+message = "HTML bruto injetado no componente (risco de XSS)"
+suggestion = "sanitize o conteúdo antes"
+
+[[rule]]
+id = "TLS010"
+pattern = 'rejectUnauthorized\s*:\s*false'
+langs = ["javascript", "typescript"]
+severity = "warning"
+category = "security"
+message = "Verificação de certificado TLS desativada"
+
+[[rule]]
+id = "TLS011"
+pattern = '''NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0'''
+langs = ["javascript", "typescript", "bash", "powershell", "yaml", "dockerfile"]
+severity = "critical"
+category = "security"
+message = "TLS desativado para todo o processo Node"
+
+[[rule]]
+id = "RND010"
+pattern = 'Math\.random\s*\('
+langs = ["javascript", "typescript"]
+severity = "info"
+category = "security"
+message = "Math.random não é criptograficamente seguro"
+suggestion = "para tokens use crypto.randomUUID() ou crypto.getRandomValues()"
+
+[[rule]]
+id = "CRY010"
+pattern = '''createHash\(\s*["'](md5|sha1)["']'''
+langs = ["javascript", "typescript"]
+severity = "warning"
+category = "security"
+message = "MD5/SHA-1 são fracos para segurança"
+suggestion = "use sha256; para senhas use scrypt/argon2"
+
+[[rule]]
+id = "REL010"
+pattern = 'catch\s*(\(\s*\w*\s*\))?\s*\{\s*\}'
+langs = ["javascript", "typescript"]
+severity = "warning"
+category = "reliability"
+message = "catch vazio esconde erros"
+
+[[rule]]
+id = "STY010"
+pattern = '[^=!<>]==(?!=)|!=(?!=)'
+langs = ["javascript"]
+scope = "nostrings"
+severity = "info"
+category = "style"
+message = "Comparação frouxa (==) converte tipos implicitamente"
+suggestion = "use === e !=="
+
+[[rule]]
+id = "STY011"
+pattern = '\bvar\s+[A-Za-z_$]'
+langs = ["javascript", "typescript"]
+scope = "nostrings"
+severity = "info"
+category = "style"
+message = "var tem escopo de função"
+suggestion = "use const ou let"
+
+[[rule]]
+id = "PERF010"
+pattern = '\bawait\b'
+langs = ["javascript", "typescript"]
+scope = "nostrings"
+in_loop = true
+severity = "info"
+category = "performance"
+message = "await dentro de laço executa as operações em série"
+suggestion = "se forem independentes, use Promise.all"
+
+[[rule]]
+id = "PERF011"
+pattern = 'JSON\.parse\s*\(\s*JSON\.stringify'
+langs = ["javascript", "typescript"]
+severity = "info"
+category = "performance"
+message = "Clonagem via JSON é lenta e perde tipos"
+suggestion = "use structuredClone()"
+
+[[rule]]
+id = "PERF012"
+pattern = '\b(readFileSync|writeFileSync|execSync)\s*\('
+langs = ["javascript", "typescript"]
+severity = "info"
+category = "performance"
+message = "API síncrona bloqueia o event loop"
+suggestion = "em servidores use as versões assíncronas (fs/promises)"
+
+[[rule]]
+id = "PERF013"
+pattern = 'new\s+RegExp\s*\('
+langs = ["javascript", "typescript"]
+in_loop = true
+severity = "info"
+category = "performance"
+message = "RegExp recompilada a cada iteração"
+suggestion = "crie a expressão uma vez fora do laço"
+
+[[rule]]
+id = "PERF014"
+pattern = '\.(query|findOne|findMany|findUnique|execute)\s*\('
+langs = ["javascript", "typescript"]
+in_loop = true
+severity = "warning"
+category = "performance"
+message = "Consulta ao banco dentro de laço (N+1)"
+suggestion = "busque em lote (WHERE id IN (...)) ou use include/join"
+
+[[rule]]
+id = "MEM010"
+pattern = '\bsetInterval\s*\('
+langs = ["javascript", "typescript"]
+severity = "info"
+category = "memory"
+message = "setInterval sem clearInterval mantém referências vivas"
+suggestion = "guarde o id e chame clearInterval na limpeza"
+
+[[rule]]
+id = "MEM011"
+pattern = '\.addEventListener\s*\('
+langs = ["javascript", "typescript"]
+in_loop = true
+severity = "warning"
+category = "memory"
+message = "Listener registrado dentro de laço tende a vazar"
+suggestion = "use delegação de eventos num elemento pai"
+
+[[rule]]
+id = "SEC011"
+pattern = '''localStorage\.setItem\s*\(\s*["'`][^"'`]*(token|jwt|auth|session)'''
+langs = ["javascript", "typescript"]
+flags = "i"
+severity = "info"
+category = "security"
+message = "Token em localStorage pode ser lido por qualquer script (XSS)"
+suggestion = "prefira cookie HttpOnly + SameSite"
+
+# ------------------------------------------------------------------ Go
+[[rule]]
+id = "SQL020"
+pattern = '\.(Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext)\s*\([^)\n]*fmt\.Sprintf'
+langs = ["go"]
+severity = "critical"
+category = "security"
+message = "SQL montado com fmt.Sprintf (injeção de SQL)"
+suggestion = "use placeholders: db.Query(\"... WHERE id = $1\", id)"
+
+[[rule]]
+id = "CMD020"
+pattern = '''exec\.Command(Context)?\s*\([^)\n]*"(sh|bash|cmd|cmd\.exe|powershell|pwsh)"\s*,\s*"(-c|/c|/C|-Command)"'''
+langs = ["go"]
+severity = "warning"
+category = "security"
+message = "Comando passado por shell (risco de injeção)"
+suggestion = "chame o binário direto com argumentos separados"
+
+[[rule]]
+id = "TLS020"
+pattern = 'InsecureSkipVerify\s*:\s*true'
+langs = ["go"]
+severity = "warning"
+category = "security"
+message = "Verificação de certificado TLS desativada"
+
+[[rule]]
+id = "CRY020"
+pattern = '\b(md5|sha1)\.(New|Sum)\b'
+langs = ["go"]
+severity = "info"
+category = "security"
+message = "MD5/SHA-1 são fracos para segurança"
+suggestion = "use crypto/sha256; para senhas use bcrypt/argon2"
+
+[[rule]]
+id = "RND020"
+pattern = '"math/rand(/v2)?"'
+langs = ["go"]
+severity = "info"
+category = "security"
+message = "math/rand não serve para tokens ou senhas"
+suggestion = "use crypto/rand"
+
+[[rule]]
+id = "PERF020"
+pattern = '\bdefer\b'
+langs = ["go"]
+scope = "nostrings"
+in_loop = true
+severity = "warning"
+category = "memory"
+message = "defer dentro de laço só executa no fim da função (recursos acumulam)"
+suggestion = "extraia o corpo do laço para uma função"
+
+[[rule]]
+id = "PERF021"
+pattern = '\+=\s*(fmt\.Sprint|"|string\()'
+langs = ["go"]
+in_loop = true
+severity = "info"
+category = "performance"
+message = "Concatenação de string em laço realoca a cada iteração"
+suggestion = "use strings.Builder"
+
+[[rule]]
+id = "REL020"
+pattern = ',\s*_\s*:?=\s*[\w.]+\('
+langs = ["go"]
+severity = "info"
+category = "reliability"
+message = "Erro descartado com _"
+suggestion = "trate o erro: if err != nil { ... }"
+
+[[rule]]
+id = "DEP020"
+pattern = '"io/ioutil"'
+langs = ["go"]
+severity = "info"
+category = "style"
+message = "io/ioutil está obsoleto desde Go 1.16"
+suggestion = "use os.ReadFile/os.WriteFile e io.ReadAll"
+
+[[rule]]
+id = "CON020"
+pattern = '\bgo\s+func\s*\('
+langs = ["go"]
+in_loop = true
+severity = "info"
+category = "memory"
+message = "Goroutine por iteração sem limite pode esgotar memória"
+suggestion = "use um pool de workers ou semáforo (errgroup.SetLimit)"
+
+# ------------------------------------------------------------------ Rust
+[[rule]]
+id = "REL030"
+pattern = '\.unwrap\s*\(\s*\)'
+langs = ["rust"]
+severity = "info"
+category = "reliability"
+message = "unwrap() derruba o programa em caso de erro"
+suggestion = "propague com ? ou trate com match/expect com contexto"
+
+[[rule]]
+id = "SAF030"
+pattern = '\bunsafe\s*\{'
+langs = ["rust"]
+severity = "warning"
+category = "security"
+message = "Bloco unsafe desativa garantias de memória"
+suggestion = "documente o invariante com // SAFETY:"
+
+[[rule]]
+id = "SQL030"
+pattern = '\.(execute|query|query_as|query_scalar|prepare)\s*\(\s*&?format!\s*\('
+langs = ["rust"]
+severity = "critical"
+category = "security"
+message = "SQL montado com format! (injeção de SQL)"
+suggestion = "use binds: sqlx::query(\"... WHERE id = $1\").bind(id)"
+
+[[rule]]
+id = "TLS030"
+pattern = 'danger_accept_invalid_certs\s*\(\s*true'
+langs = ["rust"]
+severity = "warning"
+category = "security"
+message = "Certificados TLS inválidos aceitos"
+
+[[rule]]
+id = "PERF030"
+pattern = '\.clone\s*\(\s*\)'
+langs = ["rust"]
+in_loop = true
+severity = "info"
+category = "performance"
+message = "clone() dentro de laço pode copiar dados grandes a cada iteração"
+suggestion = "use referências (&) ou Rc/Arc"
+
+[[rule]]
+id = "PERF031"
+pattern = 'Regex::new\s*\('
+langs = ["rust"]
+in_loop = true
+severity = "warning"
+category = "performance"
+message = "Regex compilada a cada iteração"
+suggestion = "use std::sync::LazyLock para compilar uma vez"
+
+# ------------------------------------------------------------------ Java / Kotlin
+[[rule]]
+id = "SQL040"
+pattern = '\.(executeQuery|executeUpdate|execute|addBatch|prepareStatement|createQuery|createNativeQuery)\s*\(\s*("[^"]*"\s*\+|String\.format\s*\()'
+langs = ["java", "kotlin"]
+severity = "critical"
+category = "security"
+message = "SQL montado por concatenação (injeção de SQL)"
+suggestion = "use PreparedStatement com ? e setString/setInt"
+
+[[rule]]
+id = "CMD040"
+pattern = 'Runtime\.getRuntime\(\)\.exec\s*\('
+langs = ["java", "kotlin"]
+severity = "warning"
+category = "security"
+message = "Runtime.exec com string única é dividido pelo shell de forma frágil"
+suggestion = "use ProcessBuilder com lista de argumentos"
+
+[[rule]]
+id = "CRY040"
+pattern = 'MessageDigest\.getInstance\s*\(\s*"(MD5|SHA-?1)"'
+langs = ["java", "kotlin"]
+severity = "warning"
+category = "security"
+message = "MD5/SHA-1 são fracos para segurança"
+
+[[rule]]
+id = "RND040"
+pattern = 'new\s+Random\s*\('
+langs = ["java", "kotlin"]
+severity = "info"
+category = "security"
+message = "java.util.Random é previsível"
+suggestion = "para segredos use SecureRandom"
+
+[[rule]]
+id = "REL040"
+pattern = 'catch\s*\(\s*[\w.|\s]+\s+\w+\s*\)\s*\{\s*\}'
+langs = ["java", "kotlin", "csharp", "cpp"]
+severity = "warning"
+category = "reliability"
+message = "catch vazio esconde erros"
+
+[[rule]]
+id = "PERF040"
+pattern = '\+=\s*"'
+langs = ["java", "kotlin"]
+in_loop = true
+severity = "info"
+category = "performance"
+message = "Concatenação de String em laço é O(n²)"
+suggestion = "use StringBuilder"
+
+[[rule]]
+id = "PERF041"
+pattern = 'Pattern\.compile\s*\('
+langs = ["java", "kotlin"]
+in_loop = true
+severity = "warning"
+category = "performance"
+message = "Pattern compilado a cada iteração"
+suggestion = "declare como static final"
+
+[[rule]]
+id = "DES040"
+pattern = '\bObjectInputStream\b'
+langs = ["java", "kotlin"]
+severity = "warning"
+category = "security"
+message = "Desserialização Java de dados não confiáveis permite execução remota"
+suggestion = "use JSON ou um filtro de desserialização (ObjectInputFilter)"
+
+[[rule]]
+id = "XXE040"
+pattern = 'DocumentBuilderFactory\.newInstance\s*\('
+langs = ["java", "kotlin"]
+severity = "info"
+category = "security"
+message = "Parser XML padrão aceita entidades externas (XXE)"
+suggestion = "setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)"
+
+# ------------------------------------------------------------------ C#
+[[rule]]
+id = "SQL050"
+pattern = '(new\s+SqlCommand\s*\(|CommandText\s*=|FromSqlRaw\s*\(|ExecuteSqlRaw\s*\()\s*(\$"|"[^"]*"\s*\+)'
+langs = ["csharp"]
+severity = "critical"
+category = "security"
+message = "SQL montado por interpolação/concatenação (injeção de SQL)"
+suggestion = "use SqlParameter ou FromSqlInterpolated"
+
+[[rule]]
+id = "CMD050"
+pattern = 'Process\.Start\s*\(\s*(\$"|"(cmd|powershell|pwsh|bash)|"[^"]*"\s*\+)'
+langs = ["csharp"]
+severity = "warning"
+category = "security"
+message = "Processo iniciado com comando dinâmico"
+suggestion = "use ProcessStartInfo.ArgumentList"
+
+[[rule]]
+id = "CRY050"
+pattern = '\b(MD5|SHA1)\.(Create|HashData)\s*\('
+langs = ["csharp"]
+severity = "warning"
+category = "security"
+message = "MD5/SHA-1 são fracos para segurança"
+
+[[rule]]
+id = "RND050"
+pattern = 'new\s+Random\s*\('
+langs = ["csharp"]
+severity = "info"
+category = "security"
+message = "System.Random é previsível"
+suggestion = "use RandomNumberGenerator para segredos"
+
+[[rule]]
+id = "TLS050"
+pattern = '(ServerCertificateCustomValidationCallback|ServerCertificateValidationCallback)\s*=\s*[^;\n]*=>\s*true'
+langs = ["csharp"]
+severity = "warning"
+category = "security"
+message = "Validação de certificado TLS desativada"
+
+[[rule]]
+id = "REL050"
+pattern = 'catch\s*(\(\s*Exception(\s+\w+)?\s*\))?\s*\{\s*\}'
+langs = ["csharp"]
+severity = "warning"
+category = "reliability"
+message = "catch vazio esconde erros"
+
+[[rule]]
+id = "PERF050"
+pattern = '\+=\s*\$?"'
+langs = ["csharp"]
+in_loop = true
+severity = "info"
+category = "performance"
+message = "Concatenação de string em laço é O(n²)"
+suggestion = "use StringBuilder"
+
+[[rule]]
+id = "PERF051"
+pattern = '\.Result\b|\.Wait\s*\(\s*\)|\.GetAwaiter\(\)\.GetResult\(\)'
+langs = ["csharp"]
+severity = "warning"
+category = "reliability"
+message = "Bloquear em Task (sync-over-async) causa deadlocks e esgota o thread pool"
+suggestion = "use await"
+
+[[rule]]
+id = "PERF052"
+pattern = 'new\s+HttpClient\s*\('
+langs = ["csharp"]
+in_loop = true
+severity = "warning"
+category = "performance"
+message = "HttpClient criado por iteração esgota sockets"
+suggestion = "reutilize uma instância ou use IHttpClientFactory"
+
+[[rule]]
+id = "DES050"
+pattern = '\bBinaryFormatter\b'
+langs = ["csharp"]
+severity = "critical"
+category = "security"
+message = "BinaryFormatter é inseguro e obsoleto"
+suggestion = "use System.Text.Json"
+
+# ------------------------------------------------------------------ C / C++
+[[rule]]
+id = "MEM060"
+pattern = '\bgets\s*\('
+langs = ["c", "cpp"]
+scope = "nostrings"
+severity = "critical"
+category = "memory"
+message = "gets() causa estouro de buffer (removida no C11)"
+suggestion = "use fgets(buf, sizeof buf, stdin)"
+
+[[rule]]
+id = "MEM061"
+pattern = '\b(strcpy|strcat|wcscpy|wcscat)\s*\('
+langs = ["c", "cpp"]
+scope = "nostrings"
+severity = "warning"
+category = "memory"
+message = "Cópia de string sem limite de tamanho (estouro de buffer)"
+suggestion = "use snprintf ou strncpy com terminador explícito"
+
+[[rule]]
+id = "MEM062"
+pattern = '\b(sprintf|vsprintf)\s*\('
+langs = ["c", "cpp"]
+scope = "nostrings"
+severity = "warning"
+category = "memory"
+message = "sprintf não limita o tamanho do destino"
+suggestion = "use snprintf"
+
+[[rule]]
+id = "MEM063"
+pattern = 'scanf\s*\(\s*"[^"]*%s'
+langs = ["c", "cpp"]
+severity = "warning"
+category = "memory"
+message = "%s sem largura em scanf estoura o buffer"
+suggestion = "limite a largura: %255s"
+
+[[rule]]
+id = "FMT060"
+pattern = '\b(printf|fprintf\s*\(\s*\w+\s*,|syslog\s*\(\s*\w+\s*,)\s*\(?\s*[A-Za-z_]\w*\s*\)'
+langs = ["c", "cpp"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "String de formato vinda de variável (format string attack)"
+suggestion = "use printf(\"%s\", texto)"
+
+[[rule]]
+id = "CMD060"
+pattern = '\b(system|popen)\s*\('
+langs = ["c", "cpp"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "system()/popen() passam pelo shell (risco de injeção)"
+suggestion = "use execv/posix_spawn com argumentos separados"
+
+[[rule]]
+id = "MEM064"
+pattern = '\bnew\s+[A-Za-z_][\w:<>]*\s*[\[(]'
+langs = ["cpp"]
+scope = "nostrings"
+severity = "info"
+category = "memory"
+message = "new/delete manual é propenso a vazamentos"
+suggestion = "use std::make_unique, std::vector ou outro tipo RAII"
+
+[[rule]]
+id = "RND060"
+pattern = '\b(rand|srand)\s*\('
+langs = ["c", "cpp"]
+scope = "nostrings"
+severity = "info"
+category = "security"
+message = "rand() é previsível e de baixa qualidade"
+suggestion = "C++: <random> (std::mt19937); segredos: getrandom()/RAND_bytes"
+
+# ------------------------------------------------------------------ PHP
+[[rule]]
+id = "SQL070"
+pattern = '(mysqli_query|->query|->exec|->prepare)\s*\([^;]*(\$_(GET|POST|REQUEST|COOKIE)|"[^"]*\$\w+|"\s*\.\s*\$)'
+langs = ["php"]
+severity = "critical"
+category = "security"
+message = "SQL com dados interpolados (injeção de SQL)"
+suggestion = "use PDO::prepare com parâmetros nomeados"
+
+[[rule]]
+id = "INJ070"
+pattern = '\b(eval|assert)\s*\('
+langs = ["php"]
+scope = "nostrings"
+severity = "critical"
+category = "security"
+message = "eval/assert executam código arbitrário"
+
+[[rule]]
+id = "CMD070"
+pattern = '\b(shell_exec|exec|system|passthru|popen|proc_open)\s*\('
+langs = ["php"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "Execução de comando do sistema"
+suggestion = "escape com escapeshellarg ou evite o shell"
+
+[[rule]]
+id = "XSS070"
+pattern = '(echo|print)\s+\$_(GET|POST|REQUEST|COOKIE)'
+langs = ["php"]
+severity = "critical"
+category = "security"
+message = "Entrada do usuário impressa sem escape (XSS)"
+suggestion = "use htmlspecialchars($v, ENT_QUOTES, 'UTF-8')"
+
+[[rule]]
+id = "INC070"
+pattern = '(include|require)(_once)?\s*\(?\s*\$_(GET|POST|REQUEST|COOKIE)'
+langs = ["php"]
+severity = "critical"
+category = "security"
+message = "Inclusão de arquivo controlada pelo usuário (LFI/RFI)"
+
+[[rule]]
+id = "DES070"
+pattern = '\bunserialize\s*\('
+langs = ["php"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "unserialize de dados não confiáveis permite injeção de objetos"
+suggestion = "use json_decode"
+
+[[rule]]
+id = "CRY070"
+pattern = '\b(md5|sha1)\s*\('
+langs = ["php"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "md5/sha1 não servem para senhas"
+suggestion = "use password_hash() e password_verify()"
+
+[[rule]]
+id = "DEP070"
+pattern = '\bmysql_(query|connect)\s*\('
+langs = ["php"]
+severity = "critical"
+category = "security"
+message = "API mysql_* foi removida no PHP 7"
+suggestion = "use PDO"
+
+# ------------------------------------------------------------------ Ruby / Lua
+[[rule]]
+id = "SQL080"
+pattern = '\.(where|find_by_sql|execute|exec_query|select|order|joins)\s*\(\s*"[^"]*#\{'
+langs = ["ruby"]
+severity = "critical"
+category = "security"
+message = "SQL com interpolação (injeção de SQL)"
+suggestion = "use where(\"id = ?\", id) ou hashes"
+
+[[rule]]
+id = "CMD080"
+pattern = '`[^`]*#\{|\b(system|exec|spawn)\s*\(?\s*"[^"]*#\{'
+langs = ["ruby"]
+severity = "critical"
+category = "security"
+message = "Comando de shell com interpolação (injeção de comando)"
+suggestion = "use system(\"cmd\", arg1, arg2)"
+
+[[rule]]
+id = "DES080"
+pattern = '\b(Marshal\.load|YAML\.load)\s*\('
+langs = ["ruby"]
+severity = "warning"
+category = "security"
+message = "Desserialização insegura"
+suggestion = "use YAML.safe_load / JSON.parse"
+
+[[rule]]
+id = "INJ090"
+pattern = '\b(loadstring|load|dofile)\s*\('
+langs = ["lua"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "load/loadstring executam código dinâmico"
+
+[[rule]]
+id = "PERF090"
+pattern = '\w\s*\.\.\s*[\w"(]'
+langs = ["lua"]
+scope = "nostrings"
+in_loop = true
+severity = "info"
+category = "performance"
+message = "Concatenação com .. em laço cria muitas strings temporárias"
+suggestion = "acumule numa tabela e use table.concat"
+
+# ------------------------------------------------------------------ Bash
+[[rule]]
+id = "SH001"
+pattern = '\brm\s+(-[a-zA-Z]*r[a-zA-Z]*\s+)+(/|/\*|~|~/|\$HOME/?|\$\{HOME\}/?)(\s|$|;)'
+langs = ["bash"]
+severity = "critical"
+category = "security"
+message = "rm recursivo na raiz ou no home"
+
+[[rule]]
+id = "SH002"
+pattern = '\brm\s+-[a-zA-Z]*[rf][a-zA-Z]*\s+[^"\s]*\$\{?\w'
+langs = ["bash"]
+severity = "warning"
+category = "reliability"
+message = "Variável sem aspas em rm -rf (vazia => apaga o diretório errado)"
+suggestion = "use rm -rf -- \"${DIR:?}/\""
+
+[[rule]]
+id = "SH003"
+pattern = '\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(ba|z|k)?sh\b'
+langs = ["bash", "dockerfile", "yaml"]
+severity = "critical"
+category = "security"
+message = "Script baixado executado direto no shell (pipe-to-shell)"
+suggestion = "baixe, verifique o checksum/assinatura e só então execute"
+
+[[rule]]
+id = "SH004"
+pattern = '\bchmod\s+(-R\s+)?(0?777|a\+rwx)\b'
+langs = ["bash", "dockerfile", "yaml"]
+severity = "warning"
+category = "security"
+message = "Permissão 777 deixa tudo gravável por todos"
+suggestion = "use 755 (diretórios/executáveis) ou 644 (arquivos)"
+
+[[rule]]
+id = "SH005"
+pattern = '(^|\s|;)eval\s'
+langs = ["bash"]
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "eval reinterpreta dados como código"
+
+[[rule]]
+id = "SH006"
+pattern = '\bcurl\b[^\n]*\s(-k|--insecure)\b|\bwget\b[^\n]*--no-check-certificate'
+langs = ["bash", "dockerfile", "yaml"]
+severity = "warning"
+category = "security"
+message = "Verificação TLS desativada"
+
+[[rule]]
+id = "SH007"
+pattern = '\b(mysql|mysqldump|psql)\b[^\n]*\s(-p\S+|--password=\S+)'
+langs = ["bash", "dockerfile", "yaml", "powershell"]
+severity = "critical"
+category = "secret"
+message = "Senha na linha de comando (visível em ps e no histórico)"
+suggestion = "use ~/.my.cnf, PGPASSFILE ou variável de ambiente"
+
+[[rule]]
+id = "SH009"
+pattern = 'for\s+\w+\s+in\s+\$\(\s*ls\b'
+langs = ["bash"]
+severity = "warning"
+category = "reliability"
+message = "Iterar sobre a saída de ls quebra com espaços em nomes"
+suggestion = "use globs: for f in ./*; do"
+
+[[rule]]
+id = "SH010"
+pattern = '\bcat\s+[^|\s]+\s*\|\s*(grep|awk|sed|head|tail|wc)\b'
+langs = ["bash"]
+severity = "info"
+category = "performance"
+message = "cat desnecessário (processo extra)"
+suggestion = "passe o arquivo direto: grep padrão arquivo"
+
+[[rule]]
+id = "SH011"
+pattern = '\[\s+\$\w+\s+(==?|!=)\s'
+langs = ["bash"]
+severity = "info"
+category = "reliability"
+message = "Variável sem aspas em [ ] quebra quando vazia"
+suggestion = "use [[ \"$var\" == ... ]]"
+
+[[rule]]
+id = "SH012"
+pattern = '''(?m)^(?!\s*#)[^\n]*?\s["']?(?P<f>[\w./-]+\.\w+|\$\{?\w+\}?)["']?(?:\s[^\n>|]*)?(?:\|[^\n>]*)?\s>\s*["']?(?P=f)["']?\s*(?:;|$|&&|\|\|)'''
+langs = ["bash"]
+scope = "all"
+severity = "error"
+category = "reliability"
+message = "O comando lê e grava o mesmo arquivo: o shell esvazia o arquivo antes de o comando ler, e os dados se perdem"
+suggestion = "grave num temporário e troque depois (cmd arq > arq.tmp && mv arq.tmp arq), ou use sort -o arq arq"
+
+# ------------------------------------------------------------------ PowerShell
+[[rule]]
+id = "PS002"
+pattern = '(iwr|irm|Invoke-WebRequest|Invoke-RestMethod|DownloadString)[^\n|]*\|\s*(iex|Invoke-Expression)\b'
+langs = ["powershell"]
+flags = "i"
+severity = "critical"
+category = "security"
+message = "Script baixado executado direto (download | iex)"
+suggestion = "salve, confira a assinatura (Get-AuthenticodeSignature) e só então execute"
+
+[[rule]]
+id = "PS001"
+pattern = '\b(Invoke-Expression|iex)\b'
+langs = ["powershell"]
+flags = "i"
+scope = "nostrings"
+severity = "warning"
+category = "security"
+message = "Invoke-Expression avalia texto como código"
+suggestion = "use & comando @args ou splatting"
+
+[[rule]]
+id = "PS003"
+pattern = '(Set-ExecutionPolicy\s+(-ExecutionPolicy\s+)?(Unrestricted|Bypass)|-ExecutionPolicy\s+(Bypass|Unrestricted))'
+langs = ["powershell", "bash", "yaml"]
+flags = "i"
+severity = "warning"
+category = "security"
+message = "Política de execução desativada"
+suggestion = "prefira RemoteSigned e scripts assinados"
+
+[[rule]]
+id = "PS005"
+pattern = '''ConvertTo-SecureString\s+(-String\s+)?["'][^"']+["'][^\n]*-AsPlainText'''
+langs = ["powershell"]
+flags = "i"
+severity = "critical"
+category = "secret"
+message = "Senha em texto puro no script"
+suggestion = "use Get-Credential ou o módulo SecretManagement"
+
+[[rule]]
+id = "PS006"
+pattern = '\$\w+\s*\+=\s*(@\(|\$\w+\s*$|\$\w+\s*\)|\[pscustomobject\])'
+langs = ["powershell"]
+flags = "i"
+in_loop = true
+severity = "info"
+category = "performance"
+message = "+= em array dentro de laço recria o array a cada iteração (O(n²))"
+suggestion = "use [System.Collections.Generic.List[object]]::new() e .Add(), ou atribua a saída do laço"
+
+[[rule]]
+id = "PS007"
+pattern = '\bGet-WmiObject\b'
+langs = ["powershell"]
+flags = "i"
+severity = "info"
+category = "style"
+message = "Get-WmiObject está obsoleto (não existe no PowerShell 7)"
+suggestion = "use Get-CimInstance"
+
+[[rule]]
+id = "PS008"
+pattern = 'Remove-Item\b[^\n]*\$\w+[^\n]*-Recurse|Remove-Item\b[^\n]*-Recurse[^\n]*\$\w+'
+langs = ["powershell"]
+flags = "i"
+severity = "warning"
+category = "reliability"
+message = "Remoção recursiva com caminho vindo de variável"
+suggestion = "valide o caminho (Test-Path, [ValidateNotNullOrEmpty()]) e use -WhatIf antes"
+
+[[rule]]
+id = "PS009"
+pattern = '\bWrite-Host\b'
+langs = ["powershell"]
+flags = "i"
+severity = "info"
+category = "style"
+message = "Write-Host não vai para o pipeline"
+suggestion = "use Write-Output para dados ou Write-Information/Write-Verbose para mensagens"
+
+[[rule]]
+id = "PS010"
+pattern = '-SkipCertificateCheck\b|ServerCertificateValidationCallback\s*=\s*\{\s*\$true\s*\}'
+langs = ["powershell"]
+flags = "i"
+severity = "warning"
+category = "security"
+message = "Verificação de certificado TLS desativada"
+
+[[rule]]
+id = "PS011"
+pattern = '''\$ErrorActionPreference\s*=\s*["']?SilentlyContinue'''
+langs = ["powershell"]
+flags = "i"
+severity = "warning"
+category = "reliability"
+message = "Erros silenciados globalmente"
+suggestion = "use 'Stop' e trate com try/catch"
+
+[[rule]]
+id = "PS012"
+pattern = 'catch\s*(\[[^\]]+\]\s*)?\{\s*\}'
+langs = ["powershell"]
+flags = "i"
+severity = "warning"
+category = "reliability"
+message = "catch vazio esconde erros"
+
+[[rule]]
+id = "PS014"
+pattern = 'New-Object\s+(System\.)?Net\.WebClient'
+langs = ["powershell"]
+flags = "i"
+severity = "info"
+category = "style"
+message = "WebClient é obsoleto"
+suggestion = "use Invoke-RestMethod / Invoke-WebRequest"
+
+[[rule]]
+id = "PS017"
+pattern = 'Invoke-Sqlcmd\b[^\n]*-Query\s+"[^"]*\$'
+langs = ["powershell"]
+flags = "i"
+severity = "critical"
+category = "security"
+message = "Consulta SQL com variável interpolada (injeção de SQL)"
+suggestion = "use -Variable ou SqlParameter"
+
+# ------------------------------------------------------------------ SQL
+[[rule]]
+id = "SQL101"
+pattern = '(?i)\bDELETE\s+FROM\s+[\w."`\[\]]+\s*(;|$)'
+langs = ["sql"]
+severity = "critical"
+category = "reliability"
+message = "DELETE sem WHERE apaga a tabela inteira"
+
+[[rule]]
+id = "SQL102"
+pattern = '(?is)\bUPDATE\s+[\w."`\[\]]+\s+SET\b(?:(?!\bWHERE\b)[^;])*(;|\Z)'
+langs = ["sql"]
+severity = "critical"
+category = "reliability"
+message = "UPDATE sem WHERE altera todas as linhas"
+
+[[rule]]
+id = "SQL103"
+pattern = '(?i)\bDROP\s+(TABLE|DATABASE|SCHEMA)\b(?!\s+IF\s+EXISTS)'
+langs = ["sql"]
+severity = "warning"
+category = "reliability"
+message = "DROP destrutivo sem IF EXISTS"
+
+[[rule]]
+id = "SQL105"
+pattern = '(?i)\bGRANT\s+ALL\b'
+langs = ["sql"]
+severity = "warning"
+category = "security"
+message = "GRANT ALL viola o menor privilégio"
+
+[[rule]]
+id = "SQL107"
+pattern = '''(?i)\bLIKE\s+'%'''
+langs = ["sql"]
+severity = "info"
+category = "performance"
+message = "LIKE com curinga no início impede o uso de índice"
+suggestion = "use índice de texto (trigram/FTS)"
+
+[[rule]]
+id = "SQL108"
+pattern = '(?i)\bOFFSET\s+\d{4,}'
+langs = ["sql"]
+severity = "info"
+category = "performance"
+message = "OFFSET alto fica lento em tabelas grandes"
+suggestion = "use paginação por chave (WHERE id > :ultimo LIMIT n)"
+
+# ------------------------------------------------------------------ Dockerfile / YAML
+[[rule]]
+id = "DKR001"
+pattern = '(?im)^FROM\s+(\S+:latest|[^:\s@]+)(\s+AS\s+\w+)?\s*$'
+langs = ["dockerfile"]
+severity = "warning"
+category = "reliability"
+message = "Imagem base sem versão fixa"
+suggestion = "fixe a tag (ex.: python:3.12-slim) ou o digest"
+
+[[rule]]
+id = "DKR004"
+pattern = 'apt-get\s+install(?![^\n]*--no-install-recommends)'
+langs = ["dockerfile"]
+severity = "info"
+category = "performance"
+message = "apt-get sem --no-install-recommends engorda a imagem"
+suggestion = "use --no-install-recommends e rm -rf /var/lib/apt/lists/*"
+
+[[rule]]
+id = "DKR005"
+pattern = '(?im)^(ENV|ARG)\s+\w*(PASSWORD|SECRET|TOKEN|API_KEY)\w*[= ]\s*\S+'
+langs = ["dockerfile"]
+severity = "critical"
+category = "secret"
+message = "Segredo gravado na imagem (ENV/ARG ficam no histórico das camadas)"
+suggestion = "use secrets do BuildKit (--mount=type=secret) ou variáveis em runtime"
+
+[[rule]]
+id = "YML001"
+pattern = 'uses:\s*[\w.-]+/[\w./-]+@(master|main|latest)\b'
+langs = ["yaml"]
+severity = "warning"
+category = "security"
+message = "Action referenciada por branch móvel"
+suggestion = "fixe uma tag ou o SHA do commit"
+
+[[rule]]
+id = "YML002"
+pattern = 'privileged:\s*true'
+langs = ["yaml"]
+severity = "warning"
+category = "security"
+message = "Container privilegiado tem acesso total ao host"

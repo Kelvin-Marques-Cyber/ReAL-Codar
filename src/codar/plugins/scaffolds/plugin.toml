@@ -1,0 +1,4 @@
+[plugin]
+name = "scaffolds"
+version = "1.0.0"
+description = "Arquivos de projeto: .gitignore, Dockerfile, CI, editorconfig, Makefile, README"
