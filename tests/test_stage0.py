@@ -61,3 +61,8 @@ def test_bloco_reconhece_variavel_do_laco_e_parametros():
     nodes, misses = Stage0().parse_program("para cada nome em nomes\n    imprimir nome\n", set())
     assert misses == 0
     assert emit(nodes, "javascript")[1] == "for (const nome of nomes) {\n  console.log(nome);\n}"
+
+
+def test_laco_em_lista_chamada_linhas_mas_nao_leitura_de_arquivo():
+    assert compile_("para cada linha em linhas imprimir linha") == "for linha in linhas:\n    print(linha)"
+    assert compile_("para cada linha do arquivo imprimir linha") is None  # vai para o banco ou para a IA

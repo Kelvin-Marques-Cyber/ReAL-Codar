@@ -220,8 +220,8 @@ _P_TIMES = _rx(r"^(?:(?:repetir|repita|repeat|loop|laco|executar|execute|faca|fa
                r"(?P<n>\d+|" + ID + r")\s+(?:vezes|times)\s*:?(?P<rest>.*)$")
 _P_FOREACH = _rx(r"^(?:para\s+cada|for\s+each|foreach|for\s+every|percorrer|percorra|percorre|iterar\s+(?:sobre|em|por|pela|"
                  r"pelo|pelos|pelas)|itere\s+(?:sobre|em|por|pela|pelo)|iterate\s+(?:over|through)|loop\s+(?:over|through|"
-                 r"sobre|em|por)|for)\s+(?:(?:o|a|os|as|cada|the|each|every)\s+)?(?:(?P<var>" + ID + r")\s+(?:em|in|de|of|"
-                 r"da|do|na|no|dentro\s+de)\s+)?(?:(?:a|o|os|as|the)\s+)?(?:(?:lista|array|vetor|list|colecao|collection)"
+                 r"sobre|em|por)|for)\s+(?:(?:o|a|os|as|cada|the|each|every)\s+)?(?:(?P<var>" + ID + r")\s+(?P<con>em|in|de|"
+                 r"of|da|do|na|no|dentro\s+de)\s+)?(?:(?:a|o|os|as|the)\s+)?(?:(?:lista|array|vetor|list|colecao|collection)"
                  r"\s+(?:de\s+)?)?(?P<iter>[a-z_][\w.]*)(?P<rest>.*)$")
 _P_INFINITE = _rx(r"^(?:(?:um|uma|a|an)\s+)?(?:loop|laco)\s+(?:infinito|eterno|forever)$|^(?:infinite\s+loop|while\s+true|"
                   r"loop\s+forever|para\s+sempre|enquanto\s+(?:verdadeiro|true))$")
@@ -593,8 +593,10 @@ class Stage0:
         if not m:
             return None
         it = _span(t, m, "iter")
-        if fold(it) in ("range", "linha", "arquivo", "file", "line", "lines", "linhas", "cada"):
+        if fold(it) in ("range", "arquivo", "file", "cada"):
             return None
+        if fold(it) in ("linha", "linhas", "line", "lines") and not (m.group("var") and fold(m.group("con")) in ("em", "in")):
+            return None  # "para cada linha do arquivo" é leitura de arquivo; "para cada linha em linhas", uma lista
         var = _ident(_span(t, m, "var") or "")
         if not var:
             base = it.split(".")[-1]
