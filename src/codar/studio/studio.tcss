@@ -351,3 +351,14 @@ HelpScreen {
 .help-items {
     color: #f0b32a;
 }
+
+/* ---------------------------------------------------------------- boas-vindas (sem arquivo aberto) */
+#welcome {
+    height: 1fr;
+    content-align: center middle;
+    text-align: center;
+    border: round #F26500;
+    border-title-color: #FF4747;
+    border-title-style: bold;
+    background: #05040A;
+}

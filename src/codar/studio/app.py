@@ -138,6 +138,7 @@ class Studio(App):
                 with Horizontal(id="pills-bar"):
                     yield Static(id="pills")
                     yield Static(id="lang-pill")
+                yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
                 with TabbedContent(id="panel", initial="tab-problems"):
                     with TabPane("PROBLEMAS", id="tab-problems"):
@@ -168,7 +169,7 @@ class Studio(App):
                                   background=C["bg"], surface=C["bg"], panel=C["grid"], dark=True))
         self.theme = "sentry"
         for wid, title in (("#explorer", "EXPLORER"), ("#radar", "PIPELINE ORBIT"), ("#feed", "SOURCE / EVENT FEED"),
-                           ("#editors", "EDITOR"), ("#panel", "PAINEL"), ("#last-card", "LAST TRANSLATION"),
+                           ("#editors", "EDITOR"), ("#welcome", "BEM-VINDO"), ("#panel", "PAINEL"), ("#last-card", "LAST TRANSLATION"),
                            ("#telemetry", "TELEMETRIA"), ("#history", "HISTÓRICO"), ("#intent-bar", "")):
             self.query_one(wid).border_title = title
         table = self.query_one("#problems", DataTable)
@@ -186,6 +187,7 @@ class Studio(App):
         self.set_interval(1.0, self.render_status)
         self.refresh_telemetry()
         self.render_status()
+        self.sync_welcome()
         self.query_one("#intent", Input).focus()
 
     def on_resize(self, event) -> None:
@@ -352,6 +354,7 @@ class Studio(App):
         pane = TabPane(title, ed, id=f"ed-{self.tab_seq}")
         tabs = self.query_one("#editors", TabbedContent)
         await tabs.add_pane(pane)
+        self.sync_welcome()
         tabs.active = pane.id or ""
         ed.focus()
         self.render_pills()
@@ -561,6 +564,29 @@ class Studio(App):
             return
         self.request(line.strip(), "line", ed, row)
 
+    @staticmethod
+    def welcome_text() -> str:
+        """Tela inicial enquanto nenhum arquivo está aberto: o que dá para fazer e frases para experimentar."""
+        def row(k1: str, v1: str, k2: str, v2: str) -> str:
+            return (f"[b {C['mint']}]{k1:<8}[/] [{C['text']}]{v1:<22}[/]   "
+                    f"[b {C['mint']}]{k2:<9}[/] [{C['text']}]{v2:<20}[/]")
+        examples = "\n".join(f"[{C['green']}]{e}[/]  [{C['dim']}]{what}[/]" for e, what in EXAMPLES[:3])
+        return "\n".join([
+            f"[b {C['orange']}]{TITLE}[/]", "",
+            f"[{C['text']}]escreva a intenção em pseudocódigo · o CODAR escreve o código[/]", "",
+            row("Ctrl+N", "novo arquivo", "Explorer", "Enter abre o arquivo"),
+            row("Ctrl+L", "descrever o código", "F1", "todos os atalhos"),
+            row("F8", "consultor do projeto", "Ctrl+Q", "sair"), "",
+            f"[{C['dim']}]experimente na barra de intenção:[/]", examples,
+        ])
+
+    def sync_welcome(self) -> None:
+        """Mostra as boas-vindas só quando não há arquivo aberto."""
+        tabs = self.query_one("#editors", TabbedContent)
+        empty = tabs.tab_count == 0
+        self.query_one("#welcome", Static).display = empty
+        tabs.display = not empty
+
     def action_help(self) -> None:
         self.push_screen(HelpScreen())
 
@@ -632,6 +658,7 @@ class Studio(App):
                 ed.saved_text = ed.text
                 return
             await tabs.remove_pane(tabs.active)
+            self.sync_welcome()
 
     def action_toggle_left(self) -> None:
         left = self.query_one("#left")
