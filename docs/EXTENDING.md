@@ -81,6 +81,20 @@ q
 expect = ["= 5", "Erro: divisão por zero"]
 ```
 
+Para programas de linha de comando, use **execuções**: argumentos, entrada opcional, o código de saída esperado e os trechos que a saída (stdout + stderr) precisa conter. `langs` restringe uma execução às linguagens que seguem aquela convenção de opções:
+
+```toml
+[[pattern.test.runs]]
+args = ["adicionar", "comprar pão", "--prioridade", "5"]
+expect = ["adicionada: comprar pão (prioridade 5)"]
+langs = ["python", "javascript", "go", "bash"]
+
+[[pattern.test.runs]]
+args = ["voar"]
+status = 2
+expect = ["voar"]
+```
+
 **Arquivos de projeto.** Com `kind = "file"` e `path = ".gitignore"`, o padrão vira um arquivo: os editores oferecem criá-lo no projeto em vez de inserir o texto no cursor.
 
 **Validação.** Antes de abrir um PR, rode:

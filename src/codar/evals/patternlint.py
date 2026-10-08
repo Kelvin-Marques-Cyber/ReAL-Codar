@@ -285,14 +285,20 @@ def run_tests(patterns, timeout: float = 20.0) -> tuple[int, list[str]]:
             ran += 1
             if not ok:
                 failures.append(f"{p.id} [{lang}]: {err}")
-        if "stdin" in p.tests:
+        sessions = [{"stdin": p.tests["stdin"], "expect": p.tests.get("expect", [])}] if "stdin" in p.tests else []
+        sessions += list(p.tests.get("runs", []))  # [[pattern.test.runs]]: args, stdin, expect, status
+        for k, run in enumerate(sessions):
             for lang, code in p.code.items():
-                result = run_session(lang, code, p.tests["stdin"], list(p.tests.get("expect", [])), timeout)
+                if run.get("langs") and lang not in run["langs"]:  # convenções diferentes (-Opcao no PowerShell)
+                    continue
+                result = run_session(lang, code, run.get("stdin", ""), list(run.get("expect", [])), timeout,
+                                     args=[str(a) for a in run.get("args", [])], status=int(run.get("status", 0)))
                 if result is None:
                     continue  # sem toolchain para essa linguagem nesta máquina
                 ran += 1
                 if result:
-                    failures.append(f"{p.id} [{lang}] sessão: {result}")
+                    label = " ".join(run.get("args", [])) or "stdin"
+                    failures.append(f"{p.id} [{lang}] execução {k + 1} ({label}): {result}")
     return ran, failures
 
 
@@ -308,9 +314,11 @@ _SESSION = {
 }
 
 
-def run_session(lang: str, code: str, stdin: str, expect: list[str], timeout: float = 20.0) -> str | None:
-    """Executa o programa com `stdin` e confere se a saída contém cada trecho de `expect`, em ordem.
-    Devolve "" se passou, a descrição da falha, ou None se não há como executar `lang` aqui."""
+def run_session(lang: str, code: str, stdin: str, expect: list[str], timeout: float = 20.0, *,
+                args: list[str] | None = None, status: int = 0) -> str | None:
+    """Executa o programa com `args` e `stdin` e confere o código de saída e se a saída (stdout + stderr) contém
+    cada trecho de `expect`, em ordem. Devolve "" se passou, a descrição da falha, ou None se não há como executar
+    `lang` aqui."""
     import subprocess
     import tempfile
     from pathlib import Path
@@ -322,19 +330,22 @@ def run_session(lang: str, code: str, stdin: str, expect: list[str], timeout: fl
         argv = cmd(str(Path(tmp, name)))
         if not argv[0]:
             return None
+        argv += args or []
         Path(tmp, name).write_text(code, encoding="utf-8")
         try:
             r = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=timeout, cwd=tmp,
                                env={**os.environ, "NO_COLOR": "1"})
         except subprocess.TimeoutExpired:
             return "timeout (o programa não terminou com a entrada dada)"
-    if r.returncode != 0:
-        return f"saiu com código {r.returncode}: {(r.stderr.strip().splitlines() or ['?'])[-1][:160]}"
+    if r.returncode != status:
+        last = (r.stderr.strip().splitlines() or ["?"])[-1][:160]
+        return f"saiu com código {r.returncode} (esperava {status}): {last}"
+    output = r.stdout + r.stderr
     pos = 0
     for want in expect:
-        found = r.stdout.find(want, pos)
+        found = output.find(want, pos)
         if found < 0:
-            got = r.stdout[pos:pos + 120].replace("\n", "⏎")
+            got = output[pos:pos + 120].replace("\n", "⏎")
             return f"esperava {want!r} na saída; depois do último acerto veio: {got!r}"
         pos = found + len(want)
     return ""
