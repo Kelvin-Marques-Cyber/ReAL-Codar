@@ -1,0 +1,222 @@
+{
+  "name": "codar",
+  "displayName": "Codar — intenção para código (offline)",
+  "description": "Pseudocódigo e intenções em PT/EN viram código: compilador determinístico, banco de padrões verificados e SLM local (≤3 GB de RAM), com auditoria estática e consultor de projeto.",
+  "version": "0.1.0",
+  "publisher": "codar",
+  "private": true,
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "pseudocode",
+    "codegen",
+    "offline",
+    "llm",
+    "powershell",
+    "pseudocódigo"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codar.translateLine",
+        "title": "Traduzir linha atual",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.translateSelection",
+        "title": "Traduzir seleção (pseudocódigo multilinha)",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.translateInput",
+        "title": "Gerar código a partir de uma intenção…",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.auditFile",
+        "title": "Auditar arquivo",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.advise",
+        "title": "Consultor de projeto",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.missionControl",
+        "title": "Mission Control (painel)",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.openStudio",
+        "title": "Abrir Studio no terminal",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.showHistory",
+        "title": "Histórico de traduções",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.saveAsPattern",
+        "title": "Salvar seleção como padrão",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.restartDaemon",
+        "title": "Reiniciar daemon",
+        "category": "Codar"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "codar.translateLine",
+        "key": "ctrl+alt+enter",
+        "mac": "cmd+alt+enter",
+        "when": "editorTextFocus && !editorReadonly && !editorHasSelection"
+      },
+      {
+        "command": "codar.translateSelection",
+        "key": "ctrl+alt+enter",
+        "mac": "cmd+alt+enter",
+        "when": "editorTextFocus && !editorReadonly && editorHasSelection"
+      },
+      {
+        "command": "codar.translateLine",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && !editorReadonly && !editorHasSelection && codar.lineIsIntent && !suggestWidgetVisible && !inlineSuggestionVisible"
+      },
+      {
+        "command": "codar.translateSelection",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && !editorReadonly && editorHasSelection && !suggestWidgetVisible"
+      },
+      {
+        "command": "codar.translateLine",
+        "key": "enter",
+        "when": "editorTextFocus && !editorReadonly && codar.spaceEnterReady && !suggestWidgetVisible && !inlineSuggestionVisible && !editorHasMultipleSelections"
+      },
+      {
+        "command": "codar.missionControl",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codar.translateLine",
+          "when": "editorTextFocus && !editorHasSelection",
+          "group": "codar@1"
+        },
+        {
+          "command": "codar.translateSelection",
+          "when": "editorHasSelection",
+          "group": "codar@1"
+        },
+        {
+          "command": "codar.saveAsPattern",
+          "when": "editorHasSelection",
+          "group": "codar@2"
+        },
+        {
+          "command": "codar.auditFile",
+          "group": "codar@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Codar",
+      "properties": {
+        "codar.executable": {
+          "type": "string",
+          "default": "codar",
+          "description": "Comando da CLI do codar (use o caminho completo se não estiver no PATH, ex.: ~/projeto/.venv/bin/codar)."
+        },
+        "codar.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Endpoint do daemon (vazio = descoberta automática). Ex.: unix:/run/user/1000/codar/codar.sock, pipe:\\\\.\\pipe\\codar-usuario, tcp://127.0.0.1:7878"
+        },
+        "codar.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Sobe o daemon automaticamente se ele não estiver rodando."
+        },
+        "codar.spaceEnter.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Espaço + Enter no fim de uma linha que parece uma frase traduz a linha (em vez de quebrar linha)."
+        },
+        "codar.hints.mode": {
+          "type": "string",
+          "enum": [
+            "diagnostics",
+            "comments",
+            "both",
+            "off"
+          ],
+          "default": "diagnostics",
+          "description": "Como mostrar as recomendações da auditoria: sublinhado (Problems), comentários '// Dica [ID]' no código, ambos ou nada."
+        },
+        "codar.imports.hoist": {
+          "type": "boolean",
+          "default": true,
+          "description": "Insere no topo do arquivo os imports que faltarem."
+        },
+        "codar.stages": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "enum": [
+              0,
+              1,
+              2
+            ]
+          },
+          "default": [
+            0,
+            1,
+            2
+          ],
+          "description": "Estágios permitidos: 0 compilador, 1 banco de padrões, 2 modelo local."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "test": "node --test",
+    "package": "vsce package --out codar.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar.git",
+    "directory": "clients/vscode"
+  },
+  "homepage": "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar",
+  "bugs": {
+    "url": "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/issues"
+  }
+}
