@@ -1,0 +1,99 @@
+# Pacotes .deb, .rpm, .apk e Arch a partir da árvore gerada por packaging/stage.sh.
+# Use packaging/build.sh, que prepara a árvore em build/root e chama o nfpm para cada formato.
+name: codar
+arch: all
+platform: linux
+version: ${CODAR_VERSION}
+release: 1
+section: devel
+priority: optional
+maintainer: ${CODAR_MAINTAINER}
+vendor: CODAR
+homepage: https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
+license: Apache-2.0
+description: |-
+  Tradução de pseudocódigo e intenções em código, 100% offline.
+  Você escreve a lógica linha por linha, em português ou inglês, e o codar escreve
+  o código em 14 linguagens. Um compilador de regras, um banco de padrões testados
+  e uma IA local (opcional) cabem em 3 GB de RAM. Inclui a IDE no terminal, plugins
+  para Neovim e Vim, módulo PowerShell, extensão do VS Code, auditoria estática e
+  consultor de projeto.
+
+overrides:
+  deb:
+    depends:
+      - python3 (>= 3.10)
+      - python3 (>= 3.11) | python3-tomli
+    recommends:
+      - python3-venv
+    suggests:
+      - neovim
+      - vim
+  rpm:
+    depends:
+      # openSUSE Leap 15 traz o Python 3.6 como python3; os pacotes python311+ trazem um Python novo ao lado
+      - (python3 >= 3.10 or python311 or python312 or python313)
+  apk:
+    depends:
+      - python3
+  archlinux:
+    depends:
+      - python
+
+contents:
+  - src: ./build/root/usr/bin/codar
+    dst: /usr/bin/codar
+    file_info: { mode: 0755 }
+  - src: ./build/root/usr/lib/codar
+    dst: /usr/lib/codar
+    type: tree
+  - src: ./build/root/usr/lib/systemd/user/codar.service
+    dst: /usr/lib/systemd/user/codar.service
+  - src: ./build/root/usr/share/doc/codar
+    dst: /usr/share/doc/codar
+    type: tree
+  - src: ./build/root/usr/share/licenses/codar/LICENSE
+    dst: /usr/share/licenses/codar/LICENSE
+  - src: ./build/root/usr/share/licenses/codar/LICENSE
+    dst: /usr/share/doc/codar/copyright
+    packager: deb
+  - src: ./build/root/usr/share/man/man1/codar.1.gz
+    dst: /usr/share/man/man1/codar.1.gz
+  - src: ./build/root/usr/share/bash-completion/completions/codar
+    dst: /usr/share/bash-completion/completions/codar
+  - src: ./build/root/usr/share/zsh/site-functions/_codar
+    dst: /usr/share/zsh/site-functions/_codar
+  - src: ./build/root/usr/share/fish/vendor_completions.d/codar.fish
+    dst: /usr/share/fish/vendor_completions.d/codar.fish
+  - src: ./build/root/usr/share/nvim/site/pack/codar
+    dst: /usr/share/nvim/site/pack/codar
+    type: tree
+  - src: ./build/root/usr/share/vim/vimfiles/plugin/codar.vim
+    dst: /usr/share/vim/vimfiles/plugin/codar.vim
+  - src: ./build/root/usr/share/vim/vimfiles/autoload/codar.vim
+    dst: /usr/share/vim/vimfiles/autoload/codar.vim
+  # o Vim do openSUSE procura plugins em /usr/share/vim/site
+  - src: ./build/root/usr/share/vim/site/plugin/codar.vim
+    dst: /usr/share/vim/site/plugin/codar.vim
+    packager: rpm
+  - src: ./build/root/usr/share/vim/site/autoload/codar.vim
+    dst: /usr/share/vim/site/autoload/codar.vim
+    packager: rpm
+  - src: ./build/root/usr/share/codar
+    dst: /usr/share/codar
+    type: tree
+
+scripts:
+  postinstall: ./packaging/postinstall.sh
+  preremove: ./packaging/preremove.sh
+
+rpm:
+  group: Development/Tools
+  summary: Tradução de pseudocódigo em código, 100% offline
+  compression: zstd
+
+deb:
+  compression: xz
+
+archlinux:
+  packager: ${CODAR_MAINTAINER}

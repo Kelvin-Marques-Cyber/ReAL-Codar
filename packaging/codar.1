@@ -1,0 +1,130 @@
+'\" -*- coding: utf-8 -*-
+.TH CODAR 1 "outubro de 2026" "codar 0.1.0" "Comandos do usuário"
+.SH NOME
+codar \- traduz pseudocódigo e intenções em código, 100% offline
+.SH SINOPSE
+.B codar
+.RI [ comando ]
+.RI [ opções ]
+.br
+.B codar run
+.RI [ \-l\ linguagem ]
+.RI [ \-\-file\ arquivo ]
+.I intenção
+.br
+.B codar studio
+.RI [ diretório ]
+.SH DESCRIÇÃO
+O
+.B codar
+recebe uma linha de pseudocódigo em português ou inglês ("x é igual a 10", "se total maior que 100 imprimir
+\(aqcaro\(aq") e devolve o código na linguagem escolhida. Cada linha passa por três camadas: um compilador de
+regras (sem IA, menos de 1 ms), um banco de padrões testados e, só para o que sobra, uma IA local em modo literal.
+Tudo roda na máquina, dentro de um orçamento de memória de 3 GB.
+.PP
+Um daemon local mantém o modelo carregado e atende o CLI, o Studio (TUI) e os plugins de Neovim, Vim, VS Code e
+PowerShell. Ele sobe sozinho no primeiro uso.
+.SH COMANDOS
+.TP
+.BI "run " intenção
+Traduz uma intenção (argumento ou entrada padrão).
+.B \-l
+escolhe a linguagem (py, js, ts, go, rs, java, cs, c, cpp, php, rb, lua, sh, ps1);
+.B \-\-file
+usa o arquivo como contexto;
+.B \-\-each
+traduz uma intenção por linha da entrada.
+.TP
+.BI "compile " arquivo
+Compila pseudocódigo indentado de várias linhas.
+.TP
+.BI "audit " arquivo
+Auditoria estática: segredos, injeção de SQL, padrões perigosos de shell e mais.
+.TP
+.BR studio " [" \fIdiretório\fR ]
+IDE no terminal. Precisa do extra
+.BR studio .
+.TP
+.BR advise " [" \fIdiretório\fR ]
+Sugestões para o projeto, com opções que o próprio codar aplica depois da sua confirmação.
+.TP
+.BR start ", " stop ", " restart ", " status
+Controla o daemon.
+.B start \-\-foreground
+roda em primeiro plano (usado pelo serviço do systemd).
+.TP
+.B init
+Cria a configuração e baixa o modelo padrão (~1,1 GB).
+.TP
+.BR "model list" | pull | use | info
+Modelos de IA locais e a memória que cada um usa.
+.TP
+.BR "extras status" | install | remove
+Extras opcionais:
+.B studio
+(Textual) e
+.B llm
+(llama.cpp). Quando o codar veio de um pacote do sistema, os extras ficam num ambiente virtual do usuário.
+.TP
+.BR "patterns list" | search | show | add | remove
+Banco de padrões.
+.TP
+.BR "config path" | get | set | edit
+Configuração.
+.TP
+.B doctor
+Diagnóstico do ambiente, com o que falta e como resolver.
+.TP
+.BI "shell\-init " shell
+Integração com bash, zsh, fish e pwsh: Ctrl+G troca a linha digitada pelo comando.
+.SH ATALHOS
+Nos editores, termine a frase com um espaço e aperte
+.B Enter
+para traduzir a linha, ou use
+.B Ctrl+Enter
+(nos terminais que distinguem a tecla) ou
+.BR Ctrl+G .
+No Neovim, ative os atalhos com
+.BR "require(\(dqcodar\(dq).setup()" .
+.SH ARQUIVOS
+.TP
+.I ~/.config/codar/config.toml
+Configuração (\fBcodar config path\fR mostra o caminho).
+.TP
+.I ~/.local/share/codar/
+Modelos, banco de padrões, ambiente dos extras e registros.
+.TP
+.I ~/.config/codar/plugins/
+Plugins do usuário: padrões, regras, skills e sugestões em TOML.
+.TP
+.I /usr/lib/systemd/user/codar.service
+Serviço opcional: \fBsystemctl \-\-user enable \-\-now codar\fR.
+.SH AMBIENTE
+.TP
+.B CODAR_HOME
+Usa um diretório único para configuração, dados e execução.
+.TP
+.BR CODAR_ENDPOINT ", " CODAR_TOKEN
+Endereço do daemon (unix:/caminho, tcp://127.0.0.1:porta) e token para TCP.
+.TP
+.BR CODAR_MODEL ", " CODAR_BUDGET_MB ", " CODAR_THREADS ", " CODAR_N_CTX
+Sobrepõem o modelo, o orçamento de memória, as threads e o contexto da configuração.
+.SH EXEMPLOS
+.nf
+codar run "x é igual a 10"
+codar run \-l go "se total maior que 100 imprimir 'caro'"
+echo "para cada nome em nomes imprimir nome" | codar run \-l rust
+codar run "criar uma calculadora" > calc.py
+codar extras install && codar init && codar studio .
+.fi
+.SH PRIVACIDADE
+O daemon escuta só localmente (Unix socket com permissão 0600). A rede é usada apenas por
+.BR "codar model pull" ,
+.B codar extras install
+e pelos comandos que você aprova no consultor.
+.SH VEJA TAMBÉM
+.BR nvim (1),
+.BR vim (1),
+.BR systemctl (1)
+.PP
+https://github.com/Kelvin-Marques-Cyber/ReAL-Codar

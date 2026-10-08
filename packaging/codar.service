@@ -1,0 +1,19 @@
+# Daemon do codar como serviço do usuário (opcional: os clientes também sobem o daemon sozinhos).
+#   systemctl --user enable --now codar
+[Unit]
+Description=codar: tradução de intenção para código (daemon local)
+Documentation=man:codar(1) https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/codar start --foreground
+Restart=on-failure
+RestartSec=3
+Environment=MALLOC_ARENA_MAX=2
+# Teto rígido do sistema, igual ao orçamento padrão (memory.budget_mb = 3072). Quando o controlador de memória não
+# está delegado ao usuário, o systemd ignora estas linhas e vale só o vigia interno do daemon.
+MemoryHigh=2458M
+MemoryMax=3G
+
+[Install]
+WantedBy=default.target
