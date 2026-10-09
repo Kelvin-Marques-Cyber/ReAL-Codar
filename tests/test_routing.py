@@ -146,3 +146,22 @@ def test_linha_indentada_nao_gera_falso_erro_de_sintaxe(router):
     assert run("total é igual a 0").findings == []          # antes: PY000 "unexpected indent"
     found = run('senha é igual a "admin123"').findings
     assert [(f["id"], f["col"]) for f in found] == [("PY017", 5)]
+
+
+@pytest.mark.parametrize("intent,lang,expected", [
+    ("senão imprimir 'oi'", "python", 'else:\n    print("oi")'),
+    ("senão se x maior que 1 imprimir x", "python", "elif x > 1:\n    print(x)"),
+    ("senão imprimir 'oi'", "javascript", 'else {\n  console.log("oi");\n}'),
+])
+def test_senao_sozinho_continua_o_if_de_cima(translate, intent, lang, expected):
+    res = translate(intent, lang)
+    assert (res.stage, res.source, res.body) == ("0", "stage0:else", expected)
+    assert res.findings == []  # o "else:" isolado não é um erro de sintaxe do usuário
+
+
+def test_senao_sozinho_em_go_explica_em_vez_de_chamar_a_ia(translate, router):
+    from codar.engine.router import TranslateError
+
+    with pytest.raises(TranslateError, match="selecione"):
+        translate("senão imprimir 'oi'", "go")
+    assert router.stage2.prompts == []  # antes, a IA inventava um if inteiro ("if not pedidos")

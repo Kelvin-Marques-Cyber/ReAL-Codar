@@ -228,7 +228,8 @@ _P_INFINITE = _rx(r"^(?:(?:um|uma|a|an)\s+)?(?:loop|laco)\s+(?:infinito|eterno|f
 _P_WHILE = _rx(r"^(?:enquanto|while)\s+(?P<cond>.+)$")
 _P_UNTIL = _rx(r"^(?:ate\s+que|until)\s+(?P<cond>.+)$")
 _P_IF = _rx(r"^(?:se|if|caso|quando|when)\s+(?P<cond>.+)$")
-_P_ELSE = _rx(r"^(?:senao|else|caso\s+contrario|otherwise)(?:\s+(?:se|if)\s+(?P<cond>.+))?$|^elif\s+(?P<cond2>.+)$")
+_P_ELSE = _rx(r"^(?:senao|else|caso\s+contrario|otherwise)(?:\s+(?:se|if)\s+(?P<cond>.+)|[,:]?\s+(?P<acao>.+))?$"
+              r"|^elif\s+(?P<cond2>.+)$")
 _P_FUNC = _rx(r"^" + _CREATE + _ART + r"(?:funcao|function|func|def|metodo|method|procedimento|procedure|rotina|fn)\s+"
               r"(?:(?:chamada|chamado|named|called|de\s+nome)\s+)?(?P<name>" + ID + r")(?:\s*\((?P<pp>[^)]*)\)|\s+(?:que\s+"
               r"recebe|recebendo|com\s+(?:os\s+)?(?:parametros|params|argumentos|args)|com|with\s+(?:the\s+)?(?:parameters|"
@@ -643,7 +644,11 @@ class Stage0:
             return None
         raw = _span(t, m, "cond") or _span(t, m, "cond2")
         if raw is None:
-            return [ir.Else()]
+            acao = _span(t, m, "acao")
+            if acao is None:
+                return [ir.Else()]
+            body = self._action(acao, known, depth)  # "senão imprimir 'não'"
+            return None if body is None else [ir.Else(body=body)]
         split = self._split_cond(raw, known, depth)
         if split is None or split[2] is not None:
             return None

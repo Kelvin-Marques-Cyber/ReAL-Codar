@@ -7,6 +7,7 @@ tenta *compor* ferramentas verificadas do banco antes de escrever código do zer
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hashlib
 import re
 import threading
@@ -19,7 +20,7 @@ from typing import Any, Callable
 from codar import langs
 from codar.audit import Auditor
 from codar.engine import emmet, ir
-from codar.engine.emit import EmitError, emit
+from codar.engine.emit import EmitError, emit, emit_else
 from functools import lru_cache
 
 from codar.engine.models import STOP, build_literal_prompt, build_prompt
@@ -257,8 +258,12 @@ class Router:
             # audita sem a indentação da linha do editor: "    total = 0" sozinho é erro de sintaxe em Python
             margin = min((len(ln) - len(ln.lstrip()) for ln in res.body.split("\n") if ln.strip()), default=0)
             audited = join_imports(res.imports, textwrap.dedent(res.body).strip("\n"), res.lang) if margin else res.code
-            findings = self.auditor.audit(audited, res.lang)
             offset = len(join_imports(res.imports, "", res.lang).split("\n")) + 1 if res.imports else 0
+            prefixo = 0
+            if res.source == "stage0:else" and res.lang == "python":  # "else:" sozinho não é Python válido
+                audited, prefixo = "if True:\n    pass\n" + audited, 2
+            findings = [dataclasses.replace(f, line=f.line - prefixo) for f in self.auditor.audit(audited, res.lang)
+                        if f.line > prefixo]
             res.findings = [{**f.as_dict(), "body_line": f.line - offset,
                              **({"col": f.col + margin} if margin and f.line > offset else {})} for f in findings]
             if req.hints or self.cfg.get("audit", {}).get("inline_hints"):
@@ -293,6 +298,12 @@ class Router:
             t = time.perf_counter()
             parsed = self.stage0.parse(intent, known)
             res = None
+            if parsed and len(parsed.nodes) == 1 and isinstance(parsed.nodes[0], ir.Else):
+                try:  # "senão …" sozinho: continuação do if que está acima no arquivo
+                    imports, body = emit_else(parsed.nodes[0], lang.id)
+                except EmitError as exc:
+                    raise TranslateError(str(exc)) from exc  # sem IA: ela inventaria um if inteiro
+                return Result(code="", body=body, imports=imports, lang=lang.id, stage="0", source="stage0:else")
             if parsed:
                 try:
                     imports, body = emit(parsed.nodes, lang.id)

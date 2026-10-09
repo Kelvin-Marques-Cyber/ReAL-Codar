@@ -6,6 +6,8 @@ variáveis mutáveis no Rust, const/let no JS) e coleta imports separadamente.
 
 from __future__ import annotations
 
+import re
+
 from codar.engine import expr as E
 from codar.engine import ir
 from codar.engine.postprocess import reindent
@@ -1633,6 +1635,29 @@ EMITTERS: dict[str, type[Emitter]] = {
     "php": PHPEmitter, "ruby": RubyEmitter, "lua": LuaEmitter, "bash": BashEmitter,
     "powershell": PowerShellEmitter,
 }
+
+
+# Linguagens em que o else precisa ficar colado ao fechamento do if ("} else {" no Go, "else … end" no Lua e no
+# Ruby, "else … fi" no Bash): uma linha "senão" sozinha não dá para traduzir sem mexer na linha de cima.
+_ELSE_GRUDADO = {"go", "lua", "ruby", "bash", "powershell"}
+_LINHA_ELSE = re.compile(r"^\s*(?:\}\s*)?((?:else|elif)\b.*)$")
+
+
+def emit_else(node: ir.Else, lang: str) -> tuple[list[str], str]:
+    """Uma linha "senão …" traduzida sozinha, como continuação do if que já está acima no arquivo."""
+    if lang in _ELSE_GRUDADO:
+        raise EmitError("em {} o senão precisa ficar junto do se: selecione as linhas do se e do senão e traduza o "
+                        "bloco inteiro".format(lang))
+    body = node.body or [ir.Comment("TODO")]
+    falso = ir.If(body=[ir.Comment("_")], cond=("bool", True),
+                  elifs=[(node.cond, body)] if node.cond is not None else [],
+                  orelse=None if node.cond is not None else body)
+    imports, code = emit([falso], lang)
+    linhas = code.split("\n")
+    for i, linha in enumerate(linhas[1:], start=1):
+        if (m := _LINHA_ELSE.match(linha)) and len(linha) - len(linha.lstrip()) == 0:
+            return imports, "\n".join([m.group(1), *linhas[i + 1:]])
+    raise EmitError(f"não consegui separar o senão em {lang}")
 
 
 def emit(nodes: list[ir.Node], lang: str) -> tuple[list[str], str]:
