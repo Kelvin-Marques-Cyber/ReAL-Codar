@@ -105,3 +105,32 @@ def test_cd_historico_e_varios_terminais(tmp_path, monkeypatch):
             assert len(terminal.sessoes) == 1 and terminal.sessao is primeiro
 
     asyncio.run(cenario())
+
+
+def test_erro_do_programa_vem_explicado_e_leva_ate_a_linha(tmp_path, monkeypatch):
+    from textual.widgets import DataTable
+
+    from codar.studio.app import Studio
+
+    monkeypatch.setenv("CODAR_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CODAR_NO_AUTOSTART", "1")
+    (tmp_path / "contas.py").write_text("total = 10\nprint('Total: ' + total)\n", encoding="utf-8")
+
+    async def cenario():
+        app = Studio(tmp_path)
+        async with app.run_test(size=(150, 42)) as pilot:
+            await app.open_file(tmp_path / "contas.py")
+            await pilot.press("f5")
+            sessao = app.terminal.sessao
+            assert await _esperar(pilot, lambda: "ERRO EXPLICADO" in _texto(sessao))
+            texto = _texto(sessao)
+            assert "TypeError · linha 2 de contas.py" in texto and "juntou texto com número" in texto
+            assert "f-string" in texto  # como corrigir
+            tabela = app.query_one("#problems", DataTable)
+            assert tabela.row_count == 1
+            app.current_editor().move_cursor((0, 0))
+            tabela.focus()
+            await pilot.press("enter")
+            assert app.current_editor().cursor_location == (1, 0)
+
+    asyncio.run(cenario())

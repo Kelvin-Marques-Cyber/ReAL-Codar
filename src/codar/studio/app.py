@@ -325,6 +325,12 @@ class Studio(App):
         self.query_one("#last-card", Static).update("\n".join(rows))
 
     def render_status(self) -> None:
+        from textual.css.query import NoMatches
+
+        try:  # chamado também por eventos de foco e do terminal, que podem chegar com a tela já desmontada
+            barra = self.query_one("#status", Static)
+        except NoMatches:
+            return
         m = self.mem
         total, budget = m.get("total_mb", 0.0), m.get("budget_mb", 3072)
         line = Text()
@@ -337,7 +343,7 @@ class Studio(App):
         state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["error"])
         line.append(f"  DAEMON {state[0]} ", style=f"bold {state[1]}")
         line.append("  " + time.strftime("%Y-%b-%d %H:%MZ", time.gmtime()).upper(), style=f"bold {C['mint']}")
-        self.query_one("#status", Static).update(line)
+        barra.update(line)
 
     def context_hint(self) -> str:
         """O que dá para fazer agora, de acordo com o foco e a linha do cursor."""
@@ -640,9 +646,10 @@ class Studio(App):
         self._update_tab_label(ed)
         self._show_findings(res.get("findings", []), 0, absolute=True)
 
-    def _show_findings(self, findings: list[dict], offset: int, absolute: bool = False) -> None:
+    def _show_findings(self, findings: list[dict], offset: int, absolute: bool = False, focar: bool = True) -> None:
         table = self.query_one("#problems", DataTable)
         table.clear()
+        self._achado_arquivo: dict[str, str] = {}  # erro de outro arquivo: Enter abre o arquivo certo
         sev_color = {"critical": C["error"], "error": C["error"], "warning": C["orange"], "info": C["cyan"]}
         for f in findings:
             line = f["line"] if absolute else offset + max(1, f.get("body_line", f["line"]))
@@ -650,20 +657,26 @@ class Studio(App):
                           Text(f["id"], style=C["red"]), Text(str(line), style=C["dim"]),
                           Text(f["message"] + (f"  → {f['suggestion']}" if f.get("suggestion") else ""), style=C["text"]),
                           key=f"{f['id']}:{line}:{len(table.rows)}")
+            if f.get("file"):
+                self._achado_arquivo[f"{f['id']}:{line}:{len(table.rows) - 1}"] = f["file"]
         self.query_one("#panel", TabbedContent).border_subtitle = f"{len(findings)} achado(s)" if findings else "limpo"
-        if findings:
+        if findings and focar:
             self.query_one("#panel", TabbedContent).active = "tab-problems"
 
     @on(DataTable.RowSelected, "#problems")
-    def _jump(self, event: DataTable.RowSelected) -> None:
+    async def _jump(self, event: DataTable.RowSelected) -> None:
+        chave = str(event.row_key.value)
+        arquivo = getattr(self, "_achado_arquivo", {}).get(chave)
+        if arquivo and Path(arquivo).is_file():
+            await self.open_file(Path(arquivo).resolve())
         ed = self.current_editor()
         if ed is None:
             return
         try:
-            line = int(str(event.row_key.value).split(":")[1])
+            line = int(chave.split(":")[1])
         except (IndexError, ValueError):
             return
-        ed.move_cursor((max(0, line - 1), 0))
+        ed.move_cursor((max(0, line - 1), 0), center=True)
         ed.focus()
 
     @on(Input.Submitted, "#intent")
@@ -979,7 +992,37 @@ class Studio(App):
         self.render_status()
 
     def programa_terminou(self, sessao, codigo: int) -> None:
+        """Programa terminou: com erro, explica em português (o quê, onde, como corrigir) e marca a linha."""
         self.feed(f"RUN · exit {codigo}", "green" if codigo == 0 else "red")
+        if codigo in (0, 130) or codigo < 0:  # 130 / sinal: interrompido com Ctrl+C
+            return
+        from codar.explicar import explicar
+
+        exp = explicar(sessao.saida, sessao.cwd)
+        if exp is not None:
+            self.mostrar_explicacao(sessao, exp)
+
+    def mostrar_explicacao(self, sessao, exp) -> None:
+        import textwrap
+
+        log = sessao.log
+        largura = max(40, log.size.width - 22)
+        onde = f" · linha {exp.linha} de {Path(exp.arquivo).name}" if exp.arquivo and exp.linha else ""
+        log.write(Text(f"┌─ ERRO EXPLICADO · {exp.tipo}{onde}", style=f"bold {C['error']}"))
+        log.write(Text(f"│ {exp.titulo}", style=f"bold {C['text']}"))
+        if exp.trecho:
+            log.write(Text(f"│     {exp.trecho.strip()}", style=C["moon"]))
+        for rotulo, texto, cor in (("o que aconteceu", exp.oque, C["text"]), ("como corrigir", exp.como, C["mint"])):
+            for i, parte in enumerate(textwrap.wrap(texto, largura) or [""]):
+                prefixo = f"│ {rotulo + ':':<16} " if i == 0 else "│ " + " " * 17
+                log.write(Text.assemble((prefixo, C["dim"]), (parte, cor)))
+        log.write(Text("└─ " + ("Enter em PROBLEMAS vai até a linha" if exp.linha else "") +
+                       (f" · F7 estuda: {exp.conceito}" if exp.conceito else ""), style=C["dim"]))
+        if exp.arquivo and exp.linha:
+            self._show_findings([{"severity": "error", "id": exp.tipo, "line": exp.linha, "message": exp.titulo,
+                                  "suggestion": exp.como, "file": exp.arquivo}], 0, absolute=True, focar=False)
+        self.ultima_explicacao = exp
+        self.notify(exp.como, title=f"{exp.tipo}: {exp.titulo}", severity="error", timeout=8)
 
     def servidor_detectado(self, sessao, url: str) -> None:
         self.feed(f"SERVIDOR · {url}", "cyan")

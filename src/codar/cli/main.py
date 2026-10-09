@@ -146,6 +146,44 @@ class _StrIn:
         return self.text
 
 
+def cmd_explicar(args) -> int:
+    """Explica o erro de um programa: lê a saída pelo stdin (python app.py 2>&1 | codar explicar) ou roda o comando
+    passado depois de -- e explica se ele falhar."""
+    import subprocess
+
+    from codar.explicar import explicar
+
+    codigo = 0
+    comando = args.comando[1:] if args.comando[:1] == ["--"] else args.comando
+    if comando:
+        r = subprocess.run(comando, capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+        sys.stdout.flush()
+        sys.stderr.write(r.stderr)
+        sys.stderr.flush()
+        saida, codigo = r.stdout + r.stderr, r.returncode
+        if codigo == 0:
+            return EXIT_OK
+    else:
+        saida = sys.stdin.read()
+    exp = explicar(saida, Path.cwd())
+    if exp is None:
+        print("codar: não reconheci um erro nessa saída", file=sys.stderr)
+        return codigo or EXIT_ERR
+    hud = _hud(sys.stdout)
+    arquivo = exp.arquivo
+    if arquivo and Path(arquivo).is_absolute() and Path(arquivo).is_relative_to(Path.cwd()):
+        arquivo = str(Path(arquivo).relative_to(Path.cwd()))
+    onde = f" · linha {exp.linha} de {arquivo}" if arquivo and exp.linha else ""
+    print(hud.pill("ERRO", "red") + " " + hud.c(f"{exp.tipo}{onde}", "red", bold=True))
+    print("  " + hud.c(exp.titulo, "text", bold=True))
+    if exp.trecho:
+        print("    " + hud.c(exp.trecho.strip(), "moon"))
+    print("  " + hud.c("o que aconteceu: ", "dim") + exp.oque)
+    print("  " + hud.c("como corrigir:   ", "dim") + hud.c(exp.como, "mint"))
+    return codigo or 1
+
+
 def cmd_audit(args) -> int:
     from codar import langs
 
@@ -498,6 +536,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hints", action="store_true", help="imprime o código com as dicas injetadas")
     p.set_defaults(fn=cmd_audit)
 
+    p = sub.add_parser("explicar", aliases=["explain"], help="explica o erro de um programa: "
+                       "python app.py 2>&1 | codar explicar  (ou: codar explicar -- python app.py)")
+    p.add_argument("comando", nargs=argparse.REMAINDER, help="comando a rodar (depois de --)")
+    p.set_defaults(fn=cmd_explicar)
     p = sub.add_parser("start", help="sobe o daemon")
     p.add_argument("--foreground", action="store_true")
     p.set_defaults(fn=cmd_start)
