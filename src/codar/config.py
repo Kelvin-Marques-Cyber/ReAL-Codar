@@ -62,6 +62,8 @@ rag = true                    # injeta o padrão mais próximo + skills no promp
 rag_min_score = 0.25
 cache_size = 256
 context_lines = 12            # linhas de contexto do editor enviadas ao SLM
+max_block_lines = 30          # Ctrl+G com várias linhas selecionadas: tamanho máximo do bloco
+max_block_ai_lines = 8        # num bloco, no máximo N linhas vão para a IA (o resto vira TODO): tempo e RAM previsíveis
 
 [audit]
 enabled = true

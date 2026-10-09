@@ -229,6 +229,11 @@ class Router:
             return res
         known = set(_IDENT.findall(req.before[-3000:]))
         if req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip()):
+            linhas = sum(1 for ln in intent.splitlines() if ln.strip())
+            maximo = int(self.rcfg.get("max_block_lines", 30))
+            if linhas > maximo:
+                raise TranslateError(f"bloco com {linhas} linhas: o máximo é {maximo} (router.max_block_lines); "
+                                     "traduza em partes")
             res = await self._compile_block(intent, lang, req, known, timings, cancel)
         else:
             res = await self._translate_line(intent, lang, req, known, timings, on_token, cancel)
@@ -513,12 +518,15 @@ class Router:
         timings["stage0_ms"] = round((time.perf_counter() - t) * 1000, 3)
         stages_used = {"0"}
         unresolved = [n for n in _walk_all(nodes) if isinstance(n, ir.Unresolved)]
+        limite_ia, com_ia = int(self.rcfg.get("max_block_ai_lines", 8)), 0
         for node in unresolved:
-            sub = Request(intent=node.text, lang=lang.id, lang_explicit=True, stages=tuple(s for s in req.stages if s),
-                          audit=False, mode="line")
+            # depois de max_block_ai_lines linhas pela IA, o resto só tenta o banco de padrões (rápido)
+            stages = tuple(s for s in req.stages if s and (s != 2 or com_ia < limite_ia))
+            sub = Request(intent=node.text, lang=lang.id, lang_explicit=True, stages=stages, audit=False, mode="line")
             try:
                 res = await self._translate_line(node.text, lang, sub, known, {}, None, cancel)
                 stages_used.add(res.stage)
+                com_ia += res.stage.startswith("2")
                 _replace(nodes, node, ir.Raw(res.body, res.imports))
             except TranslateError:
                 continue

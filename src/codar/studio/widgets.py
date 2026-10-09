@@ -9,17 +9,21 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from rich.segment import Segment
 from rich.style import Style
 from rich.text import Text
 from textual import events
+from textual.binding import Binding
 from textual.message import Message
+from textual.strip import Strip
 
+from codar import langs
 from codar.engine import emmet
 from codar.textutil import looks_like_intent
 from codar.vocab import KEYWORDS, PSEUDO_WORDS
 from textual.widget import Widget
-from textual.widgets import TextArea
-from textual.widgets.text_area import TextAreaTheme
+from textual.widgets import Static, TextArea
+from textual.widgets.text_area import Selection, TextAreaTheme
 
 # Paleta do SENTRY. O Studio inteiro lê as cores de C, que acompanha o tema ativo (Ctrl+P → tema): aplicar_paleta()
 # troca os valores no lugar, então quem importou C vê as cores novas no próximo desenho.
@@ -123,6 +127,60 @@ def tema_ansi():
 _WORD_BEFORE = re.compile(r"[^\W\d]\w*$")
 _WORDS = re.compile(r"[^\W\d]\w{2,}")
 
+# Pares que fecham sozinhos, como no VS Code: "(" vira "()" com o cursor no meio
+PARES = {"(": ")", "[": "]", "{": "}", '"': '"', "'": "'", "`": "`"}
+_FECHA_ANTES = set(" \t)]};:,.=>")  # só fecha se depois do cursor vier um destes (ou o fim da linha)
+_COM_CRASE = {"javascript", "typescript", "markdown", "bash", "go", "sql"}
+_PREFIXO_STR = set("fFrRbBuU")  # f"…", r"…", b"…" em Python
+_TAGS_VAZIAS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track",
+                "wbr", "!doctype"}
+_ABRE_TAG = re.compile(r"(?:^|[^\w.$])<([A-Za-z!][\w:.-]*)(?:\s[^<>]*)?$")  # "<div class='x'" (não pega Array<T)
+_SAI_BLOCO_PY = re.compile(r"^\s*(return|pass|break|continue|raise)\b")
+_ALINHA_PY = re.compile(r"^\s*(else|elif|except|finally)\b[^:]*:\s*$")
+_ABRIDORES = {"else": ("if", "elif", "for", "while", "try", "except"), "elif": ("if", "elif"),
+              "except": ("try", "except"), "finally": ("try", "except", "else")}
+COMENTARIO_BLOCO = {"html": ("<!--", "-->"), "css": ("/*", "*/")}
+
+
+def _sem_comentario(texto: str, marcador: str) -> str:
+    """O texto sem o comentário do fim da linha (ignora o marcador dentro de aspas)."""
+    aspas = None
+    for i, ch in enumerate(texto):
+        if aspas:
+            if ch == aspas and texto[i - 1] != "\\":
+                aspas = None
+        elif ch in "\"'":
+            aspas = ch
+        elif marcador and texto.startswith(marcador, i):
+            return texto[:i]
+    return texto
+
+
+def _recuo(texto: str) -> str:
+    return texto[: len(texto) - len(texto.lstrip())]
+
+
+def _sobrepor(strip: Strip, marcas: dict[int, tuple[str, Style]], destaque: tuple[int, Style] | None) -> Strip:
+    """Troca células de espaço por marcas (pontinhos de indentação) e pinta o fundo a partir de uma coluna."""
+    largura = strip.cell_length
+    cortes = {c for x in marcas for c in (x, x + 1)}
+    if destaque:
+        cortes.add(destaque[0])
+    cortes = sorted(c for c in cortes if 0 < c < largura)
+    pecas = strip.divide([*cortes, largura])
+    saida, pos = [], 0
+    for peca in pecas:
+        tamanho = peca.cell_length
+        if pos in marcas and tamanho == 1 and peca.text == " ":
+            ch, estilo = marcas[pos]
+            seg = next(iter(peca))
+            peca = Strip([Segment(ch, (seg.style or Style()) + estilo)], 1)
+        if destaque and pos >= destaque[0]:
+            peca = Strip([Segment(t, (st or Style()) + destaque[1], c) for t, st, c in peca], tamanho)
+        saida.append(peca)
+        pos += tamanho
+    return Strip.join(saida)
+
 
 class CodeEditor(TextArea):
     """TextArea do Studio: espaço+Enter traduz a linha, Tab expande abreviações (HTML/CSS/JSX) e aceita a
@@ -134,6 +192,15 @@ class CodeEditor(TextArea):
             self.editor = editor
             self.row = row
 
+    BINDINGS = [
+        Binding("ctrl+a", "select_all", "Selecionar tudo", show=False),
+        Binding("ctrl+underscore,ctrl+slash", "comentar", "Comentar", show=False),
+        Binding("alt+up", "mover_linhas(-1)", "Subir linha", show=False),
+        Binding("alt+down", "mover_linhas(1)", "Descer linha", show=False),
+        Binding("alt+shift+down", "duplicar_linhas(1)", "Duplicar linha", show=False),
+        Binding("alt+shift+up", "duplicar_linhas(0)", "Duplicar linha", show=False),
+    ]
+
     def __init__(self, *args, path: str | None = None, space_enter: bool = True, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.path = path
@@ -141,6 +208,9 @@ class CodeEditor(TextArea):
         self.saved_text = self.text
         self.lang_id: str | None = None
         self.autocomplete = True
+        self.guias = True  # pontinhos na indentação
+        self._auto: set[tuple[int, int]] = set()  # fechamentos postos pelo editor: (linha, distância até o fim)
+        self._destaque: tuple[int, int] | None = None  # linhas recém-inseridas, com fundo realçado por um instante
 
     @property
     def dirty(self) -> bool:
@@ -230,27 +300,328 @@ class CodeEditor(TextArea):
         self.move_cursor((new_row, new_col))
         return True
 
+    # ------------------------------------------------------------------ teclado (comportamento do VS Code)
     async def _on_key(self, event: events.Key) -> None:
-        if event.key == "tab" and not self.read_only:
-            if self.suggestion:
-                event.stop()
-                event.prevent_default()
-                self.insert(self.suggestion)
+        tratou = False
+        if not self.read_only:
+            tecla = event.key
+            if tecla == "tab":
+                tratou = self._tab()
+            elif tecla == "shift+tab":
+                self.indentar_linhas(-1)
+                tratou = True
+            elif tecla == "enter":
+                tratou = self._enter()
+            elif tecla == "backspace":
+                tratou = self._apagar_par()
+            elif tecla == "escape":  # limpa seleção e sugestão; não tira o foco do editor
                 self.suggestion = ""
-                return
-            if self.expand_abbreviation():
-                event.stop()
-                event.prevent_default()
-                return
-        if event.key == "enter" and self.space_enter and not self.read_only:
-            row, col = self.cursor_location
-            line = self.document.get_line(row)
-            if col == len(line) and line.endswith(" ") and looks_like_intent(line):
-                event.stop()
-                event.prevent_default()
-                self.post_message(self.TranslateLine(self, row))
-                return
+                self.move_cursor(self.selection.end)
+                tratou = True
+            elif event.is_printable and event.character:
+                tratou = self._digitar(event.character)
+        if tratou:
+            event.stop()
+            event.prevent_default()
+            self._restart_blink()
+            return
         await super()._on_key(event)
+
+    def _tab(self) -> bool:
+        if self.suggestion:
+            self.insert(self.suggestion)
+            self.suggestion = ""
+            return True
+        if self.expand_abbreviation():
+            return True
+        sel = self.selection
+        if sel.start[0] != sel.end[0]:
+            self.indentar_linhas(1)
+            return True
+        return False
+
+    def _enter(self) -> bool:
+        row, col = self.cursor_location
+        linha = self.document.get_line(row)
+        vazio = self.selection.start == self.selection.end
+        if self.space_enter and vazio and col == len(linha) and linha.endswith(" ") and looks_like_intent(linha):
+            self.post_message(self.TranslateLine(self, row))
+            return True
+        self.nova_linha()
+        return True
+
+    @property
+    def unidade(self) -> str:
+        return "\t" if self.indent_type == "tabs" else " " * self.indent_width
+
+    def _comentario(self) -> str:
+        lang = langs.LANGS.get(self.lang_id or "")
+        return lang.comment if lang and lang.id not in COMENTARIO_BLOCO else ""
+
+    def nova_linha(self) -> None:
+        """Enter: mantém a indentação, entra um nível depois de ':' (Python) e de ( [ {, abre o bloco entre {} e
+        <tag></tag>, sai um nível depois de return/pass/break, e não deixa espaços sobrando em linha vazia."""
+        inicio, fim = sorted((self.selection.start, self.selection.end))
+        row, col = inicio
+        linha = self.document.get_line(row)
+        antes, depois = linha[:col], self.document.get_line(fim[0])[fim[1]:]
+        base = _recuo(antes) if not antes.strip() else _recuo(linha)
+        codigo = _sem_comentario(antes, self._comentario()).rstrip()
+        extra, fechar = "", ""
+        unidade = self.unidade
+        if self.lang_id == "python" and codigo.endswith(":"):
+            extra = unidade
+        elif codigo[-1:] in ("(", "[", "{"):
+            extra = unidade
+            if depois.lstrip()[:1] == PARES[codigo[-1]]:
+                fechar = "\n" + base
+        elif self.emmet_kind() in ("html", "jsx") and codigo.endswith(">") and depois.lstrip().startswith("</"):
+            extra, fechar = unidade, "\n" + base
+        elif self.lang_id == "python" and _SAI_BLOCO_PY.match(antes) and not depois.strip():
+            base = base[: -len(unidade)] if base.endswith(unidade) else base[: max(0, len(base) - len(unidade))]
+        if not antes.strip() and not depois.strip():
+            inicio = (row, 0)  # linha só com espaços: ela fica vazia e a indentação passa para a de baixo
+        self._replace_via_keyboard("\n" + base + extra + fechar, inicio, fim)
+        self.move_cursor((row + 1, len(base + extra)))
+
+    def _pode_fechar(self, ch: str, antes: str, depois: str) -> bool:
+        if self.lang_id is None:  # texto puro: nada fecha sozinho
+            return False
+        if ch == "`" and self.lang_id not in _COM_CRASE:
+            return False
+        if ch in "\"'" and self.lang_id == "markdown" or ch == "'" and self.lang_id == "rust":
+            return False
+        if depois and depois not in _FECHA_ANTES:
+            return False
+        if ch in "\"'`":
+            anterior = antes[-1:]
+            prefixo = (self.lang_id == "python" and anterior in _PREFIXO_STR
+                       and not (antes[-2:-1].isalnum() or antes[-2:-1] == "_"))
+            if anterior and (anterior.isalnum() or anterior == "_") and not prefixo:
+                return False
+            if anterior == ch or antes.count(ch) % 2:  # terceira aspa de \"\"\" ou fechando uma string aberta
+                return False
+        return True
+
+    def _digitar(self, ch: str) -> bool:
+        sel = self.selection
+        row, col = self.cursor_location
+        linha = self.document.get_line(row)
+        if sel.start != sel.end:
+            if ch in PARES and self.lang_id is not None:  # envolve a seleção: (texto), "texto"
+                a, b = sorted((sel.start, sel.end))
+                miolo = self.get_text_range(a, b)
+                self.replace(ch + miolo + PARES[ch], a, b, maintain_selection_offset=False)
+                self.selection = Selection((a[0], a[1] + 1), (b[0], b[1] + (1 if a[0] == b[0] else 0)))
+                return True
+            return False
+        antes, depois = linha[:col], linha[col:col + 1]
+        if ch in PARES.values() and depois == ch and (row, len(linha) - col) in self._auto:
+            self._auto.discard((row, len(linha) - col))  # digitou o fechamento que o editor pôs: só passa por cima
+            self.move_cursor((row, col + 1))
+            return True
+        if ch in PARES and self._pode_fechar(ch, antes, depois):
+            self._replace_via_keyboard(ch + PARES[ch], (row, col), (row, col))
+            self.move_cursor((row, col + 1))
+            self._auto.add((row, len(linha) + 1 - col))
+            return True
+        if ch == ">" and self.emmet_kind() in ("html", "jsx") and not antes.endswith("/"):
+            m = _ABRE_TAG.search(antes)
+            if m and m.group(1).lower() not in _TAGS_VAZIAS and not linha[col:].lstrip().startswith(f"</{m.group(1)}"):
+                self._replace_via_keyboard(f"></{m.group(1)}>", (row, col), (row, col))
+                self.move_cursor((row, col + 1))
+                return True
+        if ch == ":" and self.lang_id == "python":
+            self._replace_via_keyboard(":", (row, col), (row, col))
+            nova = self.document.get_line(row)
+            m = _ALINHA_PY.match(nova)
+            recuo = self.recuo_alinhado(row, m.group(1)) if m else None
+            if recuo is not None and recuo != _recuo(nova):
+                self.replace(recuo, (row, 0), (row, len(_recuo(nova))))
+                self.move_cursor((row, len(self.document.get_line(row))))
+            return True
+        return False
+
+    def recuo_alinhado(self, row: int, palavra: str) -> str | None:
+        """Indentação certa para else/elif/except/finally na linha `row`: a do if/try correspondente. None quando a
+        pessoa já recuou por conta própria (fica como está) ou não há bloco compatível acima."""
+        linha = self.document.get_line(row)
+        atual = len(_recuo(linha))
+        anteriores = [self.document.get_line(r) for r in range(row - 1, -1, -1)]
+        anteriores = [t for t in anteriores if t.strip()]
+        if not anteriores or atual < len(_recuo(anteriores[0])):
+            return None
+        for texto in anteriores:
+            if len(_recuo(texto)) < atual:
+                chave = re.match(r"\s*(\w+)", texto)
+                return _recuo(texto) if chave and chave.group(1) in _ABRIDORES.get(palavra, ()) else None
+        return None
+
+    def _apagar_par(self) -> bool:
+        if self.selection.start != self.selection.end:
+            return False
+        row, col = self.cursor_location
+        linha = self.document.get_line(row)
+        if 0 < col < len(linha) and linha[col - 1] in PARES and linha[col] == PARES[linha[col - 1]]:
+            self._delete_via_keyboard((row, col - 1), (row, col + 1))  # (|) -> |
+            return True
+        antes = linha[:col]
+        if col and not antes.strip() and self.indent_type == "spaces" and " " * col == antes:
+            n = (col - 1) % self.indent_width + 1  # na indentação, apaga um nível inteiro
+            self._delete_via_keyboard((row, col - n), (row, col))
+            return True
+        return False
+
+    def watch_selection(self, anterior: Selection, atual: Selection) -> None:
+        if anterior.end[0] != atual.end[0]:
+            self._auto.clear()
+
+    # ------------------------------------------------------------------ linhas inteiras
+    def linhas_selecionadas(self) -> tuple[int, int]:
+        """(primeira, última) linha da seleção; uma seleção que termina no começo de uma linha não a inclui."""
+        (r0, _c0), (r1, c1) = sorted((self.selection.start, self.selection.end))
+        if r1 > r0 and c1 == 0:
+            r1 -= 1
+        return r0, r1
+
+    def _trocar_linhas(self, r0: int, r1: int, novas: list[str]) -> None:
+        self.replace("\n".join(novas), (r0, 0), (r1, len(self.document.get_line(r1))))
+
+    def indentar_linhas(self, passo: int) -> None:
+        """Tab com várias linhas selecionadas entra um nível; Shift+Tab sai um nível (com ou sem seleção)."""
+        sel = self.selection
+        r0, r1 = self.linhas_selecionadas()
+        unidade = self.unidade
+        antigas = [self.document.get_line(r) for r in range(r0, r1 + 1)]
+        novas = []
+        for t in antigas:
+            if passo > 0:
+                novas.append(unidade + t if t.strip() else t)
+            elif t.startswith(unidade):
+                novas.append(t[len(unidade):])
+            else:
+                novas.append(t[min(len(_recuo(t)), len(unidade)):] if not t.startswith("\t") else t[1:])
+        self._trocar_linhas(r0, r1, novas)
+        delta = {r: len(novas[r - r0]) - len(antigas[r - r0]) for r in range(r0, r1 + 1)}
+
+        def ajustar(loc: tuple[int, int]) -> tuple[int, int]:
+            r, c = loc
+            return (r, max(0, c + delta.get(r, 0))) if r in delta else loc
+
+        self.selection = Selection(ajustar(sel.start), ajustar(sel.end))
+
+    def action_comentar(self) -> None:
+        """Ctrl+/: comenta ou descomenta as linhas (o comentário da linguagem; <!-- --> no HTML, /* */ no CSS)."""
+        lang = langs.LANGS.get(self.lang_id or "")
+        if lang is None or self.read_only:
+            return
+        abre, fecha = COMENTARIO_BLOCO.get(lang.id, (lang.comment, ""))
+        sel = self.selection
+        r0, r1 = self.linhas_selecionadas()
+        antigas = [self.document.get_line(r) for r in range(r0, r1 + 1)]
+        cheias = [t for t in antigas if t.strip()]
+        if not cheias:
+            return
+        comentadas = all(t.lstrip().startswith(abre) for t in cheias)
+        margem = min(len(_recuo(t)) for t in cheias)
+        novas = []
+        for t in antigas:
+            if not t.strip():
+                novas.append(t)
+            elif comentadas:
+                i = t.index(abre)
+                resto = t[i + len(abre):]
+                resto = resto[1:] if resto.startswith(" ") else resto
+                if fecha and resto.rstrip().endswith(fecha):
+                    resto = resto.rstrip()[: -len(fecha)].rstrip()
+                novas.append(t[:i] + resto)
+            else:
+                novas.append(t[:margem] + abre + " " + t[margem:] + (" " + fecha if fecha else ""))
+        self._trocar_linhas(r0, r1, novas)
+        delta = {r: len(novas[r - r0]) - len(antigas[r - r0]) for r in range(r0, r1 + 1)}
+        self.selection = Selection(*[(r, max(0, c + delta.get(r, 0))) for r, c in (sel.start, sel.end)])
+
+    def action_mover_linhas(self, passo: int) -> None:
+        """Alt+↑ / Alt+↓: move a linha (ou as linhas selecionadas) para cima ou para baixo."""
+        if self.read_only:
+            return
+        sel = self.selection
+        r0, r1 = self.linhas_selecionadas()
+        if (passo < 0 and r0 == 0) or (passo > 0 and r1 >= self.document.line_count - 1):
+            return
+        bloco = [self.document.get_line(r) for r in range(r0, r1 + 1)]
+        if passo < 0:
+            self._trocar_linhas(r0 - 1, r1, bloco + [self.document.get_line(r0 - 1)])
+        else:
+            self._trocar_linhas(r0, r1 + 1, [self.document.get_line(r1 + 1)] + bloco)
+        self.selection = Selection((sel.start[0] + passo, sel.start[1]), (sel.end[0] + passo, sel.end[1]))
+
+    def action_duplicar_linhas(self, abaixo: int = 1) -> None:
+        """Alt+Shift+↓: duplica a linha (ou as linhas selecionadas); o cursor vai para a cópia."""
+        if self.read_only:
+            return
+        sel = self.selection
+        r0, r1 = self.linhas_selecionadas()
+        bloco = "\n".join(self.document.get_line(r) for r in range(r0, r1 + 1))
+        self.insert("\n" + bloco, (r1, len(self.document.get_line(r1))), maintain_selection_offset=False)
+        n = (r1 - r0 + 1) if abaixo else 0
+        self.selection = Selection((sel.start[0] + n, sel.start[1]), (sel.end[0] + n, sel.end[1]))
+
+    # ------------------------------------------------------------------ desenho: indentação e destaque
+    def destacar(self, r0: int, r1: int, segundos: float = 1.2) -> None:
+        """Realça por um instante as linhas que a tradução acabou de inserir (sem selecioná-las)."""
+        self._destaque = (r0, r1)
+        self.refresh()
+        self.set_timer(segundos, self._fim_destaque)
+
+    def _fim_destaque(self) -> None:
+        self._destaque = None
+        self.refresh()
+
+    def render_line(self, y: int) -> Strip:
+        strip = super().render_line(y)
+        if not self.text:
+            return strip
+        scroll_x, scroll_y = self.scroll_offset
+        try:
+            linha, secao = self.wrapped_document._offset_to_line_info[scroll_y + y]
+        except IndexError:
+            return strip
+        marcas: dict[int, tuple[str, Style]] = {}
+        if self.guias and secao == 0:
+            texto = self.document.get_line(linha)
+            cur_r, cur_c = self.cursor_location
+            nivel, fraco = Style(color=C["guide"]), Style(color=C["guide_faint"])
+            col = 0
+            for i, ch in enumerate(texto):
+                if ch not in " \t":
+                    break
+                x = self.gutter_width + col - scroll_x
+                if x >= self.gutter_width and not (linha == cur_r and i == cur_c):
+                    if ch == "\t":
+                        marcas[x] = ("→", fraco)
+                    else:
+                        marcas[x] = ("·", nivel if col % self.indent_width == 0 else fraco)
+                col += self.indent_width - col % self.indent_width if ch == "\t" else 1
+        destaque = None
+        if self._destaque and self._destaque[0] <= linha <= self._destaque[1]:
+            destaque = (self.gutter_width, Style(bgcolor=C["flash"]))
+        if not marcas and not destaque:
+            return strip
+        return _sobrepor(strip, marcas, destaque)
+
+
+class Botao(Static):
+    """Texto clicável que executa uma ação do app (pílulas S0/S1, barra do explorer). Diferente de um link [@click],
+    mantém as cores do próprio texto, que acompanham o tema."""
+
+    def __init__(self, texto: str = "", acao: str = "", **kwargs) -> None:
+        super().__init__(texto, **kwargs)
+        self.acao = acao
+
+    async def on_click(self, event: events.Click) -> None:
+        event.stop()
+        await self.app.run_action(self.acao)
 
 
 @dataclass

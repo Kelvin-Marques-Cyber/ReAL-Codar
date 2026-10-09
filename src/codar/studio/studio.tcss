@@ -5,7 +5,7 @@ Screen {
     color: $codar-text;
 }
 
-/* todas as barras de rolagem (cada widget tem a sua; regra só no Screen não chega nelas) */
+/* cores de todas as barras de rolagem (cada widget tem a sua; regra só no Screen não chega nelas) */
 * {
     scrollbar-color: $codar-sel;
     scrollbar-color-hover: $codar-line;
@@ -14,18 +14,22 @@ Screen {
     scrollbar-background-hover: $codar-bg;
     scrollbar-background-active: $codar-bg;
     scrollbar-corner-color: $codar-bg;
-    scrollbar-size-vertical: 1;
-    scrollbar-size-horizontal: 1;
 }
 
-/* pílulas clicáveis (S0, S1, AUDIT…): a cor vem do texto, sem o sublinhado padrão de link */
-#pills, #lang-pill {
-    link-color: $codar-text;
-    link-background: $codar-bg;
-    link-style: none;
-    link-color-hover: $codar-bg;
-    link-background-hover: $codar-mint;
-    link-style-hover: bold;
+/* barras finas só onde se rola (no rodapé e nas abas a barra fica escondida, como o Textual define) */
+CodeEditor, RichLog, DirectoryTree, DataTable, ListView, VerticalScroll, OptionList {
+    scrollbar-size-vertical: 1;
+}
+
+/* textos clicáveis (pílulas S0/S1…, barra do explorer): a cor vem do texto; o fundo acende ao passar o mouse */
+Botao {
+    width: auto;
+    height: 1;
+    margin-right: 1;
+}
+
+Botao:hover {
+    background: $codar-grid;
 }
 
 #workspace {
@@ -78,6 +82,12 @@ Screen {
 
 #pills {
     width: 1fr;
+    height: 1;
+}
+
+#explorer-bar {
+    height: 1;
+    padding: 0 1;
 }
 
 #lang-pill {
@@ -437,4 +447,59 @@ HelpScreen {
     border-title-color: $codar-red;
     border-title-style: bold;
     background: $codar-bg;
+}
+
+/* ---------------------------------------------------------------- explorer: menu de contexto e confirmação */
+MenuScreen {
+    background: $codar-bg 30%;
+}
+
+#menu-lista {
+    width: 30;
+    height: auto;
+    max-height: 16;
+    border: round $codar-orange;
+    border-title-color: $codar-red;
+    background: $codar-panel;
+    color: $codar-text;
+}
+
+#menu-lista > .option-list--option-highlighted {
+    background: $codar-orange;
+    color: $codar-bg;
+    text-style: bold;
+}
+
+ConfirmScreen {
+    align: center middle;
+    background: $codar-bg 75%;
+}
+
+#confirm-card {
+    width: 72;
+    max-width: 95%;
+    height: auto;
+    border: round $codar-orange;
+    background: $codar-bg;
+    padding: 1 2;
+}
+
+#confirm-title {
+    color: $codar-red;
+    text-style: bold;
+}
+
+#confirm-detail {
+    color: $codar-dim;
+    margin: 1 0;
+}
+
+#confirm-buttons {
+    height: 3;
+}
+
+#confirm-keys {
+    width: 1fr;
+    height: 3;
+    content-align: left middle;
 }

@@ -7,8 +7,10 @@ telemetria à direita, barra de intenção e medidor de RAM embaixo.
 
 from __future__ import annotations
 
+import asyncio
 import codecs
 import os
+import re
 import random
 import select
 import shlex
@@ -17,6 +19,7 @@ import signal
 import subprocess
 import sys
 import time
+from functools import partial
 from pathlib import Path
 
 from rich.text import Text
@@ -29,14 +32,14 @@ from textual.suggester import Suggester
 from textual.theme import Theme
 from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, ListView, RichLog, Static,
                              TabbedContent, TabPane, TextArea)
-from textual.widgets.text_area import Selection
 
 from codar import __version__, langs, paths
 from codar.studio.backend import StudioBackend
+from codar.studio.explorer import SKIP, Explorer
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, HelpScreen, PromptScreen
-from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, CodeEditor, OrbitRadar, aplicar_paleta, gauge,
-                                  paleta, tema_ansi, tema_editor)
+from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, aplicar_paleta,
+                                  gauge, paleta, tema_ansi, tema_editor)
 from codar.textutil import looks_like_intent
 from codar.vocab import EXAMPLES
 
@@ -45,34 +48,38 @@ STAGE_NAMES = {"0": "S0 COMPILER", "1": "S1 PATTERN", "2:tools": "S2 TOOLS", "2:
 TS_LANG = {"python": "python", "javascript": "javascript", "typescript": "javascript", "go": "go", "rust": "rust",
            "java": "java", "bash": "bash", "sql": "sql", "html": "html", "css": "css", "yaml": "yaml", "markdown": "markdown"}
 EXT_TS = {".json": "json", ".toml": "toml", ".md": "markdown", ".xml": "xml", ".yml": "yaml", ".yaml": "yaml"}
-SKIP = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache", "target", "dist", ".codar"}
 
 
-# Cor do marcador de cada tipo de arquivo no explorer (chaves da paleta C)
-TIPO_COR = {".py": "mint", ".pyw": "mint", ".ipynb": "mint", ".js": "text", ".mjs": "text", ".cjs": "text",
-            ".jsx": "text", ".ts": "blue", ".tsx": "blue", ".html": "red", ".htm": "red", ".css": "cyan",
-            ".scss": "cyan", ".json": "orange", ".toml": "orange", ".yaml": "orange", ".yml": "orange",
-            ".md": "moon", ".txt": "moon", ".sh": "green", ".ps1": "green", ".go": "cyan", ".rs": "orange",
-            ".java": "red", ".c": "blue", ".cpp": "blue", ".h": "blue", ".lua": "blue", ".rb": "red", ".php": "blue",
-            ".sql": "cyan", ".png": "orange", ".jpg": "orange", ".jpeg": "orange", ".svg": "orange", ".csv": "green"}
+class ArquivosProvider(Provider):
+    """Arquivos do projeto na paleta: digite parte do nome (ou do caminho) e Enter abre."""
+
+    async def startup(self) -> None:
+        self.arquivos = await asyncio.to_thread(_listar_arquivos, self.app.root)  # type: ignore[attr-defined]
+
+    async def discover(self) -> Hits:
+        for rel in self.arquivos[:12]:
+            yield DiscoveryHit(rel, partial(self._abrir, rel), help="abrir arquivo")
+
+    async def search(self, query: str) -> Hits:
+        matcher = self.matcher(query)
+        for rel in self.arquivos:
+            score = matcher.match(rel)
+            if score > 0:
+                yield Hit(score * 0.9, matcher.highlight(rel), partial(self._abrir, rel), help="abrir arquivo")
+
+    async def _abrir(self, rel: str) -> None:
+        await self.app.open_file(self.app.root / rel)  # type: ignore[attr-defined]
 
 
-class Explorer(DirectoryTree):
-    ICON_NODE = "▸ "
-    ICON_NODE_EXPANDED = "▾ "
-    ICON_FILE = "• "
-
-    def filter_paths(self, paths):
-        return [p for p in paths if p.name not in SKIP]
-
-    def render_label(self, node, base_style, style):
-        texto = super().render_label(node, base_style, style)
-        if self.is_mounted and node.data is not None:
-            if node._allow_expand:
-                texto.stylize(f"bold {C['orange']}", 0, 1)
-            else:
-                texto.stylize(C[TIPO_COR.get(Path(node.data.path).suffix.lower(), "dim")], 0, 1)
-        return texto
+def _listar_arquivos(raiz: Path, limite: int = 5000) -> list[str]:
+    arquivos: list[str] = []
+    for pasta, subpastas, nomes in os.walk(raiz):
+        subpastas[:] = sorted(d for d in subpastas if d not in SKIP and not d.startswith("."))
+        base = Path(pasta).relative_to(raiz)
+        arquivos += [(base / n).as_posix() for n in sorted(nomes)]
+        if len(arquivos) >= limite:
+            break
+    return arquivos[:limite]
 
 
 class CodarCommands(Provider):
@@ -88,6 +95,10 @@ class CodarCommands(Provider):
                 yield Hit(score, matcher.highlight(name), cb, help=help_text)
 
 
+BOTOES_EXPLORER = [("novo_arquivo", "+arquivo"), ("nova_pasta", "+pasta"), ("colar", "colar"), ("recarregar", "↻")]
+PILULAS = [("s0", "◎ S0", "toggle_stage(0)"), ("s1", "• S1", "toggle_stage(1)"), ("s2", "✳ S2", "toggle_stage(2)"),
+           ("audit", "☉ AUDIT", "toggle_audit"), ("hints", "✎ HINTS", "toggle_hints")]
+_SENAO = re.compile(r"^\s*(sen[aã]o|caso contr[aá]rio|do contr[aá]rio|else|elif)\b", re.I)
 TERM_IDLE = "$ comando no diretório do projeto (Enter executa)"
 TERM_RUNNING = "entrada do programa (Enter envia · Ctrl+C interrompe)"
 
@@ -111,6 +122,10 @@ TIPS = [
     "num arquivo .html, escreva ul>li.item*3 e aperte Tab",
     "num arquivo .css, escreva df+jcc+aic e aperte Tab",
     "F1 mostra todos os atalhos",
+    "Ctrl+E vai para o explorer: n cria arquivo, p cria pasta, r renomeia, Del apaga",
+    "Esc volta para o editor de qualquer lugar; Ctrl+T vai para o terminal",
+    "selecione várias linhas de pseudocódigo e aperte Ctrl+G: o bloco inteiro vira código",
+    "Ctrl+O abre um arquivo pelo nome; Ctrl+P também acha comandos",
     "F8 abre o consultor: sugestões para o projeto, aplicadas com um clique",
     "a barra de intenção completa o que você já usou: comece a digitar e aperte →",
     "frases que descrevem valores funcionam: 'imprimir o tamanho de pedidos'",
@@ -137,22 +152,28 @@ class IntentSuggester(Suggester):
 class Studio(App):
     TITLE = "codar studio"
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
-    COMMANDS = App.COMMANDS | {CodarCommands}
+    COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
     BINDINGS = [
-        Binding("ctrl+s", "save", "Salvar"),
+        Binding("ctrl+s", "save", "Salvar", priority=True),
         # Ctrl+Enter chega como ctrl+enter (kitty, WezTerm, foot…) ou ctrl+j (terminais clássicos); Ctrl+G em qualquer um
         Binding("ctrl+g,ctrl+enter,ctrl+j", "translate_line", "Traduzir linha"),
-        Binding("ctrl+l", "focus_intent", "Intenção"),
-        Binding("f5", "run_file", "Executar"),
-        Binding("f6", "audit_file", "Auditar"),
-        Binding("f8", "advise", "Consultor"),
-        Binding("ctrl+o", "open_vscode", "VS Code"),
-        Binding("ctrl+n", "new_file", "Novo"),
-        Binding("ctrl+w", "close_tab", "Fechar aba"),
-        Binding("ctrl+b", "toggle_left", "Explorer", show=False),
-        Binding("f9", "toggle_panel", "Painel", show=False),
-        Binding("ctrl+q", "quit", "Sair"),
-        Binding("f1", "help", "Ajuda"),
+        # ir para cada área sem o mouse; Esc volta ao editor
+        Binding("ctrl+e", "focus_explorer", "Explorer", priority=True),
+        Binding("ctrl+t", "focus_terminal", "Terminal", priority=True),
+        Binding("ctrl+l", "focus_intent", "Intenção", priority=True),
+        Binding("escape", "focus_editor", "Editor", show=False),
+        Binding("ctrl+o", "quick_open", "Abrir", priority=True),
+        Binding("ctrl+pagedown", "next_tab", "Próxima aba", show=False, priority=True),
+        Binding("ctrl+pageup", "prev_tab", "Aba anterior", show=False, priority=True),
+        Binding("f5", "run_file", "Executar", priority=True),
+        Binding("f6", "audit_file", "Auditar", priority=True),
+        Binding("f8", "advise", "Consultor", priority=True),
+        Binding("ctrl+n", "new_file", "Novo", priority=True),
+        Binding("ctrl+w", "close_tab", "Fechar aba", priority=True),
+        Binding("ctrl+b", "toggle_left", "Mostrar explorer", show=False, priority=True),
+        Binding("f9", "toggle_panel", "Painel", show=False, priority=True),
+        Binding("ctrl+q", "quit", "Sair", priority=True),
+        Binding("f1", "help", "Ajuda", priority=True),
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -177,12 +198,17 @@ class Studio(App):
     def compose(self) -> ComposeResult:
         with Horizontal(id="workspace"):
             with Vertical(id="left"):
+                with Horizontal(id="explorer-bar"):
+                    for acao, _rotulo in BOTOES_EXPLORER:
+                        yield Botao(acao=f"explorer('{acao}')", id=f"eb-{acao}")
                 yield Explorer(self.root, id="explorer")
                 yield OrbitRadar(id="radar")
                 yield RichLog(id="feed", markup=True, wrap=True, max_lines=500, min_width=16)
             with Vertical(id="center"):
                 with Horizontal(id="pills-bar"):
-                    yield Static(id="pills")
+                    with Horizontal(id="pills"):
+                        for pid, _rotulo, acao in PILULAS:
+                            yield Botao(acao=acao, id=f"pill-{pid}")
                     yield Static(id="lang-pill")
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
@@ -292,14 +318,13 @@ class Studio(App):
         self.query_one("#feed", RichLog).write(f"{mark} [{C.get(color, color)}]{_esc(text)}[/]")
 
     def render_pills(self) -> None:
-        def pill(label: str, on_: bool, action: str) -> str:
-            color = C["mint"] if on_ else C["red"]
-            return f"[@click=app.{action}][b {color}] {label} [/][/]"
-
-        t = "  ".join([pill("◎ S0", 0 in self.stages, "toggle_stage(0)"), pill("• S1", 1 in self.stages, "toggle_stage(1)"),
-                       pill("✳ S2", 2 in self.stages, "toggle_stage(2)"), pill("☉ AUDIT", self.audit_on, "toggle_audit"),
-                       pill("✎ HINTS", self.hints, "toggle_hints")])
-        self.query_one("#pills", Static).update(t)
+        """Pílulas (clicáveis): menta = ligado, vermelho = desligado. A barra do explorer também é redesenhada aqui."""
+        ligado = {"s0": 0 in self.stages, "s1": 1 in self.stages, "s2": 2 in self.stages, "audit": self.audit_on,
+                  "hints": self.hints}
+        for pid, rotulo, _acao in PILULAS:
+            self.query_one(f"#pill-{pid}", Botao).update(f"[b {C['mint'] if ligado[pid] else C['red']}] {rotulo} [/]")
+        for acao, rotulo in BOTOES_EXPLORER:
+            self.query_one(f"#eb-{acao}", Botao).update(f"[b {C['mint']}]{rotulo}[/]")
         self.query_one("#lang-pill", Static).update(f"[b {C['red']}]LANG[/] [b {C['mint']}]{self.current_lang().upper()}[/]")
 
     def render_last(self) -> None:
@@ -341,21 +366,35 @@ class Studio(App):
             return "O PROGRAMA ESPERA ENTRADA · DIGITE NO TERMINAL"
         focused = self.focused
         if isinstance(focused, Input) and focused.id == "intent":
-            return "ENTER GERA · → COMPLETA" if focused.value else "DESCREVA O CÓDIGO · F1 AJUDA"
+            return "ENTER GERA · → COMPLETA · ESC EDITOR" if focused.value else "DESCREVA O CÓDIGO · ESC EDITOR"
+        if isinstance(focused, Explorer):
+            return "N NOVO · P PASTA · R RENOMEAR · C/X/V COPIAR · DEL APAGAR · ESC EDITOR"
+        if isinstance(focused, Input) and focused.id == "term-input":
+            return "ENTER ENVIA · CTRL+C INTERROMPE" if self.process_running() else "ENTER EXECUTA · ESC EDITOR"
+        if isinstance(focused, DataTable):
+            return "ENTER VAI PARA A LINHA · ESC EDITOR"
+        if isinstance(focused, ListView) and focused.id == "advice-list":
+            return "ENTER ABRE A SUGESTÃO · ESC EDITOR"
         if isinstance(focused, CodeEditor):
             row, col = focused.cursor_location
             line = focused.document.get_line(row)
+            if focused.selection.start[0] != focused.selection.end[0]:
+                r0, r1 = focused.linhas_selecionadas()
+                return f"CTRL+G TRADUZ {r1 - r0 + 1} LINHAS (MÁX {self.max_linhas_bloco()}) · TAB INDENTA · CTRL+/ COMENTA"
             if focused.suggestion:
                 return "TAB COMPLETA"
             if focused.emmet_kind() and emmet.extract_abbreviation(line[:col]):
                 return "TAB EXPANDE"
             if looks_like_intent(line):
                 return "CTRL+ENTER TRADUZ · ESPAÇO+ENTER"
-            return "CTRL+L INTENÇÃO · F1 AJUDA"
-        return "F1 AJUDA"
+            return "CTRL+E EXPLORER · CTRL+T TERMINAL · CTRL+L INTENÇÃO · F1"
+        return "ESC EDITOR · F1 AJUDA"
 
     @on(TextArea.SelectionChanged)
     def _cursor_moved(self) -> None:
+        self.render_status()
+
+    def on_descendant_focus(self) -> None:
         self.render_status()
 
     @work(thread=True, exclusive=True, group="telemetry")
@@ -483,21 +522,30 @@ class Studio(App):
         unit = "\t" if ed.indent_type == "tabs" else " " * ed.indent_width
         return before, indent, unit
 
-    def request(self, intent: str, mode: str, ed: CodeEditor | None = None, row: int | None = None) -> None:
-        intent = intent.strip()
-        if not intent:
+    def request(self, intent: str, mode: str, ed: CodeEditor | None = None, row: int | None = None,
+                original: str | None = None, indent: str | None = None) -> None:
+        intent = intent.strip("\n") if mode == "block" else intent.strip()
+        if not intent.strip():
             return
-        if intent in self.intents:
-            self.intents.remove(intent)
-        self.intents.insert(0, intent)  # o autocompletar da barra sugere primeiro o que você já usou
-        before, indent, unit = self._editor_context(ed, row)
-        original = ed.document.get_line(row) if ed is not None and row is not None else None
+        if mode != "block":
+            if intent in self.intents:
+                self.intents.remove(intent)
+            self.intents.insert(0, intent)  # o autocompletar da barra sugere primeiro o que você já usou
+        before, recuo, unit = self._editor_context(ed, row)
+        indent = recuo if indent is None else indent
+        if original is None:
+            original = ed.document.get_line(row) if ed is not None and row is not None else None
         self.feed(f"TX · {intent[:70]}", "text")
         out = self.query_one("#output", RichLog)
         out.write(f"[{C['red']}]▸ INTENÇÃO[/] [{C['text']}]{_esc(intent)}[/]")
         self.streaming = False
         self.translate_worker(intent, self.current_lang(), mode, ed.path if ed else None, before, indent, unit, row,
                               original, ed.id if ed else None)
+
+    def max_linhas_bloco(self) -> int:
+        from codar import config
+
+        return int(config.load()["router"].get("max_block_lines", 30))
 
     @work(thread=True, group="translate")
     def translate_worker(self, intent, lang, mode, path, before, indent, unit, row, original, editor_id) -> None:
@@ -507,7 +555,8 @@ class Studio(App):
             self.call_from_thread(self._delta, d)
 
         try:
-            res = self.backend.translate(intent, lang, file=path, before=before, indent=indent if mode == "line" else "",
+            res = self.backend.translate(intent, lang, file=path, before=before,
+                                         indent=indent if mode in ("line", "block") else "",
                                          indent_unit=unit, stages=tuple(sorted(self.stages)), hints=self.hints,
                                          on_delta=on_delta)
         except RpcError as exc:
@@ -550,12 +599,15 @@ class Studio(App):
         if ed is None:
             self.call_later(self._new_buffer_with, res)
             return
-        if mode == "line" and row is not None and original is not None:
-            if row >= ed.document.line_count or ed.document.get_line(row) != original:
-                self.notify("a linha mudou enquanto a IA respondia; resultado mostrado em SAÍDA", severity="warning")
+        if mode in ("line", "block") and row is not None and original is not None:
+            fim = row + original.count("\n")
+            atual = "\n".join(ed.document.get_line(r) for r in range(row, fim + 1)) \
+                if fim < ed.document.line_count else None
+            if atual != original:
+                self.notify("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA", severity="warning")
                 self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
                 return
-            start, end = (row, 0), (row, len(original))
+            start, end = (row, 0), (fim, len(ed.document.get_line(fim)))
             ed.replace(body, start, end)
         else:
             r, _c = ed.cursor_location
@@ -574,7 +626,8 @@ class Studio(App):
         added = self._hoist_imports(ed, res)
         start = (start[0] + added, 0)
         end_row = start[0] + n_lines
-        ed.selection = Selection(start, (end_row, len(ed.document.get_line(end_row))))
+        ed.move_cursor((end_row, len(ed.document.get_line(end_row))))
+        ed.destacar(start[0], end_row)
         ed.focus()
         self._show_findings(res.get("findings", []), start[0])
         for note in res.get("notes", []):
@@ -640,18 +693,49 @@ class Studio(App):
     @on(CodeEditor.TranslateLine)
     def _space_enter(self, event: CodeEditor.TranslateLine) -> None:
         line = event.editor.document.get_line(event.row)
-        self.request(line.strip(), "line", event.editor, event.row)
+        self.request(line.strip(), "line", event.editor, event.row,
+                     indent=self._recuo_senao(event.editor, event.row, line))
 
     def action_translate_line(self) -> None:
         ed = self.current_editor()
         if ed is None:
             self.notify("abra um arquivo (ou use a barra de intenção)", severity="warning")
             return
+        if ed.selection.start != ed.selection.end and ed.selection.start[0] != ed.selection.end[0]:
+            self.traduzir_bloco(ed)
+            return
         row = ed.cursor_location[0]
         line = ed.document.get_line(row)
         if not line.strip():
             return
-        self.request(line.strip(), "line", ed, row)
+        self.request(line.strip(), "line", ed, row, indent=self._recuo_senao(ed, row, line))
+
+    def traduzir_bloco(self, ed: CodeEditor) -> None:
+        """Várias linhas selecionadas viram um bloco só (se/senão, laços aninhados). O limite de linhas mantém o
+        tempo e a RAM previsíveis: cada linha que o compilador não resolve pode ir para a IA."""
+        import textwrap
+
+        r0, r1 = ed.linhas_selecionadas()
+        linhas = [ed.document.get_line(r) for r in range(r0, r1 + 1)]
+        cheias = [t for t in linhas if t.strip()]
+        maximo = self.max_linhas_bloco()
+        if not cheias:
+            return
+        if len(cheias) > maximo:
+            self.notify(f"{len(cheias)} linhas selecionadas; o máximo por bloco é {maximo}. Traduza em partes "
+                        f"(ou ajuste router.max_block_lines no config.toml).", severity="warning", title="bloco grande")
+            return
+        original = "\n".join(linhas)
+        margem = min(len(t) - len(t.lstrip()) for t in cheias)
+        recuo = cheias[0][:margem]
+        self.request(textwrap.dedent(original), "block", ed, r0, original=original, indent=recuo)
+
+    @staticmethod
+    def _recuo_senao(ed: CodeEditor, row: int, linha: str) -> str | None:
+        """"senão imprimir …" digitado com a indentação do corpo do if: traduz já alinhado com o if (Python)."""
+        if ed.lang_id != "python" or not _SENAO.match(linha):
+            return None
+        return ed.recuo_alinhado(row, "else")
 
     @staticmethod
     def welcome_text() -> str:
@@ -663,9 +747,9 @@ class Studio(App):
         return "\n".join([
             f"[b {C['orange']}]{TITLE}[/]", "",
             f"[{C['text']}]escreva a intenção em pseudocódigo · o CODAR escreve o código[/]", "",
-            row("Ctrl+N", "novo arquivo", "Explorer", "Enter abre o arquivo"),
-            row("Ctrl+L", "descrever o código", "F1", "todos os atalhos"),
-            row("F8", "consultor do projeto", "Ctrl+Q", "sair"), "",
+            row("Ctrl+N", "novo arquivo", "Ctrl+E", "explorer (n, p, r…)"),
+            row("Ctrl+O", "abrir pelo nome", "Ctrl+L", "descrever o código"),
+            row("F8", "consultor do projeto", "F1", "todos os atalhos"), "",
             f"[{C['dim']}]experimente na barra de intenção:[/]", examples,
         ])
 
@@ -681,6 +765,74 @@ class Studio(App):
 
     def action_focus_intent(self) -> None:
         self.query_one("#intent", Input).focus()
+
+    def action_focus_explorer(self) -> None:
+        self.query_one("#left").display = True
+        explorer = self.query_one("#explorer", Explorer)
+        explorer.focus()
+        if explorer.cursor_line < 0:
+            explorer.cursor_line = 0
+
+    def action_focus_terminal(self) -> None:
+        panel = self.query_one("#panel", TabbedContent)
+        panel.display = True
+        panel.active = "tab-terminal"
+        self.query_one("#term-input", Input).focus()
+
+    def action_focus_editor(self) -> None:
+        """Esc: de qualquer painel, volta para o editor (ou para a intenção, se não há arquivo aberto)."""
+        ed = self.current_editor()
+        (ed if ed is not None else self.query_one("#intent", Input)).focus()
+
+    def action_quick_open(self) -> None:
+        from textual.command import CommandPalette
+
+        self.push_screen(CommandPalette(providers=[ArquivosProvider], placeholder="abrir arquivo: digite parte do nome…"))
+
+    def _trocar_aba(self, passo: int) -> None:
+        tabs = self.query_one("#editors", TabbedContent)
+        ids = [p.id for p in tabs.query(TabPane) if p.id]
+        if not ids:
+            return
+        i = ids.index(tabs.active) if tabs.active in ids else 0
+        tabs.active = ids[(i + passo) % len(ids)]
+        ed = self.current_editor()
+        if ed is not None:
+            ed.focus()
+
+    def action_next_tab(self) -> None:
+        self._trocar_aba(1)
+
+    def action_prev_tab(self) -> None:
+        self._trocar_aba(-1)
+
+    async def action_explorer(self, acao: str) -> None:
+        """Botões da barra do explorer."""
+        explorer = self.query_one("#explorer", Explorer)
+        if acao == "recarregar":
+            await explorer.reload()
+            return
+        explorer.focus()
+        await explorer.run_action(acao)
+
+    def arquivo_movido(self, antigo: Path, novo: Path) -> None:
+        """Renomeado ou movido no explorer: as abas abertas passam a apontar para o caminho novo."""
+        for ed in self.query(CodeEditor):
+            if not ed.path:
+                continue
+            atual = Path(ed.path)
+            if atual == antigo or antigo in atual.parents:
+                ed.path = str(novo / atual.relative_to(antigo)) if atual != antigo else str(novo)
+                self._update_tab_label(ed)
+        self.render_pills()
+
+    def arquivo_apagado(self, caminho: Path) -> None:
+        """Apagado no explorer: a aba fica aberta, mas Ctrl+S passa a pedir um nome (não recria o arquivo sozinho)."""
+        for ed in self.query(CodeEditor):
+            if ed.path and (Path(ed.path) == caminho or caminho in Path(ed.path).parents):
+                ed.path = None
+                ed.saved_text = ""
+                self._update_tab_label(ed)
 
     def action_toggle_stage(self, stage: int) -> None:
         self.stages ^= {stage}

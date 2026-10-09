@@ -46,9 +46,10 @@ class AdviceScreen(ModalScreen[str | None]):
 class PromptScreen(ModalScreen[str | None]):
     BINDINGS = [("escape", "dismiss_none", "Cancelar")]
 
-    def __init__(self, title: str, placeholder: str = "", value: str = "") -> None:
+    def __init__(self, title: str, placeholder: str = "", value: str = "", selecionar: int | None = None) -> None:
         super().__init__()
         self.title_text, self.placeholder, self.value = title, placeholder, value
+        self.selecionar = selecionar  # renomear: já seleciona o nome sem a extensão
 
     def compose(self) -> ComposeResult:
         with Vertical(id="prompt-card"):
@@ -56,7 +57,12 @@ class PromptScreen(ModalScreen[str | None]):
             yield Input(value=self.value, placeholder=self.placeholder, id="prompt-input")
 
     def on_mount(self) -> None:
-        self.query_one(Input).focus()
+        campo = self.query_one(Input)
+        campo.focus()
+        if self.selecionar:
+            from textual.widgets.input import Selection
+
+            self.call_after_refresh(setattr, campo, "selection", Selection(0, self.selecionar))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.dismiss(event.value.strip() or None)
@@ -67,17 +73,31 @@ class PromptScreen(ModalScreen[str | None]):
 
 # Atalhos do Studio, agrupados como aparecem na ajuda (F1). Mantenha em sincronia com Studio.BINDINGS.
 SHORTCUTS: list[tuple[str, list[tuple[str, str]]]] = [
-    ("TRADUZIR", [("Ctrl+Enter  ou  Ctrl+G", "traduz a linha do cursor (ou a seleção)"),
-                  ("espaço + Enter", "no fim de uma frase, traduz em vez de quebrar a linha"),
-                  ("Ctrl+L", "vai para a barra de intenção"),
+    ("NAVEGAR", [("Ctrl+E", "vai para o explorer (arquivos)"), ("Ctrl+T", "vai para o terminal"),
+                 ("Ctrl+L", "vai para a barra de intenção"), ("Esc", "volta para o editor, de qualquer lugar"),
+                 ("Ctrl+O", "abre um arquivo pelo nome"), ("Ctrl+P", "paleta: comandos e arquivos"),
+                 ("Ctrl+PgDn  /  Ctrl+PgUp", "próxima aba / aba anterior")]),
+    ("TRADUZIR", [("espaço + Enter", "no fim de uma frase, traduz em vez de quebrar a linha"),
+                  ("Ctrl+G  ou  Ctrl+Enter", "traduz a linha; com várias linhas selecionadas, traduz o bloco"),
                   ("Enter na barra", "gera o código e insere no editor")]),
     ("ESCREVER", [("Tab  ou  →", "aceita a sugestão (o texto apagado à direita)"),
                   ("Tab em .html/.css/.jsx", "expande abreviações: ul>li*3, a:blank, df+jcc"),
+                  ("( [ { \" '", "fecham sozinhos; com texto selecionado, envolvem a seleção"),
+                  ("Enter", "mantém a indentação; depois de : ou { entra um nível"),
+                  ("Tab  /  Shift+Tab", "com várias linhas selecionadas: indenta / desindenta"),
+                  ("Ctrl+/", "comenta ou descomenta as linhas"),
+                  ("Alt+↑  /  Alt+↓", "move a linha para cima / para baixo"),
+                  ("Alt+Shift+↓", "duplica a linha"), ("Ctrl+A", "seleciona tudo"),
                   ("Ctrl+Z  /  Ctrl+Y", "desfaz / refaz")]),
+    ("EXPLORER", [("↑ ↓  →  ←", "anda; → abre, ← fecha a pasta"), ("Enter", "abre o arquivo"),
+                  ("n  /  p", "novo arquivo / nova pasta"), ("r  ou  F2", "renomeia"), ("d", "duplica"),
+                  ("c  /  x  /  v", "copia / recorta / cola na pasta selecionada"),
+                  ("Del", "apaga (vai para .codar/lixeira)"), ("m  ou  botão direito", "menu com todas as ações"),
+                  ("arrastar arquivo", "solte no terminal com o explorer em foco: copia para o projeto")]),
     ("ARQUIVOS", [("Ctrl+S", "salva"), ("Ctrl+N", "novo arquivo"), ("Ctrl+W", "fecha a aba"),
                   ("Ctrl+B", "mostra/esconde o explorer"), ("F9", "mostra/esconde o painel")]),
     ("PROJETO", [("F5", "executa o arquivo"), ("F6", "audita o arquivo"), ("F8", "consultor de projeto"),
-                 ("Ctrl+O", "abre no VS Code"), ("Ctrl+P", "paleta de comandos"), ("Ctrl+Q", "sai")]),
+                 ("Ctrl+Q", "sai")]),
 ]
 
 
