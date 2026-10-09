@@ -30,7 +30,7 @@ from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, 
                              TabbedContent, TabPane, TextArea)
 
 from codar import __version__, langs
-from codar.studio import estado
+from codar.studio import comandos, estado
 from codar.studio.backend import StudioBackend
 from codar.studio.explorer import SKIP, Explorer
 from codar.studio.terminal import TerminalInput, TerminalPainel
@@ -111,6 +111,7 @@ TIPS = [
     "a barra de intenção completa o que você já usou: comece a digitar e aperte →",
     "frases que descrevem valores funcionam: 'imprimir o tamanho de pedidos'",
     "pedidos de funcionalidade usam padrões testados: 'criar uma calculadora'",
+    "na barra de intenção: 'crie o arquivo main.py', 'crie a pasta src' ou 'abra conta.py'",
 ]
 
 
@@ -680,10 +681,38 @@ class Studio(App):
         ed.focus()
 
     @on(Input.Submitted, "#intent")
-    def _intent(self, event: Input.Submitted) -> None:
+    async def _intent(self, event: Input.Submitted) -> None:
         text = event.value
         event.input.value = ""
+        pedido = comandos.interpretar(text)
+        if pedido is not None:  # "crie o arquivo main.py", "crie a pasta src", "abra conta.py"
+            await self.executar_pedido(pedido)
+            return
         self.request(text, "insert", self.current_editor(), None)
+
+    async def executar_pedido(self, pedido: comandos.PedidoArquivo) -> None:
+        explorer = self.query_one("#explorer", Explorer)
+        if pedido.acao == "abrir":
+            alvo = self._achar_arquivo(pedido.caminhos[0])
+            if alvo is None:
+                self.notify(f"não achei {pedido.caminhos[0]} no projeto (Ctrl+O busca pelo nome)", severity="warning")
+                return
+            await self.open_file(alvo)
+            return
+        for caminho in pedido.caminhos:
+            await explorer.criar(self.root, caminho, diretorio=pedido.acao == "criar_pasta")
+            self.feed(f"{'PASTA' if pedido.acao == 'criar_pasta' else 'ARQUIVO'} · {caminho}", "green")
+
+    def _achar_arquivo(self, nome: str) -> Path | None:
+        direto = (self.root / nome).resolve()
+        if direto.is_file():
+            return direto
+        arquivos = _listar_arquivos(self.root)
+        for criterio in (lambda r: Path(r).name == nome, lambda r: r.endswith(nome), lambda r: nome in Path(r).name):
+            achado = next((r for r in arquivos if criterio(r)), None)
+            if achado:
+                return self.root / achado
+        return None
 
     @on(CodeEditor.TranslateLine)
     def _space_enter(self, event: CodeEditor.TranslateLine) -> None:

@@ -139,3 +139,33 @@ async def _abrir(app, pilot, caminho):
     ed.focus()
     ed.move_cursor(ed.document.end)
     return ed
+
+
+def test_barra_de_intencao_cria_e_abre_arquivos(tmp_path, monkeypatch):
+    from codar.studio.comandos import interpretar
+
+    assert interpretar("crie um arquivo python chamado app").caminhos == ["app.py"]
+    assert interpretar("crie as pastas src e tests").acao == "criar_pasta"
+    assert interpretar("crie uma calculadora") is None  # pedido de código continua indo para o tradutor
+
+    app = _studio(tmp_path, monkeypatch, {"conta.py": "x = 1\n"})
+
+    async def cenario():
+        async with app.run_test(size=(150, 42)) as pilot:
+            for frase in ("crie a pasta modelos", "crie o arquivo modelos/pessoa.py"):
+                await pilot.press("ctrl+l")
+                for ch in frase:
+                    await pilot.press({" ": "space"}.get(ch, ch))
+                await pilot.press("enter")
+                await pilot.pause(0.3)
+            assert (tmp_path / "modelos").is_dir() and (tmp_path / "modelos" / "pessoa.py").is_file()
+            assert app.current_editor().path == str(tmp_path / "modelos" / "pessoa.py")
+            await pilot.press("ctrl+l")
+            for ch in "abra conta.py":
+                await pilot.press({" ": "space"}.get(ch, ch))
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            assert Path(app.current_editor().path).name == "conta.py"
+            assert app.backend.pedidos == []  # nada disso foi para o tradutor
+
+    asyncio.run(cenario())

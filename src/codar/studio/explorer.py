@@ -207,14 +207,14 @@ class Explorer(DirectoryTree):
         pasta = self.pasta_alvo()
         self.app.push_screen(PromptScreen(f"novo arquivo em {self.rel(pasta)}/",
                                           "ex.: main.py  (com / cria pastas: src/app.py)"),
-                             lambda nome: self._criar(pasta, nome, diretorio=False))
+                             lambda nome: self.criar(pasta, nome, diretorio=False))
 
     def action_nova_pasta(self) -> None:
         pasta = self.pasta_alvo()
         self.app.push_screen(PromptScreen(f"nova pasta em {self.rel(pasta)}/", "ex.: src  ou  assets/img"),
-                             lambda nome: self._criar(pasta, nome, diretorio=True))
+                             lambda nome: self.criar(pasta, nome, diretorio=True))
 
-    async def _criar(self, pasta: Path, nome: str | None, diretorio: bool) -> None:
+    async def criar(self, pasta: Path, nome: str | None, diretorio: bool) -> None:
         if not nome:
             return
         alvo = (pasta / nome.strip().strip("/")).resolve()
