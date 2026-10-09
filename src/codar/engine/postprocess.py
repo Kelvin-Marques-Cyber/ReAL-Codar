@@ -78,6 +78,10 @@ _IMPORT_RX = {
     "ruby": re.compile(r"^require(?:_relative)?\s"),
     "lua": re.compile(r"^local\s+\w+\s*=\s*require\s*\(?"),
     "powershell": re.compile(r"^(?:Import-Module\s|using\s+(?:module|namespace)\s|#Requires\s)", re.I),
+    "swift": re.compile(r"^import\s+\w+"),
+    "dart": re.compile(r"^import\s+['\"]"),
+    "julia": re.compile(r"^(?:using|import)\s+\w"),
+    "r": re.compile(r"^(?:library|require)\("),
     "bash": re.compile(r"^(?:source|\.)\s+\S"),
 }
 

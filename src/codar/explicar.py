@@ -77,7 +77,7 @@ def explicar(saida: str | list[str], raiz: Path | str | None = None) -> Explicac
     linhas = saida.splitlines() if isinstance(saida, str) else list(saida)
     linhas = [ln.rstrip("\r") for ln in linhas][-400:]
     raiz = Path(raiz).resolve() if raiz else None
-    for analisar in (_python, _javascript, _compiladores, _shell):
+    for analisar in (_python, _outras, _javascript, _compiladores, _shell):  # específicas antes das genéricas
         exp = analisar(linhas, raiz)
         if exp is not None:
             return exp
@@ -468,7 +468,7 @@ def _regra_compilador(ext: str, codigo: str | None, msg: str, arquivo: str, linh
         return Explicacao(f"{tipo}", titulo, oque, como, arquivo, linha, _codigo(arquivo, linha, raiz), conceito)
 
     if m := re.search(r"undefined: (\w+)|cannot find (?:value|symbol)\W+(\w+)|'(\w+)' undeclared|use of undeclared "
-                      r"identifier '(\w+)'|Cannot find name '(\w+)'", msg):
+                      r"identifier '(\w+)'|Cannot find name '(\w+)'|unresolved reference '?(\w+)'?", msg):
         nome = next(g for g in m.groups() if g)
         return e(f"{nome} não foi declarado", f"O código usa {nome}, que não existe neste ponto (nome errado ou "
                  "declarado depois/em outro escopo).", "Declare antes de usar ou corrija o nome.", "variavel")
@@ -512,6 +512,43 @@ def _regra_java_runtime(classe: str, msg: str) -> Explicacao:
     titulo, oque, como, conceito = regras.get(classe, (msg or classe, f"O programa parou com {classe}.",
                                                         "Veja a linha indicada no rastro da pilha.", None))
     return Explicacao(classe, titulo, oque, como, conceito=conceito)
+
+
+# ---------------------------------------------------------------------------------- R, Julia, Dart, Kotlin, Swift
+_OUTRAS = [  # (regex na linha, linguagem, função que monta a explicação a partir do nome)
+    (re.compile(r"object '(\w+)' not found|objeto '(\w+)' não encontrado"), "R",
+     lambda n: (f"{n} não existe", f"O R não achou {n}: não foi criado antes (com <-) ou o nome está diferente.",
+                f"Crie antes: {n} <- valor (e confira maiúsculas).", "variavel")),
+    (re.compile(r"could not find function \"(\w+)\""), "R",
+     lambda n: (f"a função {n} não existe", "Ou o nome está errado, ou a função é de um pacote que não foi carregado.",
+                f"Carregue o pacote com library(...) (instale com install.packages(\"...\")) ou confira o nome.",
+                "import")),
+    (re.compile(r"UndefVarError: `?(\w+)`? not defined"), "Julia",
+     lambda n: (f"{n} não existe", f"{n} foi usado sem ter sido criado; dentro de um laço no topo do arquivo, uma "
+                "variável de fora só pode ser alterada com global.", f"Crie {n} antes, ou escreva global {n} no "
+                "começo do laço.", "variavel")),
+    (re.compile(r"Error: Undefined name '(\w+)'"), "Dart",
+     lambda n: (f"{n} não existe", f"{n} foi usado sem ter sido declarado.", f"Declare antes: final {n} = ...;",
+                "variavel")),
+    (re.compile(r"[Uu]nresolved reference:? '?(\w+)'?"), "Kotlin",
+     lambda n: (f"{n} não existe", f"O Kotlin não achou {n}: nome errado, declarado depois ou falta o import.",
+                f"Declare antes (val {n} = ...) ou importe.", "variavel")),
+    (re.compile(r"error: cannot find '(\w+)' in scope"), "Swift",
+     lambda n: (f"{n} não existe", f"O Swift não achou {n} neste ponto do código.", f"Declare antes: let {n} = ...",
+                "variavel")),
+]
+
+
+def _outras(linhas: list[str], raiz: Path | None) -> Explicacao | None:
+    for ln in reversed(linhas):
+        for padrao, lang, montar in _OUTRAS:
+            if m := padrao.search(ln):
+                nome = next(g for g in m.groups() if g)
+                titulo, oque, como, conceito = montar(nome)
+                local = re.search(r"([\w./-]+\.(?:R|r|jl|dart|kt|kts|swift)):(\d+)", "\n".join(linhas))
+                arquivo, linha = (local.group(1), int(local.group(2))) if local else (None, None)
+                return Explicacao(lang, titulo, oque, como, arquivo, linha, _codigo(arquivo, linha, raiz), conceito)
+    return None
 
 
 # ---------------------------------------------------------------------------------------------------------- shell

@@ -40,7 +40,7 @@ Além da tradução:
 
 - **Auditoria estática a cada geração**: segredos no código, injeção de SQL, comandos de shell que apagam o próprio arquivo e outras 140 regras (Python, JavaScript, PowerShell, Bash, SQL, Docker e mais), cada uma com a correção sugerida.
 - **Consultor de projeto**: "O projeto usa npm. pnpm e Bun instalam as mesmas dependências bem mais rápido…". Você escolhe a opção e ele executa a migração.
-- **14 linguagens** de programação: Python, JavaScript, TypeScript, Go, Rust, Java, C#, C, C++, PHP, Ruby, Lua, Bash e PowerShell, mais HTML e CSS.
+- **19 linguagens** de programação: Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Swift, Dart, C#, C, C++, PHP, Ruby, Lua, R, Julia, Bash e PowerShell, mais HTML e CSS.
 
 ## Instalação
 
@@ -201,4 +201,4 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) e o [histórico de mudanças](CHANGELOG.
 
 ---
 
-**In English:** CODAR turns line-by-line pseudocode (Portuguese or English) into code in 14 languages, plus Emmet-style HTML and CSS abbreviations. A rule-based compiler, a bank of tested patterns and a small local LLM in "literal" mode run 100% offline within a 3 GB RAM budget. It ships a terminal IDE (works over SSH on Ubuntu Server), Neovim, Vim, PowerShell and VS Code clients, shell completion, a static auditor and a project advisor. Packages for Debian/Ubuntu, Fedora, openSUSE, Arch and Alpine. Apache-2.0 licensed.
+**In English:** CODAR turns line-by-line pseudocode (Portuguese or English) into code in 19 languages, plus Emmet-style HTML and CSS abbreviations. A rule-based compiler, a bank of tested patterns and a small local LLM in "literal" mode run 100% offline within a 3 GB RAM budget. It ships a terminal IDE (works over SSH on Ubuntu Server), Neovim, Vim, PowerShell and VS Code clients, shell completion, a static auditor and a project advisor. Packages for Debian/Ubuntu, Fedora, openSUSE, Arch and Alpine. Apache-2.0 licensed.

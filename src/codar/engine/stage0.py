@@ -172,7 +172,8 @@ def field_type(name: str) -> str:
 
 # --------------------------------------------------------------------------- padrões
 
-_P_COMMENT = _rx(r"^(?:comentario|comentar|comente|comment|nota|note)\s*[:\-]?\s+(?P<text>.+)$")
+# "nota: ..." é comentário, mas "nota é igual a 7" é uma variável (nota de aluno): nota/note só com : ou -
+_P_COMMENT = _rx(r"^(?:(?:comentario|comentar|comente|comment)\s*[:\-]?\s+|(?:nota|note)\s*[:\-]\s*)(?P<text>.+)$")
 _P_TODO = _rx(r"^(?:todo|fixme|pendente)\s*[:\-]?\s+(?P<text>.+)$")
 _P_IMPORT = _rx(
     r"^(?:importar|importe|importa|import|incluir|inclua|include|require|requerer|"
@@ -533,7 +534,9 @@ class Stage0:
                 return None  # "a mensagem de boas-vindas" descreve o texto, não é o texto
             return ("str", a.lstrip(":").strip().strip("'\""))
         if len(a) >= 2 and a[0] == a[-1] and a[0] in "'\"`":
-            return ("str", a[1:-1])
+            node = E.try_parse(a)  # 'Olá, ' + nome + '!' começa e termina com aspas, mas é uma soma de textos
+            if node is None or node[0] == "str":
+                return ("str", a[1:-1])
         node = E.try_parse(a)
         if node is not None and node[0] != "id":
             if node[0] == "attr" and _has_reject_word(a):

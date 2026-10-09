@@ -321,12 +321,14 @@ def identifiers(node: Any) -> set[str]:
 # --------------------------------------------------------------------------- renderização
 
 _BOOL = {
-    "python": ("True", "False"), "powershell": ("$true", "$false"),
+    "python": ("True", "False"), "powershell": ("$true", "$false"), "r": ("TRUE", "FALSE"),
 }
 _NULL_LIT = {
     "python": "None", "lua": "nil", "ruby": "nil", "go": "nil", "rust": "None", "powershell": "$null",
-    "cpp": "nullptr", "c": "NULL", "php": "null", "bash": '""',
+    "cpp": "nullptr", "c": "NULL", "php": "null", "bash": '""', "swift": "nil", "r": "NULL", "julia": "nothing",
 }
+# linguagens em que índices começam em 1: "o primeiro" (índice 0 no pseudocódigo) vira [1]
+_BASE1 = {"r", "julia", "lua"}
 _SIGIL = {"php": "$", "powershell": "$"}
 
 
@@ -340,6 +342,8 @@ def quote(s: str, lang: str) -> str:
     esc = s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t")
     if lang == "ruby":
         esc = esc.replace("#{", "\\#{")
+    if lang in ("kotlin", "dart", "julia"):  # nessas, "$nome" dentro do texto é interpolação
+        esc = esc.replace("$", "\\$")
     return f'"{esc}"'
 
 
@@ -353,6 +357,8 @@ def _op(op: str, lang: str) -> str:
                 "<=": "-le", ">=": "-ge", "%": "%"}.get(op, op)
     if lang in ("javascript", "typescript", "php"):
         return {"==": "===", "!=": "!=="}.get(op, op)
+    if lang == "r":
+        return {"%": "%%"}.get(op, op)
     return op
 
 
@@ -362,7 +368,8 @@ def _len(arg: str, lang: str) -> str:
         "typescript": f"{arg}.length", "rust": f"{arg}.len()", "java": f"{arg}.size()",
         "csharp": f"{arg}.Count", "cpp": f"{arg}.size()", "ruby": f"{arg}.length", "lua": f"#{arg}",
         "php": f"count({arg})", "powershell": f"{arg}.Count", "bash": "${#" + arg.lstrip("$") + "[@]}",
-        "c": f"(sizeof {arg} / sizeof {arg}[0])",
+        "c": f"(sizeof {arg} / sizeof {arg}[0])", "kotlin": f"{arg}.size", "swift": f"{arg}.count",
+        "dart": f"{arg}.length", "r": f"length({arg})", "julia": f"length({arg})",
     }.get(lang, f"len({arg})")
 
 
@@ -375,16 +382,85 @@ def _int_lit(node: Ast) -> bool:
 
 # divisão de inteiros com resultado decimal precisa de conversão explícita nas linguagens tipadas
 _CAST_DIV = {"go": lambda e: f"float64({e})", "rust": lambda e: f"({e} as f64)", "java": lambda e: f"(double) {e}",
-             "csharp": lambda e: f"(double){e}", "c": lambda e: f"(double){e}", "cpp": lambda e: f"static_cast<double>({e})"}
+             "csharp": lambda e: f"(double){e}", "c": lambda e: f"(double){e}", "cpp": lambda e: f"static_cast<double>({e})",
+             "kotlin": lambda e: f"{e}.toDouble()" if e.isidentifier() or _entre_parenteses(e) else f"({e}).toDouble()",
+             "swift": lambda e: f"Double{e}" if _entre_parenteses(e) else f"Double({e})"}
+
+
+def _entre_parenteses(e: str) -> bool:
+    """"(a + b)" sim; "(a) + (b)" não."""
+    if not (e.startswith("(") and e.endswith(")")):
+        return False
+    nivel = 0
+    for i, ch in enumerate(e):
+        nivel += ch == "("
+        nivel -= ch == ")"
+        if nivel == 0 and i < len(e) - 1:
+            return False
+    return True
+# junção de textos: interpolação em vez de "+" (nessas linguagens "texto" + número nem compila, ou é o jeito
+# idiomático); em Python, Go e Ruby só quando um número entra no texto
+_INTERP = {"kotlin", "swift", "dart", "julia", "r", "rust"}
+_INTERP_MISTO = {"python", "go", "ruby"}
 
 
 class Renderer:
     """Renderiza um AST para uma linguagem. ``arith`` = contexto aritmético do bash ((...))."""
 
-    def __init__(self, lang: str, arith: bool = False, typeof=None):
+    def __init__(self, lang: str, arith: bool = False, typeof=None, need=None):
         self.lang = lang
         self.arith = arith
         self.typeof = typeof
+        self.need = need  # o emissor: acrescenta imports (ex.: fmt para Sprintf em Go)
+
+    # ------------------------------------------------------------------ junção de textos
+    def tipo(self, node: Ast) -> str:
+        if node[0] == "str":
+            return "str"
+        t = self.typeof(node) if self.typeof else infer(node)
+        return "int" if t == "num?" else t
+
+    def eh_texto(self, node: Ast) -> bool:
+        if node[0] == "bin" and node[1] == "+":
+            return self.eh_texto(node[2]) or self.eh_texto(node[3])
+        return self.tipo(node) == "str"
+
+    def partes_texto(self, node: Ast) -> list[Ast] | None:
+        """"Olá, " + nome + "!" -> [str, id, str]: só quando a soma é de textos. (a + b) + " reais" mantém a + b
+        como conta, como na linguagem de origem."""
+        if not (node[0] == "bin" and node[1] == "+" and self.eh_texto(node)):
+            return None
+
+        def achatar(n: Ast) -> list[Ast]:
+            if n[0] == "bin" and n[1] == "+" and (self.eh_texto(n[2]) or self.eh_texto(n[3])):
+                return achatar(n[2]) + achatar(n[3])
+            return [n]
+
+        return achatar(node)
+
+    def interpolar(self, partes: list[Ast]) -> str | None:
+        lang = self.lang
+        if lang == "r":
+            return "paste0(" + ", ".join(self(p) for p in partes) + ")"
+
+        def lit(texto: str, chaves: bool = False) -> str:
+            corpo = quote(texto, lang)[1:-1]
+            return corpo.replace("{", "{{").replace("}", "}}") if chaves else corpo
+
+        if lang == "rust":
+            fmt = "".join(lit(p[1], True) if p[0] == "str" else "{}" for p in partes)
+            return 'format!("' + fmt + '"' + "".join(f", {self(p)}" for p in partes if p[0] != "str") + ")"
+        if lang == "go":
+            if self.need is None:
+                return None
+            self.need('import "fmt"')
+            fmt = "".join(lit(p[1]).replace("%", "%%") if p[0] == "str" else "%v" for p in partes)
+            return f'fmt.Sprintf("{fmt}"' + "".join(f", {self(p)}" for p in partes if p[0] != "str") + ")"
+        abre, fecha, prefixo = {"python": ("{", "}", "f"), "kotlin": ("${", "}", ""), "swift": ("\\(", ")", ""),
+                                "dart": ("${", "}", ""), "julia": ("$(", ")", ""), "ruby": ("#{", "}", "")}[lang]
+        corpo = "".join(lit(p[1], lang == "python") if p[0] == "str" else abre + self(p[1] if p[0] == "paren" else p) +
+                        fecha for p in partes)
+        return f'{prefixo}"{corpo}"'
 
     def __call__(self, node: Ast, parent_prec: int = 0) -> str:
         lang = self.lang
@@ -429,6 +505,12 @@ class Renderer:
             if op == "/" and self.typeof and lang in _CAST_DIV and self.typeof(node[2]) == "int" \
                     and self.typeof(node[3]) == "int":
                 lhs, rhs = _CAST_DIV[lang](lhs), (_CAST_DIV[lang](rhs) if lang in ("go", "rust") else rhs)
+            if op == "+" and (lang in _INTERP or lang in _INTERP_MISTO) and (partes := self.partes_texto(node)):
+                misto = any(p[0] != "str" and self.tipo(p) in ("int", "float", "bool") for p in partes)
+                if lang in _INTERP or misto:
+                    texto = self.interpolar(partes)
+                    if texto is not None:
+                        return texto
             if lang == "lua" and op == "+" and "str" in (infer(node[2]), infer(node[3])):
                 text = f"{lhs} .. {rhs}"
             elif lang == "php" and op == "+" and "str" in (infer(node[2]), infer(node[3])):
@@ -450,7 +532,10 @@ class Renderer:
             base = self(node[1], 10)
             return f"{base}->{node[2]}" if lang == "php" else f"{base}.{node[2]}"
         if k == "index":
-            return f"{self(node[1], 10)}[{self(node[2])}]"
+            idx = node[2]
+            if lang in _BASE1 and idx[0] == "num" and "." not in idx[1]:
+                idx = ("num", str(int(idx[1]) + 1))
+            return f"{self(node[1], 10)}[{self(idx)}]"
         if k == "list":
             return self.list_literal(node)
         if k == "dict":
@@ -482,6 +567,12 @@ class Renderer:
             return "{" + joined + "}"
         if lang == "c":
             return "{" + joined + "}"
+        if lang == "kotlin":
+            return f"listOf({joined})" if items else "listOf<Any>()"
+        if lang == "r":
+            return f"c({joined})" if len({infer(x) for x in node[1]}) <= 1 else f"list({joined})"
+        if lang == "julia" and not items:
+            return "Any[]"
         return f"[{joined}]"
 
     def dict_literal(self, node: Ast) -> str:
@@ -505,6 +596,17 @@ class Renderer:
             return "new Dictionary<string, object> { " + ", ".join(f"[{quote(k, lang)}] = {v}" for k, v in pairs) + " }"
         if lang == "java":
             return "Map.of(" + ", ".join(f"{quote(k, lang)}, {v}" for k, v in pairs) + ")"
+        if lang == "kotlin":
+            return "mapOf(" + ", ".join(f"{quote(k, lang)} to {v}" for k, v in pairs) + ")"
+        if lang == "swift":
+            corpo = "[" + ", ".join(f"{quote(k, lang)}: {v}" for k, v in pairs) + "]"
+            return corpo if len({infer(v) for _, v in node[1]}) <= 1 else f"{corpo} as [String: Any]"
+        if lang == "dart":
+            return "{" + ", ".join(f"{quote(k, lang)}: {v}" for k, v in pairs) + "}"
+        if lang == "r":
+            return "list(" + ", ".join(f"{k} = {v}" for k, v in pairs) + ")"
+        if lang == "julia":
+            return "Dict(" + ", ".join(f"{quote(k, lang)} => {v}" for k, v in pairs) + ")"
         raise ExprError("dicionário não suportado nesta linguagem")
 
 
@@ -542,6 +644,30 @@ def c_type(t: str) -> str:
     if (e := _elem(t)) is not None:
         return "const " + c_type(e if e != "?" else "int") + " *"
     return {"int": "int", "float": "double", "str": "const char *", "bool": "bool"}.get(t, "int")
+
+
+def kotlin_type(t: str) -> str:
+    if t.startswith("list"):
+        return f"List<{kotlin_type(_elem(t) or '?')}>"
+    return {"int": "Int", "float": "Double", "str": "String", "bool": "Boolean"}.get(t, "Any")
+
+
+def swift_type(t: str) -> str:
+    if t.startswith("list"):
+        return f"[{swift_type(_elem(t) or '?')}]"
+    return {"int": "Int", "float": "Double", "str": "String", "bool": "Bool"}.get(t, "Any")
+
+
+def dart_type(t: str) -> str:
+    if t.startswith("list"):
+        return f"List<{dart_type(_elem(t) or '?')}>"
+    return {"int": "int", "float": "double", "str": "String", "bool": "bool"}.get(t, "dynamic")
+
+
+def julia_type(t: str) -> str:
+    if t.startswith("list"):
+        return f"Vector{{{julia_type(_elem(t) or '?')}}}"
+    return {"int": "Int", "float": "Float64", "str": "String", "bool": "Bool"}.get(t, "Any")
 
 
 def ts_type(t: str) -> str:

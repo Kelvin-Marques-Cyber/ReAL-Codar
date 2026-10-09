@@ -86,6 +86,10 @@ AMOSTRAS = [
     ("a.c:4:5: error: implicit declaration of function 'printf'\n", "C/C++", "printf sem #include", 4),
     ("index.ts(2,13): error TS2304: Cannot find name 'usuario'.\n", "TypeScript", "usuario não foi declarado", 2),
     ("src/app.tsx:7:3 - error TS2304: Cannot find name 'estado'.\n", "TypeScript", "estado não foi declarado", 7),
+    ("Error: object 'idadee' not found\nExecution halted\n", "R", "idadee não existe", None),
+    ("ERROR: LoadError: UndefVarError: `contador` not defined in local scope\n in expression starting at "
+     "/w/app.jl:8\n", "Julia", "contador não existe", 8),
+    ("app.kt:3:13: error: unresolved reference 'nomee'.\n", "Kotlin", "nomee não existe", 3),
 ]
 
 

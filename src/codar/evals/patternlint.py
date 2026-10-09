@@ -24,7 +24,11 @@ GRAMMARS = {
     "lua": ("tree_sitter_lua", "language"), "php": ("tree_sitter_php", "language_php"), "ruby": ("tree_sitter_ruby", "language"),
     "sql": ("tree_sitter_sql", "language"), "json": ("tree_sitter_json", "language"), "yaml": ("tree_sitter_yaml", "language"),
     "toml": ("tree_sitter_toml", "language"), "css": ("tree_sitter_css", "language"), "html": ("tree_sitter_html", "language"),
+    "kotlin": ("tree_sitter_kotlin", "language"), "swift": ("tree_sitter_swift", "language"),
+    "dart": ("tree_sitter_dart", "language"), "julia": ("tree_sitter_julia", "language"),
 }
+# gramáticas que só existem no tree-sitter-language-pack (baixadas na primeira vez e guardadas em cache)
+PACK = {"r": "r"}
 
 WRAPS = {
     "java": [lambda c: f"class W {{ void m() throws Exception {{\n{c}\n}} }}", lambda c: f"class W {{\n{c}\n}}"],
@@ -36,6 +40,8 @@ WRAPS = {
     "php": [lambda c: f"<?php\n{c}"],
     "typescript": [lambda c: f"async function w() {{\n{c}\n}}"],
     "javascript": [lambda c: f"async function w() {{\n{c}\n}}"],
+    "kotlin": [lambda c: f"fun w() {{\n{c}\n}}"],
+    "dart": [lambda c: f"void w() {{\n{c}\n}}", lambda c: f"class W {{\n{c}\n}}"],
 }
 
 
@@ -56,6 +62,13 @@ def _parser(lang: str):
         return _parsers[lang]
     spec = GRAMMARS.get(lang)
     parser = None
+    if lang in PACK:
+        try:
+            from tree_sitter_language_pack import get_parser
+
+            parser = get_parser(PACK[lang])
+        except Exception:
+            parser = None
     if spec:
         try:
             from tree_sitter import Language, Parser
