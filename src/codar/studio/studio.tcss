@@ -515,3 +515,31 @@ ConfirmScreen {
     height: 3;
     content-align: left middle;
 }
+
+/* ---------------------------------------------------------------- ver no celular (F4) */
+CelularScreen {
+    align: center middle;
+    background: $codar-bg 75%;
+}
+
+#celular-card {
+    width: 72;
+    max-width: 95%;
+    height: auto;
+    max-height: 95%;
+    border: round $codar-orange;
+    border-title-color: $codar-red;
+    border-title-style: bold;
+    border-subtitle-color: $codar-dim;
+    background: $codar-bg;
+    padding: 0 2;
+}
+
+#celular-card > Static {
+    margin-top: 1;
+}
+
+#celular-qr {
+    width: auto;
+    margin-top: 1;
+}

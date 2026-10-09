@@ -15,6 +15,7 @@ import shlex
 import shutil
 import subprocess
 import time
+import urllib.parse
 from functools import partial
 from pathlib import Path
 
@@ -36,7 +37,7 @@ from codar.studio.backend import StudioBackend
 from codar.studio.explorer import SKIP, Explorer
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
-from codar.studio.screens import AdviceScreen, HelpScreen, PromptScreen
+from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen
 from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, aplicar_paleta,
                                   gauge, paleta, tema_ansi, tema_editor)
 from codar.textutil import looks_like_intent
@@ -158,6 +159,7 @@ class Studio(App):
         Binding("ctrl+b", "toggle_left", "Mostrar explorer", show=False, priority=True),
         Binding("f9", "toggle_panel", "Painel", show=False, priority=True),
         Binding("f12", "shell", "Seu shell", show=False, priority=True),
+        Binding("f4", "celular", "Celular", priority=True),
         Binding("f7", "estudo", "Estudo", priority=True),
         Binding("shift+f7", "estudo_aplicar", "Aplicar sugestão do estudo", show=False, priority=True),
         Binding("ctrl+q", "quit", "Sair", priority=True),
@@ -178,6 +180,7 @@ class Studio(App):
         self.intents: list[str] = []
         self.online = False
         self.streaming = False
+        self.rede_srv = None  # prévia na rede ou repasse de servidor (F4: ver no celular)
         self.estudo = False  # modo estudo (F7): o painel ESTUDO acompanha o cursor
         self._estudo_timer = None
         self._estudo_conceito = None
@@ -356,6 +359,8 @@ class Studio(App):
         line.append("  MEMORY BUDGET ", style=C["dim"])
         line.append_text(gauge(total, budget, 26))
         line.append(f" {total:.0f}/{budget} MB ", style=C["mint"])
+        if self.rede_srv is not None:
+            line.append(f"  ◉ REDE :{self.rede_srv.porta} ", style=f"bold {C['mint']}")
         state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["error"])
         line.append(f"  DAEMON {state[0]} ", style=f"bold {state[1]}")
         line.append("  " + time.strftime("%Y-%b-%d %H:%MZ", time.gmtime()).upper(), style=f"bold {C['mint']}")
@@ -1067,6 +1072,8 @@ class Studio(App):
         ed.saved_text = ed.text
         self._update_tab_label(ed)
         self.feed(f"SAVE · {path.name}", "green")
+        if self.rede_srv is not None and hasattr(self.rede_srv, "avisar_mudanca"):
+            self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
         self.verificar_pacotes(ed)
         if self.audit_on:
             self.action_audit_file()
@@ -1125,6 +1132,9 @@ class Studio(App):
             return
         if ed.dirty:
             self._write(ed)
+        if Path(ed.path).suffix.lower() in (".html", ".htm"):  # "rodar" uma página é abrir a prévia
+            self.action_celular()
+            return
         lang = langs.from_path(ed.path)
         runner = self._executor(lang, Path(ed.path))
         if not lang or not runner:
@@ -1229,7 +1239,60 @@ class Studio(App):
 
     def servidor_detectado(self, sessao, url: str) -> None:
         self.feed(f"SERVIDOR · {url}", "cyan")
-        self.notify(f"servidor no ar: {url}", title=f"terminal {sessao.numero}")
+        self.notify(f"servidor no ar: {url} · F4 abre no celular", title=f"terminal {sessao.numero}")
+
+    # ------------------------------------------------------------------ ver no celular
+    def action_celular(self) -> None:
+        """F4: ver no celular. Com um servidor rodando no terminal, repassa ele para a rede (ele continua escutando
+        só neste computador); senão, mostra a pasta do arquivo aberto (páginas, imagens, gráficos) com recarga ao
+        salvar. O endereço tem um código aleatório: só quem recebe o link vê."""
+        from codar import rede
+
+        sessao = next((s for s in [self.terminal.sessao, *self.terminal.sessoes] if s.url and s.rodando()), None)
+        try:
+            if sessao is not None:
+                partes = urllib.parse.urlsplit(sessao.url)
+                if partes.hostname not in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):  # já está na rede
+                    self.push_screen(CelularScreen(f"servidor do terminal {sessao.numero}", sessao.url, sessao.url))
+                    return
+                if not (isinstance(self.rede_srv, rede.ProxyRede) and self.rede_srv.porta_destino == partes.port):
+                    self._parar_rede()
+                    self.rede_srv = rede.ProxyRede(partes.port or 80).iniciar()
+                caminho = partes.path if partes.path not in ("", "/") else ""
+                titulo, url_rede, url_local = (f"repassando o servidor do terminal {sessao.numero}",
+                                               self.rede_srv.url_rede.rstrip("/") + (caminho or "/"), sessao.url)
+            else:
+                ed = self.current_editor()
+                pasta = (Path(ed.path).parent if ed is not None and ed.path else self.root).resolve()
+                if not (isinstance(self.rede_srv, rede.ServidorPrevia) and self.rede_srv.raiz == pasta):
+                    self._parar_rede()
+                    self.rede_srv = rede.ServidorPrevia(pasta).iniciar()
+                arquivo = Path(ed.path).name if ed is not None and ed.path and Path(ed.path).suffix.lower() in (
+                    ".html", ".htm", ".png", ".jpg", ".jpeg", ".svg", ".gif", ".webp") else ""
+                try:
+                    onde = pasta.relative_to(self.root).as_posix()
+                except ValueError:
+                    onde = str(pasta)
+                titulo = f"prévia de {onde if onde != '.' else self.root.name}/{arquivo}"
+                url_rede, url_local = self.rede_srv.url_rede + arquivo, self.rede_srv.url_local + arquivo
+        except OSError as exc:
+            self.notify(f"não consegui abrir a porta: {exc.strerror or exc}", severity="error")
+            return
+        self.feed(f"REDE · {url_rede}", "mint")
+        self.render_status()
+        self.push_screen(CelularScreen(titulo, url_rede, url_local, rede.aviso_firewall(self.rede_srv.porta)),
+                         self._celular_fechado)
+
+    def _celular_fechado(self, acao: str | None) -> None:
+        if acao == "parar":
+            self._parar_rede()
+            self.notify("servidor da rede parado", title="celular")
+
+    def _parar_rede(self) -> None:
+        if self.rede_srv is not None:
+            self.rede_srv.parar()
+            self.rede_srv = None
+            self.render_status()
 
     # ------------------------------------------------------------------ consultor de projeto
     # ------------------------------------------------------------------ dicas de pacotes
@@ -1416,11 +1479,15 @@ class Studio(App):
             ("Codar: Parar processo do terminal", "encerra o processo do terminal ativo", self.action_stop_process),
             ("Codar: Novo terminal", "Ctrl+T dentro do terminal — o outro continua rodando", self.action_novo_terminal),
             ("Codar: Abrir o meu shell", "F12 — o seu terminal de verdade; exit volta ao Studio", self.action_shell),
+            ("Codar: Ver no celular", "F4 — prévia na rede com QR code (ou repassa o servidor do terminal)",
+             self.action_celular),
+            ("Codar: Parar o servidor da rede", "para a prévia/repasse aberto com F4", self._parar_rede),
             ("Codar: Mostrar/ocultar explorer", "Ctrl+B", self.action_toggle_left),
             ("Codar: Mostrar/ocultar painel", "F9", self.action_toggle_panel),
         ]
 
     def on_unmount(self) -> None:
+        self._parar_rede()
         self.terminal.parar_tudo()
         self.backend.close()
 

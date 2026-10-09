@@ -43,6 +43,54 @@ class AdviceScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+def qr_texto(conteudo: str):
+    """QR code para a tela: preto sobre branco explícito (o leitor do celular não depende do tema do terminal)."""
+    from rich.style import Style
+    from rich.text import Text
+
+    from codar.qr import QR
+
+    m = QR(conteudo).linhas(borda=2)
+    if len(m) % 2:
+        m.append([False] * len(m[0]))
+    texto = Text(no_wrap=True)
+    for y in range(0, len(m), 2):
+        for a, b in zip(m[y], m[y + 1]):
+            texto.append("▀", Style(color="#000000" if a else "#ffffff", bgcolor="#000000" if b else "#ffffff"))
+        if y + 2 < len(m):
+            texto.append("\n")
+    return texto
+
+
+class CelularScreen(ModalScreen[str | None]):
+    """F4: o endereço na rede local e o QR code para abrir no celular (no mesmo Wi-Fi)."""
+
+    BINDINGS = [("escape,f4", "fechar", "Fechar"), ("p", "parar", "Parar o servidor")]
+
+    def __init__(self, titulo: str, url_rede: str | None, url_local: str, aviso: str | None = None) -> None:
+        super().__init__()
+        self.titulo, self.url_rede, self.url_local, self.aviso = titulo, url_rede, url_local, aviso
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="celular-card") as card:
+            card.border_title = "VER NO CELULAR"
+            card.border_subtitle = "Esc fecha (o servidor continua) · p para"
+            yield Static(f"[b {C['mint']}]{self.titulo}[/]", id="celular-titulo")
+            if self.url_rede:
+                yield Static(qr_texto(self.url_rede), id="celular-qr")
+                yield Static(f"[{C['dim']}]no celular (mesmo Wi-Fi), aponte a câmera ou abra:[/]\n"
+                             f"[b {C['mint']}]{self.url_rede}[/]")
+            yield Static(f"[{C['dim']}]neste computador:[/] [{C['cyan']}]{self.url_local}[/]")
+            if self.aviso:
+                yield Static(f"[{C['orange']}]{self.aviso}[/]")
+
+    def action_fechar(self) -> None:
+        self.dismiss(None)
+
+    def action_parar(self) -> None:
+        self.dismiss("parar")
+
+
 class PromptScreen(ModalScreen[str | None]):
     BINDINGS = [("escape", "dismiss_none", "Cancelar")]
 
@@ -100,7 +148,9 @@ SHORTCUTS: list[tuple[str, list[tuple[str, str]]]] = [
                  ("Shift+F7", "cria o arquivo que o estudo sugeriu (ex.: main.py comentado)")]),
     ("ARQUIVOS", [("Ctrl+S", "salva"), ("Ctrl+N", "novo arquivo"), ("Ctrl+W", "fecha a aba"),
                   ("Ctrl+B", "mostra/esconde o explorer"), ("F9", "mostra/esconde o painel")]),
-    ("PROJETO", [("F5", "executa o arquivo"), ("F6", "audita o arquivo"), ("F8", "consultor de projeto"),
+    ("PROJETO", [("F5", "executa o arquivo (.html: abre a prévia)"),
+                 ("F4", "ver no celular: prévia na rede com QR code (ou repassa o servidor do terminal)"),
+                 ("F6", "audita o arquivo"), ("F8", "consultor de projeto"),
                  ("Ctrl+Q", "sai")]),
 ]
 

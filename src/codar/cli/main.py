@@ -146,6 +146,45 @@ class _StrIn:
         return self.text
 
 
+def cmd_servir(args) -> int:
+    """Ver no celular: serve uma pasta (páginas, imagens, gráficos salvos) na rede local, ou repassa um servidor de
+    desenvolvimento que só escuta em localhost (--proxy 5173). Mostra os endereços e o QR code."""
+    import time
+
+    from codar import rede
+    from codar.qr import QR
+
+    hud = _hud(sys.stdout)
+    try:
+        if args.proxy:
+            servidor = rede.ProxyRede(args.proxy, porta=args.porta, rede=not args.local).iniciar()
+            url, local, titulo = servidor.url_rede, f"http://127.0.0.1:{args.proxy}/", f"repassando a porta {args.proxy}"
+        else:
+            pasta = Path(args.pasta).expanduser().resolve()
+            if not pasta.is_dir():
+                print(f"codar: {pasta} não é uma pasta", file=sys.stderr)
+                return EXIT_ERR
+            servidor = rede.ServidorPrevia(pasta, porta=args.porta, rede=not args.local).iniciar()
+            url, local, titulo = servidor.url_rede or servidor.url_local, servidor.url_local, f"prévia de {pasta}"
+    except OSError as exc:
+        print(f"codar: não consegui abrir a porta: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_ERR
+    print(hud.pill("REDE", "mint") + " " + hud.c(titulo, "text", bold=True))
+    print("  neste computador:  " + hud.c(local, "cyan"))
+    if not args.local:
+        print("  no celular (mesmo Wi-Fi):  " + hud.c(url, "mint", bold=True))
+        print(QR(url).texto(cores=hud.mode != "none"))
+        if aviso := rede.aviso_firewall(servidor.porta):
+            print("  " + hud.c(aviso, "orange"))
+    print(hud.c("  Ctrl+C para parar", "dim"))
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        servidor.parar()
+    return EXIT_OK
+
+
 def cmd_explicar(args) -> int:
     """Explica o erro de um programa: lê a saída pelo stdin (python app.py 2>&1 | codar explicar) ou roda o comando
     passado depois de -- e explica se ele falhar."""
@@ -536,6 +575,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hints", action="store_true", help="imprime o código com as dicas injetadas")
     p.set_defaults(fn=cmd_audit)
 
+    p = sub.add_parser("servir", aliases=["serve"], help="ver no celular: serve uma pasta na rede local (com QR code) "
+                       "ou repassa um servidor de desenvolvimento (--proxy 5173)")
+    p.add_argument("pasta", nargs="?", default=".", help="pasta a mostrar (padrão: a atual)")
+    p.add_argument("--porta", type=int, default=None, help="porta (padrão: a mesma de sempre, sorteada na primeira vez)")
+    p.add_argument("--proxy", type=int, metavar="PORTA", help="repassa este servidor de localhost para a rede")
+    p.add_argument("--local", action="store_true", help="só neste computador (não abre na rede)")
+    p.set_defaults(fn=cmd_servir)
     p = sub.add_parser("explicar", aliases=["explain"], help="explica o erro de um programa: "
                        "python app.py 2>&1 | codar explicar  (ou: codar explicar -- python app.py)")
     p.add_argument("comando", nargs=argparse.REMAINDER, help="comando a rodar (depois de --)")
