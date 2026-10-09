@@ -4,6 +4,25 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.2.0] - 2026-10-09
+
+### Edição de código
+- A barra de intenção no Studio e no VS Code substitui a seleção. Pedidos explícitos de correção, refatoração ou complemento sem seleção editam o arquivo aberto.
+- O motor recebe código antes/depois e o trecho a substituir em `mode=edit`, sem recorrer a snippets genéricos. A seleção não é cortada silenciosamente.
+- Respostas incompletas, arquivos modificados durante a geração e abas fechadas preservam o código original. Corpo e imports são desfeitos juntos.
+- A limpeza de edições preserva o fim do código; imports não entram de novo dentro do corpo com dicas inline. Cache distingue seleção, contexto, caixa e literais.
+- Neovim e Vim também preservam o buffer quando a geração é incompleta ou o documento mudou.
+- Imports preservam docstrings/future do Python e param/CmdletBinding do PowerShell. Cancelar uma requisição no VS Code impede aplicação tardia e remove os listeners do pedido.
+
+### Dart, Flutter e PowerShell
+- F5 reconhece o pubspec mais próximo: executa o aplicativo Flutter por lib/main.dart, testes por flutter test e scripts Dart por dart run.
+- Dicas de dependências reconhecem package_config.json, pacotes do projeto e bibliotecas do SDK; comandos pub usam a pasta do projeto, inclusive em projetos aninhados.
+- Plugins Flutter e PowerShell acrescentam seis padrões, cinco skills e três regras de auditoria. Imports Dart preservam aliases.
+- `codar toolchains list|install|env` detecta e instala SDKs de programação; `--dry-run` mostra o plano. Dart e PowerShell usam downloads oficiais com SHA-256; Flutter usa o repositório oficial estável. Outros runtimes usam o gerenciador do sistema.
+- SDKs por usuário ficam disponíveis nos terminais do Studio sem alterar arquivos de inicialização do shell.
+- `codar plugins install PASTA` valida e instala plugins locais sem sobrescrever os existentes; `codar skills list|show` permite consultar diretrizes.
+
+
 ## [0.1.1] - 2026-10-09
 
 ### Correções de atualização

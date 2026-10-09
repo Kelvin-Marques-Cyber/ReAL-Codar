@@ -33,7 +33,7 @@ Cada linha passa por três camadas, da mais barata para a mais cara:
 | Camada | O que faz | Tempo típico* |
 |---|---|---|
 | **0 · Compilador** | Regras determinísticas para atribuições, condições, laços, impressão, contas e expressões em português ("o tamanho de pedidos", "a média entre x e y"), além de abreviações HTML e CSS no estilo Emmet. Sem IA. | < 1 ms |
-| **1 · Banco de padrões** | 125 padrões incluídos: calculadora, Dijkstra, CPF/CNPJ (incluindo o CNPJ alfanumérico), Pix copia e cola, programas de linha de comando, gravação atômica de arquivos, CI, Dockerfile e mais. Usado quando você pede uma funcionalidade ("criar uma calculadora"). | < 5 ms |
+| **1 · Banco de padrões** | 131 padrões incluídos: calculadora, Dijkstra, CPF/CNPJ (incluindo o CNPJ alfanumérico), Pix copia e cola, widgets Flutter, funções PowerShell, programas de linha de comando, gravação atômica de arquivos, CI, Dockerfile e mais. Usado quando você pede uma funcionalidade ("criar uma calculadora"). | < 5 ms |
 | **2 · IA local** | Qwen2.5-Coder 1.5B via llama.cpp, em **modo literal**: traduz só o que a linha diz, sem inventar funções, imports ou dados de exemplo. Usa o código acima do cursor como contexto. | ~2 s |
 
 \* Medido num notebook Intel i7-7500U (2 núcleos, 2016), sem GPU. A primeira frase de cada linguagem que não foi pré-aquecida leva cerca de 10 s.
@@ -75,6 +75,7 @@ codar version --verbose
 codar restart
 codar doctor
 codar servir --help
+codar toolchains --help
 ```
 
 O `version --verbose` mostra o caminho do código e o **commit instalado**. Assim você consegue distinguir revisões que ainda têm o mesmo número de versão. `codar version --json` fornece esses dados para scripts. Configurações, modelos e plugins do usuário ficam fora do ambiente do pipx e não são apagados por essa atualização.
@@ -169,6 +170,68 @@ O Studio funciona em qualquer terminal, inclusive via SSH; no console puro do Li
 ![Ajuda do Studio (F1) com os atalhos agrupados](docs/img/ajuda.png)
 
 O Studio também tem explorer de arquivos, abas, terminal integrado, execução com **F5**, auditoria com **F6**, modo de estudo com **F7** e consultor com **F8**. `Ctrl+E`, `Ctrl+T` e `Esc` alternam o foco entre explorer, terminal e editor. `codar explicar -- python app.py` executa um programa e explica erros reconhecidos; também aceita a saída pelo stdin.
+
+### Corrigir e completar código existente
+
+No Studio, selecione o trecho, pressione **Ctrl+L** e descreva a alteração, por exemplo: `corrija a validação sem mudar a assinatura`. A resposta **substitui a seleção**. No VS Code, use **Codar: Traduzir intenção…** com o trecho selecionado.
+
+Sem seleção, pedidos que começam com `corrija`, `refatore`, `reescreva`, `substitua`, `complete`, `melhore` ou `otimize` substituem o **arquivo aberto inteiro**, se ele contém código. Pedidos de criação continuam inserindo código abaixo da linha atual. Para uma alteração pequena, selecione apenas o trecho necessário. **Ctrl+Z** desfaz corpo e imports juntos; o arquivo só é salvo quando você manda salvar.
+
+A edição usa a IA local (S2). O motor recebe o trecho original e o código ao redor, com instruções para devolver uma substituição completa. Se o arquivo mudar durante a geração, a aba for fechada ou a resposta atingir o limite de tokens, o código original é preservado e a resposta fica em **SAÍDA**. A qualidade do resultado depende do modelo: revise a alteração antes de salvar.
+
+O limite de seleção é `router.max_edit_chars` (12.000 caracteres). Isso não aumenta a capacidade do modelo. Se o prompt não couber ou a resposta ficar incompleta, selecione um trecho menor. Para edições maiores, ajuste o contexto e a saída e reinicie o daemon, respeitando a RAM disponível:
+
+```bash
+codar config set model.n_ctx 4096
+codar config set model.max_tokens 1024
+codar restart
+```
+
+Pelo terminal, você pode gerar a substituição sem escrever no arquivo original:
+
+```bash
+codar run --mode edit --file app.ps1 "refatore preservando os parâmetros" > app-revisado.ps1
+```
+
+### Dart, Flutter e PowerShell
+
+O compilador já traduz pseudocódigo para Dart e PowerShell. Os plugins incluídos acrescentam exemplos de **MaterialApp**, **StatelessWidget**, **StatefulWidget**, consumo de JSON em Dart e funções PowerShell com parâmetros e pipeline:
+
+```bash
+codar run --local --stages 0,1 -l flutter "criar aplicativo flutter materialapp"
+codar run --local --stages 0,1 -l dart "criar widget stateless flutter"
+codar run --local --stages 0,1 -l powershell "ler arquivo json powershell"
+```
+
+No Studio, **F5** em `lib/` de um projeto Flutter executa `lib/main.dart`; em `test/*_test.dart`, executa `flutter test`. Arquivos Dart comuns usam `dart run`. A detecção procura o `pubspec.yaml` mais próximo dentro da pasta aberta, inclusive em projetos aninhados. **F8** mostra dependências ausentes e oferece `flutter pub get`, `flutter pub add`, `dart pub get` ou `dart pub add` na pasta correta. Imports de `dart:`, do próprio pacote e de bibliotecas já resolvidas não geram instalação indevida.
+
+Para criar um projeto, abra o terminal do Studio (**Ctrl+T**) e use `flutter create meu_app` ou `dart create meu_app`; depois abra essa pasta com `codar studio meu_app`. Em Flutter, selecione o dispositivo quando o comando pedir; `r` e Enter no terminal enviam hot reload. `flutter doctor` identifica os requisitos de Android, web ou desktop que ainda faltam.
+
+### Instalar ferramentas de programação
+
+O CODAR funciona sem SDKs para **gerar** código. Para **executar**, instale as ferramentas necessárias:
+
+```bash
+codar toolchains list
+codar toolchains install flutter --dry-run  # mostra a origem e a pasta, sem baixar
+codar toolchains install flutter           # canal stable; requer Git
+codar toolchains install dart              # SDK Dart independente, se ainda não existir
+codar toolchains install powershell        # PowerShell 7, comando pwsh
+codar toolchains install go rust           # pelo gerenciador do sistema
+```
+
+SDKs de Dart e PowerShell são baixados de fontes oficiais e conferidos por **SHA-256**, extraídos numa pasta temporária e publicados só depois da validação. Flutter vem do [repositório oficial](https://github.com/flutter/flutter), branch `stable`; o primeiro uso prepara as dependências do SDK e pode baixar arquivos adicionais. SDKs gerenciados ficam na pasta de dados do CODAR, no seu usuário, sem alterar arquivos do shell. Os terminais do Studio os reconhecem automaticamente. PowerShell portátil ainda depende das bibliotecas nativas do seu sistema.
+
+Python, Node.js/TypeScript, Go, Rust, Java, C/C++, PHP, Ruby e Lua usam o gerenciador disponível: apt, dnf, zypper, pacman, apk, Homebrew ou WinGet. A disponibilidade varia por sistema; ferramentas ausentes no catálogo daquele gerenciador geram uma mensagem clara. Instalações de pacotes do sistema podem solicitar a senha do `sudo` ou elevação do Windows. Instalações existentes são aproveitadas.
+
+Para usar os SDKs gerenciados também fora do Studio, execute no terminal atual:
+
+```bash
+eval "$(codar toolchains env)"                    # Bash/Zsh
+codar toolchains env --shell fish | source         # Fish
+```
+
+No PowerShell: `codar toolchains env --shell powershell | Invoke-Expression`. Fontes e requisitos: [Dart SDK](https://dart.dev/get-dart), [Flutter](https://docs.flutter.dev/install/manual) e [PowerShell](https://learn.microsoft.com/powershell/scripting/install/installing-powershell).
 
 ### Ver o projeto no celular
 
@@ -273,10 +336,16 @@ Padrões, regras de auditoria, skills e sugestões do consultor são arquivos TO
 
 ```bash
 codar plugins new meu-plugin          # cria a estrutura em ~/.config/codar/plugins/meu-plugin
+codar plugins install ./meu-plugin    # valida e instala um plugin local, sem sobrescrever outro
+codar plugins list
+codar skills list -l dart
+codar skills show flutter.widgets
 codar patterns add --title "Ler CSV" --keywords "ler csv arquivo" --code-file ler_csv.py -l python
 ```
 
 Guia completo em [docs/EXTENDING.md](docs/EXTENDING.md). Arquitetura e protocolo em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) e [docs/PROTOCOL.md](docs/PROTOCOL.md).
+
+Skills do CODAR são diretrizes TOML usadas pela IA local. Você pode editá-las dentro de um plugin criado com `plugins new`, instalar a pasta com `plugins install` e executar `codar restart`. A instalação valida os arquivos sem executar `plugin.py`; extensões Python de terceiros continuam dependendo da opção explícita `plugins.allow_python`.
 
 ## Desenvolvimento
 

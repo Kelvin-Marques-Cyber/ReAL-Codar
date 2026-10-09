@@ -68,8 +68,9 @@ _INSTALAR = {"bun": "instale com: curl -fsSL https://bun.sh/install | bash (depo
              "gcc": "instale o compilador: sudo zypper install gcc (ou apt install build-essential)",
              "git": "instale o git: sudo zypper install git (ou apt install git)",
              "docker": "instale o Docker (ou o podman, que usa os mesmos comandos)",
-             "flutter": "instale o Flutter SDK (flutter.dev) e ponha flutter/bin no PATH",
-             "dart": "o Dart vem com o Flutter, ou instale o Dart SDK"}
+             "flutter": "instale com: codar toolchains install flutter",
+             "dart": "instale com: codar toolchains install dart (ou use o SDK que vem com Flutter)",
+             "pwsh": "instale o PowerShell 7 com: codar toolchains install powershell"}
 
 
 def explicar(saida: str | list[str], raiz: Path | str | None = None) -> Explicacao | None:

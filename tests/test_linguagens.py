@@ -94,9 +94,13 @@ SAIDAS = {"texto_numero": "Total: 10\nOlá, Ana (10)\n", "lacos": "oi\noi\noi\n1
           "listas": "Ana\nBia\nCaio\n3\nAna\n", "funcao": "10\n", "se_senao": "aprovado\n", "media": "7.5\n",
           "entrada": "Nome: Idade: Ano que vem: 31\n"}
 ENTRADA = "Ana\n30\n"
+# Read-Host ecoa a entrada recebida por pipe, diferente de input()/stdin.readLineSync().
+SAIDAS_PS = {"entrada": "Nome: Ana\nIdade: 30\nAno que vem: 31\n"}
 EXECUTORES = {
     "python": ("app.py", lambda a: [sys.executable, a]),
     "javascript": ("app.mjs", lambda a: ["node", a]),
+    "dart": ("app.dart", lambda a: ["dart", "run", a]),
+    "powershell": ("app.ps1", lambda a: ["pwsh", "-NoLogo", "-NoProfile", "-File", a]),
     "c": ("app.c", lambda a: ["sh", "-c", f"gcc -std=c11 -o app {a} && ./app"]),
 }
 
@@ -108,13 +112,15 @@ def test_programas_rodam_com_a_saida_certa(nome, lang, tmp_path):
     if not shutil.which(comando("x")[0]) or (lang == "c" and not shutil.which("gcc")):
         pytest.skip(f"sem {lang} nesta máquina")
     codigo = compilar(nome, lang)
+    if lang == "dart":
+        codigo = _main(codigo, lang, "void main()")
     if lang == "c":
         codigo = "\n".join(ln for ln in codigo.splitlines() if ln.startswith("#include")) + "\n\nint main(void) {\n" + \
             "\n".join("    " + ln for ln in codigo.splitlines() if not ln.startswith("#include")) + "\n    return 0;\n}\n"
     (tmp_path / arquivo).write_text(codigo, encoding="utf-8")
     r = subprocess.run(comando(arquivo), cwd=tmp_path, input=ENTRADA, capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
-    assert r.stdout == SAIDAS[nome], codigo
+    assert r.stdout == (SAIDAS_PS.get(nome, SAIDAS[nome]) if lang == "powershell" else SAIDAS[nome]), codigo
 
 
 # Execução de verdade nas linguagens que não costumam estar instaladas: imagens oficiais (docker) e o kotlinc.

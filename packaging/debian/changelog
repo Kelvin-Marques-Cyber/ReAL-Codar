@@ -1,3 +1,10 @@
+codar (0.2.0-1) unstable; urgency=medium
+
+  * Edita trechos existentes sem duplicar código, com contexto e aplicação atômica.
+  * Adiciona suporte a projetos Flutter, SDKs opcionais e plugins locais.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Fri, 09 Oct 2026 18:30:00 -0300
+
 codar (0.1.1-1) unstable; urgency=medium
 
   * Corrige a identificação da instalação e o fluxo de atualização via pipx.

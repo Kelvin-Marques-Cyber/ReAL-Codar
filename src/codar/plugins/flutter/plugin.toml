@@ -1,0 +1,4 @@
+[plugin]
+name = "flutter"
+version = "1.0.0"
+description = "Padrões Dart/Flutter, widgets com null safety e diretrizes de estado, testes e dependências"

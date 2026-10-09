@@ -119,9 +119,17 @@ def guess_fmt(path: Path) -> str:
 
 
 def build_prompt(fmt: str, lang_name: str, fence: str, task: str, *, guidance: list[str] | None = None,
-                 reference: tuple[str, str, str] | None = None, context: str = "") -> str:
+                 reference: tuple[str, str, str] | None = None, context: str = "", after: str = "",
+                 selected: str | None = None) -> str:
     """Prompt mínimo com resposta pré-preenchida (abre o bloco de código), o que elimina texto explicativo."""
     system = SYSTEM.format(lang=lang_name)
+    if selected is not None:
+        system += (" Replace the selected code according to the task. Return the COMPLETE replacement, including "
+                   "unchanged parts of the selection. Do not append the old version or repeat surrounding code. "
+                   "Preserve existing names, imports and behavior unless the task requires changing them. "
+                   "Never use ellipses or placeholders for omitted code.")
+    elif context or after:
+        system += " Return only new code for the cursor. Do not repeat code already before or after the cursor."
     if guidance:
         system += "\nRules:\n" + "\n".join(f"- {g}" for g in guidance)
     user = []
@@ -130,6 +138,10 @@ def build_prompt(fmt: str, lang_name: str, fence: str, task: str, *, guidance: l
         user.append(f"Reference pattern ({title}); adapt it, do not copy blindly:\n```{ref_fence}\n{code.strip()}\n```")
     if context:
         user.append(f"Existing code before the cursor:\n```{fence}\n{context.rstrip()}\n```")
+    if selected is not None:
+        user.append(f"Selected code to replace:\n```{fence}\n{selected}\n```")
+    if after:
+        user.append(f"Existing code after the cursor (keep unchanged):\n```{fence}\n{after}\n```")
     user.append(f"Task: {task.strip()}")
     prompt = (f"<|im_start|>system\n{system}<|im_end|>\n"
               f"<|im_start|>user\n" + "\n\n".join(user) + "<|im_end|>\n<|im_start|>assistant\n")
@@ -146,7 +158,7 @@ LITERAL_SYSTEM = ("You translate pseudo-code (Portuguese or English) into {lang}
 
 
 def build_literal_prompt(fmt: str, lang_name: str, fence: str, intent: str, examples: list[tuple[str, str]],
-                         context: str = "") -> str:
+                         context: str = "", after: str = "") -> str:
     """Tradução literal de pseudocódigo: exemplos few-shot (gerados pelo compilador do Estágio 0) ensinam o
     modelo a responder só a linha pedida — é o que impede a "alucinação" de programas inteiros."""
     think = "<think>\n\n</think>\n\n" if fmt == "chatml-nothink" else ""
@@ -156,5 +168,7 @@ def build_literal_prompt(fmt: str, lang_name: str, fence: str, intent: str, exam
     user = intent.strip()
     if context:
         user = f"Code already written (do not repeat it):\n```{fence}\n{context.rstrip()}\n```\n\n{user}"
+    if after:
+        user = f"Code after the cursor (do not repeat it):\n```{fence}\n{after}\n```\n\n{user}"
     parts.append(f"<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n{think}```{fence}\n")
     return "".join(parts)

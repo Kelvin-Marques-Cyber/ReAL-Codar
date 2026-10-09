@@ -27,10 +27,11 @@ class StudioBackend:
 
     def translate(self, intent: str, lang: str | None, *, file: str | None, before: str, indent: str,
                   indent_unit: str | None, stages: tuple[int, ...], hints: bool,
+                  after: str = "", selected: str = "", mode: str = "auto",
                   on_delta: Callable[[str], None] | None = None) -> dict:
         with self._client() as c:
             return c.translate(intent, lang, file=file, before=before, indent=indent, indent_unit=indent_unit,
-                               stages=stages, hints=hints, on_delta=on_delta)
+                               after=after, selected=selected, mode=mode, stages=stages, hints=hints, on_delta=on_delta)
 
     def audit(self, code: str, lang: str) -> dict:
         with self._client() as c:

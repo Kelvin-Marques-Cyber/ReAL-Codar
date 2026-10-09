@@ -1,0 +1,26 @@
+[[rule]]
+id = "DART001"
+langs = ["dart"]
+pattern = 'print\('
+severity = "info"
+category = "style"
+message = "print é útil para depuração; em aplicativos considere um logger configurável"
+suggestion = "evite registrar dados sensíveis e remova logs de depuração da versão de produção"
+
+[[rule]]
+id = "DART002"
+langs = ["dart"]
+pattern = 'HttpOverrides\.global\s*='
+severity = "warning"
+category = "security"
+message = "Alterar HttpOverrides.global afeta as conexões HTTP de todo o processo"
+suggestion = "mantenha a validação de certificados; prefira configurar um cliente local"
+
+[[rule]]
+id = "DART003"
+langs = ["dart"]
+pattern = 'sleep\('
+severity = "warning"
+category = "performance"
+message = "sleep bloqueia o isolate, podendo congelar a interface Flutter"
+suggestion = "em código assíncrono, use await Future.delayed(Duration(...))"

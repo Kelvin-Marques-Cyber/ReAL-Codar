@@ -379,18 +379,20 @@ class TerminalPainel(Vertical):
             campo.placeholder = TERM_IDLE if onde == "." else f"{onde} {TERM_IDLE}"
 
     # ------------------------------------------------------------------ execução
-    def executar(self, cmd: str, visivel: str | None = None) -> None:
+    def executar(self, cmd: str, visivel: str | None = None, cwd: Path | None = None) -> None:
         """Roda no terminal ativo; se ele está ocupado (ex.: bun run dev), abre outro terminal para o comando."""
         if self.sessao.rodando():
-            self.app.call_later(self._executar_em_novo, cmd, visivel)
+            self.app.call_later(self._executar_em_novo, cmd, visivel, cwd)
             return
-        self._iniciar(self.sessao, cmd, visivel)
+        self._iniciar(self.sessao, cmd, visivel, cwd)
 
-    async def _executar_em_novo(self, cmd: str, visivel: str | None) -> None:
+    async def _executar_em_novo(self, cmd: str, visivel: str | None, cwd: Path | None = None) -> None:
         sessao = await self.nova_sessao(focar=False)
-        self._iniciar(sessao, cmd, visivel)
+        self._iniciar(sessao, cmd, visivel, cwd)
 
-    def _iniciar(self, sessao: Sessao, cmd: str, visivel: str | None) -> None:
+    def _iniciar(self, sessao: Sessao, cmd: str, visivel: str | None, cwd: Path | None = None) -> None:
+        if cwd is not None:
+            sessao.cwd = cwd.resolve()
         onde = self._rel(sessao.cwd)
         sessao.comando, sessao.codigo, sessao.url = visivel or cmd, None, None
         sessao.saida.clear()
@@ -404,7 +406,9 @@ class TerminalPainel(Vertical):
         pergunta na hora, a saída não fica presa em buffer, Ctrl+C e getpass funcionam). No Windows, pipes."""
         chamar = self.app.call_from_thread
         t0 = time.monotonic()
-        env = {**self.ambiente, **SEM_PAGINADOR, "PYTHONUNBUFFERED": "1", "TERM": "xterm-256color",
+        from codar.toolchains import environment
+
+        env = {**environment(self.ambiente), **SEM_PAGINADOR, "PYTHONUNBUFFERED": "1", "TERM": "xterm-256color",
                "CODAR_STUDIO": "1"}
         mestre = None
         try:

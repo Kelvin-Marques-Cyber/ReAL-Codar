@@ -25,7 +25,7 @@ from functools import lru_cache
 
 from codar.engine.models import STOP, build_literal_prompt, build_prompt
 from codar.engine.postprocess import (clean_generation, detect_indent_unit, join_imports, prune_imports,
-                                     prune_sample_data, reindent, split_imports)
+                                     prune_sample_data, reindent, split_imports, strip_context_echo)
 from codar.engine.stage0 import Stage0, clean_intent, extract_lang_hint
 from codar.engine.stage1 import Match, PatternStore, compose, extract_slots
 from codar.engine.stage2 import Cancelled, ModelUnavailable, Stage2, plan_prompt, plan_schema
@@ -96,12 +96,14 @@ class Request:
     lang_explicit: bool = False
     file: str | None = None
     before: str = ""
+    after: str = ""
+    selected: str = ""
     indent: str = ""
     indent_unit: str | None = None
     stages: tuple[int, ...] = (0, 1, 2)
     audit: bool = True
     hints: bool = False
-    mode: str = "auto"  # auto | line | block
+    mode: str = "auto"  # auto | line | block | insert | edit
 
     @classmethod
     def from_params(cls, p: dict[str, Any], default_lang: str | None = None) -> Request:
@@ -110,6 +112,7 @@ class Request:
         stages = tuple(int(s) for s in opts.get("stages", (0, 1, 2)))
         return cls(intent=str(p.get("intent", "")), lang=p.get("lang") or default_lang,
                    lang_explicit=bool(p.get("lang")), file=ctx.get("file"), before=str(ctx.get("before", ""))[-6000:],
+                   after=str(ctx.get("after", ""))[:3000], selected=str(ctx.get("selected", "")),
                    indent=str(ctx.get("indent", "")), indent_unit=ctx.get("indent_unit"), stages=stages,
                    audit=bool(opts.get("audit", True)), hints=bool(opts.get("hints", False)),
                    mode=str(opts.get("mode", "auto")))
@@ -132,6 +135,8 @@ class Result:
     file_suggestion: dict | None = None
     cached: bool = False
     notes: list[str] = field(default_factory=list)
+    complete: bool = True
+    annotated_body: str | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -189,8 +194,9 @@ class Router:
 
     # ------------------------------------------------------------------ cache
     def _key(self, req: Request, lang: str, intent: str) -> str:
-        ctx = hashlib.sha1(req.before[-400:].encode()).hexdigest()[:8] if 2 in req.stages else ""
-        return "|".join([fold(intent), lang, req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
+        # O compilador também depende das variáveis do contexto. Caixa e aspas da intenção importam.
+        ctx = hashlib.sha256(repr((req.before, req.after, req.selected)).encode()).hexdigest()
+        return "|".join([intent, lang, req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
                          str(req.hints), str(req.audit), req.mode, ctx])
 
     def cache_get(self, key: str) -> Result | None:
@@ -228,7 +234,9 @@ class Router:
             self.metrics.record(res, intent)
             return res
         known = set(_IDENT.findall(req.before[-3000:]))
-        if req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip()):
+        if req.mode == "edit":
+            res = await self._edit(intent, lang, req, timings, on_token, cancel)
+        elif req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip()):
             linhas = sum(1 for ln in intent.splitlines() if ln.strip())
             maximo = int(self.rcfg.get("max_block_lines", 30))
             if linhas > maximo:
@@ -238,7 +246,7 @@ class Router:
         else:
             res = await self._translate_line(intent, lang, req, known, timings, on_token, cancel)
         self._finish(res, req, timings, t0)
-        if res.stage != "2:gen" or not res.notes:
+        if res.complete and (res.stage != "2:gen" or not res.notes):
             self.cache_put(key, res)
         self.metrics.record(res, intent)
         return res
@@ -273,9 +281,50 @@ class Router:
                              **({"col": f.col + margin} if margin and f.line > offset else {})} for f in findings]
             if req.hints or self.cfg.get("audit", {}).get("inline_hints"):
                 res.annotated = self.auditor.annotate(res.code, findings, res.lang)
+                body_findings = [dataclasses.replace(f, line=f.line - offset) for f in findings if f.line > offset]
+                res.annotated_body = self.auditor.annotate(res.body, body_findings, res.lang)
             timings["audit_ms"] = round((time.perf_counter() - ta) * 1000, 3)
         timings["total_ms"] = round((time.perf_counter() - t0) * 1000, 3)
         res.timings = timings
+
+    async def _edit(self, intent, lang, req, timings, on_token, cancel) -> Result:
+        """Reescrita explícita: não troca um pedido sobre código existente por um snippet do banco."""
+        if not req.selected.strip():
+            raise TranslateError("selecione o código que deseja editar")
+        maximum = int(self.rcfg.get("max_edit_chars", 12000))
+        if len(req.selected) > maximum:
+            raise TranslateError(f"seleção com {len(req.selected)} caracteres; o máximo é {maximum} "
+                                 "(router.max_edit_chars). Selecione um trecho menor")
+        if 2 not in req.stages or self.stage2 is None or not self.stage2.configured():
+            raise TranslateError("editar código existente precisa da IA local: habilite S2 e rode `codar model pull`")
+
+        guidance_task = intent
+        if lang.id == "dart" and "package:flutter/" in req.selected + req.before:
+            guidance_task += " flutter widget"
+
+        def builder(level):
+            # A seleção nunca é cortada durante a redução do prompt por pressão de memória.
+            return build_prompt(self.stage2.fmt, lang.name, lang.fence, intent, selected=req.selected,
+                                context=req.before[-3000:] if level == 0 else "",
+                                after=req.after[:3000] if level == 0 else "",
+                                guidance=self._guidance(guidance_task, lang.id))
+
+        t = time.perf_counter()
+        gen = await asyncio.wrap_future(self.stage2.submit(self.stage2.generate, builder, on_token=on_token,
+                                                           cancel=cancel))
+        timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
+        timings["tokens"] = gen.tokens
+        # Não "conserta" Python removendo o fim do arquivo nem poda imports usados fora da seleção.
+        code = clean_generation(gen.text, lang.id, repair=False)
+        if not code.strip():
+            raise TranslateError("a IA devolveu uma edição vazia; seu código foi preservado")
+        imports, body = split_imports(code, lang.id)
+        res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:edit",
+                     source=f"slm:{self.stage2.name}", confidence=0.5, complete=gen.finish != "length")
+        if not res.complete:
+            res.notes.append("edição incompleta: selecione um trecho menor ou aumente model.max_tokens; "
+                             "o código original deve ser preservado")
+        return res
 
     # ------------------------------------------------------------------ uma linha
     @staticmethod
@@ -314,9 +363,8 @@ class Router:
                     imports, body = emit(parsed.nodes, lang.id)
                     res = Result(code="", body=body, imports=imports, lang=lang.id, stage="0",
                                  source=f"stage0:{parsed.construct}", confidence=parsed.confidence)
-                except EmitError as exc:
+                except EmitError:
                     timings["stage0_skip"] = 1
-                    del exc
             timings["stage0_ms"] = round((time.perf_counter() - t) * 1000, 3)
             if res:
                 return res
@@ -346,7 +394,6 @@ class Router:
         useful = [m for m in matches if m.score >= rag_min]
         loop = asyncio.get_running_loop()
         if pseudo:  # pseudocódigo nunca vira padrão por similaridade parcial: tradução literal
-            return await self._literal(intent, lang, req, timings, on_token, cancel, cands)
             return await self._literal(intent, lang, req, timings, on_token, cancel, cands)
         # 2a: compositor — a IA escolhe ferramentas verificadas em vez de escrever código
         if useful:
@@ -381,7 +428,7 @@ class Router:
             if ref and level == 1:
                 ref = (ref[0], ref[1], "\n".join(ref[2].split("\n")[:30]))
             return build_prompt(fmt, lang.name, lang.fence, intent, guidance=guidance if level < 3 else guidance[:2],
-                                reference=ref, context=context if level == 0 else "")
+                                reference=ref, context=context if level == 0 else "", after=req.after[:3000])
 
         t = time.perf_counter()
         try:
@@ -391,11 +438,12 @@ class Router:
             raise TranslateError(str(exc), cands) from exc
         timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = gen.tokens
-        code = prune_imports(clean_generation(gen.text, lang.id), lang.id)
+        code = strip_context_echo(clean_generation(gen.text, lang.id), context, req.after)
+        code = prune_imports(code, lang.id)
         imports, body = split_imports(code, lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:adapt" if reference else "2:gen",
                      source=f"slm:{self.stage2.name}" + (f"+ref:{ref_pattern.id}" if ref_pattern else ""),
-                     confidence=0.5, candidates=cands)
+                     confidence=0.5, candidates=cands, complete=gen.finish != "length")
         if gen.finish == "length":
             res.notes.append("geração atingiu o limite de tokens; revise o final do código")
         return res
@@ -410,7 +458,7 @@ class Router:
 
         def builder(level: int) -> str:
             return build_literal_prompt(fmt, lang.name, lang.fence, intent, examples[: 3 - level] if level else examples,
-                                        context if level == 0 else "")
+                                        context if level == 0 else "", after=req.after[:3000])
 
         n_lines = intent.count("\n") + 1
         t = time.perf_counter()
@@ -425,12 +473,11 @@ class Router:
         code = clean_generation(gen.text, lang.id)
         if n_lines == 1 and "\n\n" in code.strip("\n"):
             code = code.strip("\n").split("\n\n", 1)[0]  # uma linha de pseudocódigo -> um bloco de código
-        lines = code.split("\n")
-        while lines and ctx_lines and lines[0].strip() and lines[0].strip() in {c.strip() for c in ctx_lines}:
-            lines.pop(0)  # o modelo repetiu o contexto
-        imports, body = split_imports(prune_sample_data(prune_imports("\n".join(lines), lang.id), intent), lang.id)
+        code = strip_context_echo(code, context, req.after)
+        imports, body = split_imports(prune_sample_data(prune_imports(code, lang.id), intent), lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:pseudo",
-                     source=f"slm:{self.stage2.name}:literal", confidence=0.6, candidates=cands)
+                     source=f"slm:{self.stage2.name}:literal", confidence=0.6, candidates=cands,
+                     complete=gen.finish != "length")
         res.notes.append("pseudocódigo traduzido pela IA em modo literal; ensine o compilador salvando como padrão")
         return res
 
@@ -519,6 +566,7 @@ class Router:
         stages_used = {"0"}
         unresolved = [n for n in _walk_all(nodes) if isinstance(n, ir.Unresolved)]
         limite_ia, com_ia = int(self.rcfg.get("max_block_ai_lines", 8)), 0
+        complete = True
         for node in unresolved:
             # depois de max_block_ai_lines linhas pela IA, o resto só tenta o banco de padrões (rápido)
             stages = tuple(s for s in req.stages if s and (s != 2 or com_ia < limite_ia))
@@ -526,6 +574,7 @@ class Router:
             try:
                 res = await self._translate_line(node.text, lang, sub, known, {}, None, cancel)
                 stages_used.add(res.stage)
+                complete = complete and res.complete
                 com_ia += res.stage.startswith("2")
                 _replace(nodes, node, ir.Raw(res.body, res.imports))
             except TranslateError:
@@ -536,10 +585,13 @@ class Router:
             raise TranslateError(f"pseudocódigo não suportado em {lang.name}: {exc}") from exc
         stage = max(stages_used, key=lambda s: (s[0], len(s)))
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage=stage,
-                     source=f"block:{len(text.splitlines())} linhas", confidence=1.0 if not misses else 0.7)
+                     source=f"block:{len(text.splitlines())} linhas", confidence=1.0 if not misses else 0.7,
+                     complete=complete)
         left = sum(1 for n in _walk_all(nodes) if isinstance(n, ir.Unresolved))
         if left:
             res.notes.append(f"{left} linha(s) não resolvida(s) viraram TODO")
+        if not complete:
+            res.notes.append("uma tradução do bloco atingiu o limite de tokens; preserve o código original")
         return res
 
     # ------------------------------------------------------------------ utilidades

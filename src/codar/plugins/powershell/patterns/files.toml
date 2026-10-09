@@ -1,0 +1,51 @@
+[[pattern]]
+id = "powershell.json.file"
+title = "Ler arquivo JSON em PowerShell"
+keywords = "ler arquivo json powershell funcao get content convertfrom json"
+require = ["json"]
+tags = ["powershell", "io"]
+[pattern.code]
+powershell = '''
+function Get-JsonFile {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [ValidateNotNullOrEmpty()]
+        [string] $Path
+    )
+    process {
+        try {
+            Get-Content -LiteralPath $Path -Raw -Encoding utf8 -ErrorAction Stop |
+                ConvertFrom-Json -ErrorAction Stop
+        }
+        catch {
+            $PSCmdlet.ThrowTerminatingError($_)
+        }
+    }
+}
+'''
+
+[[pattern]]
+id = "powershell.files.filter"
+title = "Listar arquivos por extensão em PowerShell"
+keywords = "listar arquivos extensao powershell recursivo pasta pipeline filtrar"
+require = ["arquivos", "files"]
+tags = ["powershell", "io"]
+[pattern.code]
+powershell = '''
+function Get-FilesByExtension {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string] $Path,
+
+        [ValidatePattern('^\.[A-Za-z0-9]+$')]
+        [string] $Extension = '.ps1',
+
+        [switch] $Recurse
+    )
+    Get-ChildItem -LiteralPath $Path -File -Recurse:$Recurse -ErrorAction Stop |
+        Where-Object { $_.Extension -eq $Extension }
+}
+'''

@@ -126,6 +126,8 @@ Para Python há também regras sobre a árvore sintática (`src/codar/audit/pyth
 
 ## Skills
 
+Consulte as diretrizes carregadas com `codar skills list -l dart` ou `codar skills show flutter.widgets`. Para instalar um plugin local com seus padrões, regras e `skills.toml`, execute `codar plugins install ./pasta-do-plugin` e depois `codar restart`. A pasta precisa ter `plugin.toml`; arquivos inválidos, links simbólicos e destinos existentes são recusados. A validação não executa `plugin.py`.
+
 Skills são diretrizes curtas que entram no prompt da IA quando ela gera código livre (não no modo literal). Ficam em inglês porque modelos pequenos seguem instruções em inglês com mais consistência:
 
 ```toml

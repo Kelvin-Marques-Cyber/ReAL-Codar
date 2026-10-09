@@ -1,0 +1,109 @@
+[[pattern]]
+id = "flutter.app"
+title = "Aplicativo Flutter com MaterialApp e Scaffold"
+keywords = "criar aplicativo app flutter materialapp scaffold tela inicial interface"
+require = ["flutter", "materialapp"]
+tags = ["flutter", "ui"]
+[pattern.code]
+dart = '''
+import 'package:flutter/material.dart';
+
+void main() => runApp(const MeuApp());
+
+class MeuApp extends StatelessWidget {
+  const MeuApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Meu aplicativo',
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Início')),
+        body: const Center(child: Text('Olá, mundo!')),
+      ),
+    );
+  }
+}
+'''
+
+[[pattern]]
+id = "flutter.stateless"
+title = "Widget Flutter sem estado com StatelessWidget"
+keywords = "criar widget flutter stateless statelesswidget sem estado componente imutavel"
+require = ["stateless", "statelesswidget"]
+tags = ["flutter", "ui"]
+[pattern.code]
+dart = '''
+import 'package:flutter/material.dart';
+
+class MinhaTela extends StatelessWidget {
+  const MinhaTela({super.key, required this.titulo});
+
+  final String titulo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: Text(titulo));
+  }
+}
+'''
+
+[[pattern]]
+id = "flutter.stateful"
+title = "Contador Flutter com StatefulWidget e setState"
+keywords = "criar contador flutter stateful statefulwidget setstate estado incrementar botao widget"
+require = ["stateful", "statefulwidget", "setstate", "contador"]
+tags = ["flutter", "ui"]
+[pattern.code]
+dart = '''
+import 'package:flutter/material.dart';
+
+class Contador extends StatefulWidget {
+  const Contador({super.key});
+
+  @override
+  State<Contador> createState() => _ContadorState();
+}
+
+class _ContadorState extends State<Contador> {
+  int _valor = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('$_valor', key: const Key('valor')),
+        ElevatedButton(
+          onPressed: () => setState(() => _valor += 1),
+          child: const Text('Incrementar'),
+        ),
+      ],
+    );
+  }
+}
+'''
+
+[[pattern]]
+id = "dart.http.json"
+title = "Buscar JSON de uma API em Dart"
+keywords = "buscar consumir api http json dart flutter requisicao resposta get"
+require = ["api", "http"]
+tags = ["dart", "http"]
+[pattern.code]
+dart = '''
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+Future<Map<String, dynamic>> buscarJson(Uri url) async {
+  final response = await http.get(url).timeout(const Duration(seconds: 15));
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw http.ClientException('HTTP ${response.statusCode}', url);
+  }
+  final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+  if (decoded is! Map<String, dynamic>) {
+    throw const FormatException('A API não retornou um objeto JSON');
+  }
+  return decoded;
+}
+'''

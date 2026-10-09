@@ -2,7 +2,7 @@
 # O layout de instalação vem de packaging/stage.sh, o mesmo dos pacotes gerados pelo nfpm.
 
 Name:           codar
-Version:        0.1.1
+Version:        0.2.0
 Release:        0
 Summary:        Tradução de pseudocódigo e intenções em código, 100% offline
 License:        Apache-2.0
@@ -21,7 +21,7 @@ Requires:       (python3 >= 3.10 or python311 or python312 or python313)
 
 %description
 Você escreve a lógica linha por linha, em português ou inglês, e o codar
-escreve o código em 14 linguagens. Um compilador de regras, um banco de
+escreve o código em 19 linguagens. Um compilador de regras, um banco de
 padrões testados e uma IA local (opcional) cabem em 3 GB de RAM.
 
 Inclui a IDE no terminal, plugins para Neovim e Vim, módulo PowerShell,

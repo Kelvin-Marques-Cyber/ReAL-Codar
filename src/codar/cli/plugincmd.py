@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import sys
+import re
+import shutil
+import tempfile
+from pathlib import Path
 
 from codar import config, paths
-from codar.plugin_loader import discover
+from codar.plugin_loader import discover, load_plugin
 
 TEMPLATE_PATTERN = '''# Padrões = ferramentas verificadas que a IA reutiliza em vez de escrever código do zero.
 [[pattern]]
@@ -63,6 +67,8 @@ def cmd_plugins(args) -> int:
                 f"{len(p.patterns):3} padrões · {len(p.skills):2} skills · {len(p.rules):3} regras · "
                 f"{len(p.advice):2} conselhos", "text") + ("  " + hud.c(f"{len(p.errors)} erro(s)", "red") if p.errors else ""))
         return 0
+    if args.action == "install":
+        return install_plugin(args.name)
     if not args.name or not args.name.replace("-", "").replace("_", "").isalnum():
         print("uso: codar plugins new <nome>", file=sys.stderr)
         return 1
@@ -81,3 +87,33 @@ def cmd_plugins(args) -> int:
     print(hud.pill("PLUGIN CRIADO", "mint") + " " + hud.c(str(root), "green"))
     print(hud.c("edite os .toml e rode `codar restart` (ou o método reload) para recarregar", "dim"))
     return 0
+
+
+def install_plugin(directory: str | None) -> int:
+    """Instala um plugin local validado, sem sobrescrever outro nem executar plugin.py."""
+    try:
+        source = Path(directory or "").expanduser().resolve()
+        if not directory or not (source / "plugin.toml").is_file():
+            raise ValueError("uso: codar plugins install <pasta-com-plugin.toml>")
+        plugin = load_plugin(source, builtin=False)
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", plugin.name):
+            raise ValueError("nome do plugin inválido")
+        if plugin.errors:
+            raise ValueError("plugin inválido: " + "; ".join(plugin.errors))
+        if any(file.is_symlink() for file in source.rglob("*")):
+            raise ValueError("plugins locais devem conter arquivos próprios, sem links simbólicos")
+        parent = paths.user_plugins_dir()
+        parent.mkdir(parents=True, exist_ok=True)
+        destination = parent / plugin.name
+        if destination.exists():
+            raise ValueError(f"já existe: {destination}; seus arquivos foram preservados")
+        with tempfile.TemporaryDirectory(prefix=".install-", dir=parent) as temporary:
+            stage = Path(temporary) / plugin.name
+            shutil.copytree(source, stage, ignore=shutil.ignore_patterns(".git", "__pycache__", ".venv", "node_modules"))
+            stage.rename(destination)
+        print(f"plugin {plugin.name} instalado: {destination}")
+        print("rode `codar restart` para carregar padrões, skills e regras")
+        return 0
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"codar: {exc}", file=sys.stderr)
+        return 1

@@ -1,0 +1,21 @@
+[[skill]]
+id = "dart.base"
+langs = ["dart"]
+guidance = ["Use sound null safety: prefer final, typed collections and required named parameters; avoid dynamic and unnecessary !.",
+            "Use async/await for I/O. Preserve package: imports and do not add dart:io to Flutter web code."]
+
+[[skill]]
+id = "flutter.widgets"
+langs = ["dart"]
+triggers = "flutter widget widgets tela materialapp scaffold stateless stateful interface"
+guidance = ["Use package:flutter/material.dart and const constructors with super.key. Return a Widget from build(BuildContext context).",
+            "Choose StatelessWidget for immutable UI, StatefulWidget only when state changes; keep side effects out of build.",
+            "After await, check mounted before setState or using State.context; dispose controllers, listeners and subscriptions.",
+            "When editing an existing app, preserve its entry point, navigation and state management; do not generate a second main or duplicate widget class."]
+
+[[skill]]
+id = "flutter.tests"
+langs = ["dart"]
+triggers = "teste testes test widgettest tester pumpwidget"
+guidance = ["Use flutter_test for widget tests, pumpWidget with MaterialApp, and pump after interactions.",
+            "Prefer stable keys and semantic finders; avoid fixed delays and unbounded pumpAndSettle on looping animations."]

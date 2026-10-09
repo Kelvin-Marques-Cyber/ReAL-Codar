@@ -1,0 +1,13 @@
+[[skill]]
+id = "powershell.edit"
+langs = ["powershell"]
+guidance = ["When editing, preserve param blocks, CmdletBinding, pipeline input and existing functions. Return a complete replacement without repeating the original script.",
+            "Use -LiteralPath for user paths, single quotes for literal strings, and param validation rather than Invoke-Expression.",
+            "Write data to the success stream and diagnostics to Write-Verbose or Write-Error. Use -ErrorAction Stop where failures must enter catch."]
+
+[[skill]]
+id = "powershell.portable"
+langs = ["powershell"]
+triggers = "linux macos multiplataforma portavel arquivos caminho portable"
+guidance = ["Target PowerShell 7 (pwsh) and use Join-Path and .NET APIs. Do not assume Windows-only registry, WMI or drive letters.",
+            "Check $LASTEXITCODE after native commands; terminating-error preferences alone do not catch every native failure."]

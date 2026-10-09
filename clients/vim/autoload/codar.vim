@@ -76,7 +76,12 @@ function! s:apply(buf, first, last, original, tick, mode, out, code, err) abort
   if bufnr('%') != a:buf
     return s:echo('o buffer mudou; o código ficou em :messages', 'WarningMsg') | echomsg l:res.code
   endif
-  if b:changedtick != a:tick && getline(a:first, a:last) != a:original
+  if get(l:res, 'complete', v:true) == v:false
+    call s:echo('resposta incompleta; código original preservado', 'WarningMsg')
+    echomsg l:res.code
+    return
+  endif
+  if b:changedtick != a:tick
     call s:echo('o texto mudou enquanto o codar respondia; nada foi alterado', 'WarningMsg')
     return
   endif

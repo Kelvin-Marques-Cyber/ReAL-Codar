@@ -1,0 +1,4 @@
+[plugin]
+name = "powershell"
+version = "1.0.0"
+description = "Funções avançadas e pipelines PowerShell 7 com parâmetros tipados e erros explícitos"

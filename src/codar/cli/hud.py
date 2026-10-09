@@ -161,7 +161,7 @@ BANNER_ASCII = r"""
  \____\___/|____/_/   \_\_| \_\
 """
 
-STAGE_COLOR = {"0": "mint", "1": "green", "2:tools": "cyan", "2:adapt": "blue", "2:gen": "orange", "2:pseudo": "cyan"}
+STAGE_COLOR = {"0": "mint", "1": "green", "2:tools": "cyan", "2:adapt": "blue", "2:gen": "orange", "2:pseudo": "cyan", "2:edit": "orange"}
 STAGE_LABEL = {"0": "S0 COMPILER", "1": "S1 PATTERN", "2:tools": "S2 TOOLS", "2:adapt": "S2 ADAPT", "2:gen": "S2 SLM",
-               "2:pseudo": "S2 PSEUDO"}
+               "2:pseudo": "S2 PSEUDO", "2:edit": "S2 EDIT"}
 SEV_COLOR = {"info": "cyan", "warning": "orange", "error": "red", "critical": "red"}

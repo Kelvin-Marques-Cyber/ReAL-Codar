@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { CodarClient, Finding, RpcError, TranslateResult } from "./client";
-import { looksLikeIntent } from "./intent";
+import { looksLikeIntent, wantsEdit } from "./intent";
 import { MissionControl } from "./missionControl";
+import { hoistImports } from "./imports";
 
 let client: CodarClient;
 let diagnostics: vscode.DiagnosticCollection;
@@ -17,6 +18,7 @@ const STAGE_LABEL: Record<string, string> = {
   "2:adapt": "S2 adaptado",
   "2:gen": "S2 gerado",
   "2:pseudo": "S2 pseudocódigo",
+  "2:edit": "S2 edição",
 };
 
 const LINE_COMMENT: Record<string, string> = {
@@ -77,22 +79,6 @@ function makeDiagnostic(doc: vscode.TextDocument, f: Finding, line: number): vsc
   return d;
 }
 
-/** Imports que faltam no documento, e a linha onde inseri-los (depois de shebang/package/<?php/imports existentes). */
-function importEdit(doc: vscode.TextDocument, imports: string[]): { line: number; text: string } | undefined {
-  if (!cfg("imports.hoist", true) || imports.length === 0) return undefined;
-  const all = doc.getText();
-  const missing = imports.filter((imp) => !all.split(/\r?\n/).some((l) => l.trim() === imp.trim()));
-  if (missing.length === 0) return undefined;
-  let line = 0;
-  const max = Math.min(doc.lineCount, 200);
-  for (let i = 0; i < max; i++) {
-    const t = doc.lineAt(i).text.trim();
-    if (/^(#!|package |<\?php|"use strict"|'use strict')/.test(t)) line = i + 1;
-    else if (/^(import\s|from\s+\S+\s+import\s|using\s+[\w.]+;|#include\s|use\s+[\w:\\{}, *]+;|require[\s(]|const\s+\w+\s*=\s*require\()/.test(t)) line = i + 1;
-  }
-  return { line, text: missing.join("\n") + "\n" + (line === 0 && doc.lineCount > 0 && doc.lineAt(0).text.trim() ? "\n" : "") };
-}
-
 function commentHints(body: string, findings: Finding[], languageId: string): string {
   const prefix = LINE_COMMENT[languageId] ?? "//";
   const lines = body.split("\n");
@@ -112,13 +98,18 @@ function commentHints(body: string, findings: Finding[], languageId: string): st
   return out.join("\n");
 }
 
-async function translate(editor: vscode.TextEditor, range: vscode.Range, intent: string, mode: "line" | "block" | "insert"): Promise<void> {
+async function translate(editor: vscode.TextEditor, range: vscode.Range, intent: string, mode: "line" | "block" | "insert" | "edit"): Promise<void> {
   const doc = editor.document;
+  if (mode === "insert") {
+    const line = doc.lineAt(range.start.line);
+    range = line.text.trim() ? new vscode.Range(line.range.end, line.range.end) : line.range;
+  }
   const version = doc.version;
   const original = doc.getText(range);
   const firstLine = doc.lineAt(range.start.line).text;
   const indent = mode === "insert" ? "" : firstLine.slice(0, firstLine.length - firstLine.trimStart().length);
-  const before = doc.getText(new vscode.Range(Math.max(0, range.start.line - 40), 0, range.start.line, 0));
+  const before = doc.getText(new vscode.Range(new vscode.Position(0, 0), range.start)).slice(-6000);
+  const after = doc.getText(new vscode.Range(range.end, doc.lineAt(doc.lineCount - 1).range.end)).slice(0, 3000);
   const hintsMode = cfg<string>("hints.mode", "diagnostics");
   const ctrl = new AbortController();
   let tokens = 0;
@@ -132,8 +123,9 @@ async function translate(editor: vscode.TextEditor, range: vscode.Range, intent:
           {
             intent,
             lang: doc.languageId,
-            context: { file: doc.uri.scheme === "file" ? doc.uri.fsPath : undefined, before, indent, indent_unit: indentUnit(editor) },
-            options: { stages: cfg<number[]>("stages", [0, 1, 2]), audit: hintsMode !== "off", mode: mode === "block" ? "block" : "auto", stream: true },
+            context: { file: doc.uri.scheme === "file" ? doc.uri.fsPath : undefined, before, after,
+              selected: mode === "edit" ? original : "", indent, indent_unit: indentUnit(editor) },
+            options: { stages: cfg<number[]>("stages", [0, 1, 2]), audit: hintsMode !== "off", mode, stream: true },
           },
           {
             signal: ctrl.signal,
@@ -157,41 +149,51 @@ async function translate(editor: vscode.TextEditor, range: vscode.Range, intent:
   status.text = `$(zap) codar ${STAGE_LABEL[res.stage] ?? res.stage} ${res.timings.total_ms?.toFixed(1) ?? "?"}ms`;
   status.tooltip = `${res.source}\n${res.findings.length} achado(s) da auditoria`;
 
-  // atomicidade: só aplica se o trecho não mudou enquanto o daemon respondia
-  if (doc.version !== version && doc.getText(range) !== original) {
-    const choice = await vscode.window.showWarningMessage("O texto mudou enquanto o Codar respondia.", "Inserir mesmo assim", "Abrir em nova aba");
+  output.appendLine(res.code);
+  if (res.complete === false) {
+    void vscode.window.showWarningMessage("Codar: resposta incompleta. Código preservado; selecione um trecho menor ou aumente model.max_tokens.");
+    return;
+  }
+  // Mudanças fora do trecho também deslocam o alvo. O cursor atual nunca redefine a edição.
+  if (doc.isClosed || doc.version !== version) {
+    const choice = await vscode.window.showWarningMessage("O arquivo mudou ou foi fechado enquanto o Codar respondia.", "Abrir em nova aba");
     if (choice === "Abrir em nova aba") {
       const d = await vscode.workspace.openTextDocument({ content: res.code, language: doc.languageId });
       await vscode.window.showTextDocument(d, vscode.ViewColumn.Beside);
       return;
     }
-    if (choice !== "Inserir mesmo assim") return;
+    return;
   }
   let body = res.body;
   if ((hintsMode === "comments" || hintsMode === "both") && res.findings.length) body = commentHints(body, res.findings, doc.languageId);
-  const edit = new vscode.WorkspaceEdit();
-  const imp = importEdit(doc, res.imports);
+  const eol = doc.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
+  let startLine = range.start.line;
   if (mode === "insert") {
-    const pos = editor.selection.active;
-    const curLine = doc.lineAt(pos.line);
-    const base = curLine.text.slice(0, curLine.firstNonWhitespaceCharacterIndex);
-    const block = body.split("\n").map((l) => (l.trim() ? base + l : l)).join("\n");
-    if (curLine.text.trim()) edit.insert(doc.uri, curLine.range.end, "\n" + block);
-    else edit.replace(doc.uri, curLine.range, block);
-  } else {
-    edit.replace(doc.uri, range, body);
+    const base = firstLine.slice(0, firstLine.length - firstLine.trimStart().length);
+    body = body.split("\n").map((l) => (l.trim() ? base + l : l)).join("\n");
+    if (firstLine.trim()) { body = "\n" + body; startLine++; }
+  } else if (mode === "edit") {
+    if (range.start.character > 0 && indent && body.startsWith(indent)) body = body.slice(indent.length);
+    if (original.endsWith("\n") && !body.endsWith("\n")) body += "\n";
   }
-  if (imp) edit.insert(doc.uri, new vscode.Position(imp.line, 0), imp.text);
-  const ok = await vscode.workspace.applyEdit(edit); // uma única operação = um único Ctrl+Z
+  body = body.replace(/\r?\n/g, eol);
+  const all = doc.getText();
+  let replacement = all.slice(0, doc.offsetAt(range.start)) + body + all.slice(doc.offsetAt(range.end));
+  if (cfg("imports.hoist", true)) {
+    const imp = hoistImports(replacement, res.imports, doc.languageId, eol);
+    replacement = imp.text;
+    if (imp.at <= startLine) startLine += imp.added;
+  }
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length), replacement);
+  const ok = await vscode.workspace.applyEdit(edit); // corpo e imports numa única operação = um único Ctrl+Z
   if (!ok) return;
-  const shift = imp && imp.line <= range.start.line ? imp.text.split("\n").length - 1 : 0;
-  const startLine = (mode === "insert" && doc.lineAt(Math.min(editor.selection.active.line, doc.lineCount - 1)).text.trim() ? editor.selection.active.line : range.start.line) + shift;
   if (hintsMode === "diagnostics" || hintsMode === "both") {
     const diags = res.findings.map((f) => makeDiagnostic(doc, f, startLine + Math.max(1, f.body_line ?? f.line) - 1));
     diagnostics.set(doc.uri, diags);
   }
   for (const note of res.notes) output.appendLine(`[${res.source}] ${note}`);
-  if (res.file_suggestion?.path && mode !== "block") {
+  if (res.file_suggestion?.path && mode !== "block" && mode !== "edit") {
     void vscode.window.showInformationMessage(`Este padrão é um arquivo (${res.file_suggestion.path}). Criar no projeto?`, "Criar arquivo").then(async (c) => {
       const root = vscode.workspace.workspaceFolders?.[0]?.uri;
       if (c && root) {
@@ -225,8 +227,20 @@ async function cmdTranslateSelection(): Promise<void> {
 async function cmdTranslateInput(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
+  const selection = editor.selection;
+  const version = editor.document.version;
   const intent = await vscode.window.showInputBox({ prompt: "Descreva o código (pseudocódigo ou intenção)", placeHolder: "ex.: conectar ao redis em localhost:6380" });
-  if (intent?.trim()) await translate(editor, editor.selection, intent.trim(), "insert");
+  if (intent?.trim()) {
+    if (editor.document.isClosed || editor.document.version !== version) {
+      void vscode.window.showWarningMessage("O arquivo mudou durante o pedido. Selecione o trecho novamente.");
+      return;
+    }
+    const edit = !selection.isEmpty || (editor.document.getText().trim() && wantsEdit(intent));
+    const range = edit && selection.isEmpty
+      ? new vscode.Range(0, 0, editor.document.lineCount - 1, editor.document.lineAt(editor.document.lineCount - 1).text.length)
+      : selection;
+    await translate(editor, range, intent.trim(), edit ? "edit" : "insert");
+  }
 }
 
 async function cmdAuditFile(): Promise<void> {

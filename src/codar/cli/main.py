@@ -97,20 +97,24 @@ def cmd_run(args) -> int:
     except (DaemonNotRunning, OSError, TimeoutError, RuntimeError) as exc:
         print(f"codar: daemon indisponível: {exc}", file=sys.stderr)
         return EXIT_NO_DAEMON
-    before = ""
+    before, selected = "", ""
     ctx = args.context or (args.file if args.file and args.file != "-" and Path(args.file).is_file() else None)
     if ctx:  # a intenção entra logo depois desse código (o fim do arquivo, ou o trecho que o editor mandou)
-        before = "\n".join(Path(ctx).read_text(encoding="utf-8", errors="replace").splitlines()[-200:]) + "\n"
+        source = Path(ctx).read_text(encoding="utf-8", errors="replace")
+        if args.mode == "edit":
+            selected = source
+        else:
+            before = "\n".join(source.splitlines()[-200:]) + "\n"
     status = EXIT_OK
     with client:
         for k, intent in enumerate(intents):
-            on_delta = None
-            if args.stream and hud.mode != "none":
-                def on_delta(d: str) -> None:
-                    sys.stderr.write(hud.c(d, "dim"))
-                    sys.stderr.flush()
+            def delta(d: str) -> None:
+                sys.stderr.write(hud.c(d, "dim"))
+                sys.stderr.flush()
+            on_delta = delta if args.stream and hud.mode != "none" else None
             try:
                 res = client.translate(intent, args.lang, file=args.file, before=before, indent=args.indent or "", stages=_stages(args.stages),
+                                       selected=selected,
                                        audit=not args.no_audit, hints=args.hints, mode=args.mode, on_delta=on_delta,
                                        indent_unit=args.indent_unit)
             except RpcError as exc:
@@ -125,6 +129,9 @@ def cmd_run(args) -> int:
             if k:
                 print()
             print_result(res, args, hud)
+            if not res.get("complete", True):
+                print("codar: resposta incompleta; selecione um trecho menor ou aumente model.max_tokens", file=sys.stderr)
+                status = EXIT_UNRESOLVED
     return status
 
 
@@ -557,7 +564,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", metavar="comando")
 
     def common_engine(p):
-        p.add_argument("-l", "--lang", help="linguagem alvo (py, js, ts, go, rs, java, cs, c, cpp, sh, ps1, lua, rb, php)")
+        p.add_argument("-l", "--lang", help="linguagem alvo (py, js, ts, go, rs, java, cs, c, cpp, sh, ps1, dart, flutter…)")
         p.add_argument("--local", action="store_true", help="roda o motor no próprio processo, sem daemon")
         p.add_argument("--no-autostart", action="store_true", help="não sobe o daemon automaticamente")
         p.add_argument("--json", action="store_true", help="saída JSON completa")
@@ -570,7 +577,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--indent", help="indentação da linha atual, aplicada ao código gerado")
     p.add_argument("--stages", help="estágios permitidos, ex.: 0,1")
     p.add_argument("--each", action="store_true", help="cada linha do stdin é uma intenção")
-    p.add_argument("--mode", default="auto", choices=["auto", "line", "block"])
+    p.add_argument("--mode", default="auto", choices=["auto", "line", "block", "insert", "edit"])
     p.add_argument("--hints", action="store_true", help="injeta dicas da auditoria como comentários")
     p.add_argument("--no-audit", action="store_true")
     p.add_argument("--stream", action="store_true", help="mostra tokens do SLM enquanto gera (stderr)")
@@ -689,8 +696,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("names", nargs="*", metavar="studio|llm|all", help="padrão: todos")
     p.set_defaults(fn=cmd_extras)
 
-    p = sub.add_parser("plugins", help="plugins: list | new NOME")
-    p.add_argument("action", choices=["list", "new"])
+    p = sub.add_parser("toolchains", aliases=["sdk"], help="SDKs de programação: list | install | env")
+    p.add_argument("action", nargs="?", choices=["list", "install", "env"], default="list")
+    p.add_argument("names", nargs="*")
+    p.add_argument("--dry-run", action="store_true", help="mostra a instalação sem executar ou baixar")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--shell", choices=["bash", "zsh", "fish", "powershell"], default="bash")
+    p.set_defaults(fn=lambda a: __import__("codar.cli.toolchaincmd", fromlist=["x"]).cmd_toolchains(a))
+
+    p = sub.add_parser("skills", help="skills locais da IA: list | show ID")
+    p.add_argument("action", nargs="?", choices=["list", "show"], default="list")
+    p.add_argument("name", nargs="?")
+    p.add_argument("-l", "--lang")
+    p.set_defaults(fn=lambda a: __import__("codar.cli.skillcmd", fromlist=["x"]).cmd_skills(a))
+
+    p = sub.add_parser("plugins", help="plugins: list | new NOME | install PASTA")
+    p.add_argument("action", choices=["list", "new", "install"])
     p.add_argument("name", nargs="?")
     p.set_defaults(fn=lambda a: __import__("codar.cli.plugincmd", fromlist=["x"]).cmd_plugins(a))
 

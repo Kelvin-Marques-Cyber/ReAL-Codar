@@ -37,6 +37,8 @@ export interface TranslateResult {
   notes: string[];
   cached: boolean;
   file_suggestion: { path: string; kind: string } | null;
+  complete?: boolean;
+  annotated_body?: string | null;
 }
 
 export class RpcError extends Error {
@@ -49,6 +51,7 @@ interface Pending {
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
   onProgress?: (delta: string) => void;
+  cleanup?: () => void;
 }
 
 /** Diretório onde o daemon publica endpoint.json (mesma regra de codar/paths.py). */
@@ -172,6 +175,7 @@ export class CodarClient {
       const p = this.pending.get(msg.id);
       if (!p) continue;
       this.pending.delete(msg.id);
+      p.cleanup?.();
       if (msg.error) p.reject(new RpcError(msg.error.code, msg.error.message, msg.error.data));
       else p.resolve(msg.result);
     }
@@ -179,18 +183,30 @@ export class CodarClient {
 
   private onClose(): void {
     this.socket = undefined;
-    for (const p of this.pending.values()) p.reject(new Error("conexão com o daemon encerrada"));
+    for (const p of this.pending.values()) {
+      p.cleanup?.();
+      p.reject(new Error("conexão com o daemon encerrada"));
+    }
     this.pending.clear();
   }
 
   /** Envia uma requisição; `signal` cancela no daemon via $/cancelRequest. */
   async call<T = unknown>(method: string, params: object = {}, opts: { onProgress?: (d: string) => void; signal?: AbortSignal } = {}): Promise<T> {
+    if (opts.signal?.aborted) throw new RpcError(-32800, "requisição cancelada");
     if (!this.connected && method !== "auth") await this.connect();
+    if (opts.signal?.aborted) throw new RpcError(-32800, "requisição cancelada");
     const id = this.nextId++;
     const sock = this.socket!;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, onProgress: opts.onProgress });
-      opts.signal?.addEventListener("abort", () => this.notify("$/cancelRequest", { id }), { once: true });
+      const abort = () => {
+        this.notify("$/cancelRequest", { id });
+        this.pending.delete(id);
+        opts.signal?.removeEventListener("abort", abort);
+        reject(new RpcError(-32800, "requisição cancelada"));
+      };
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, onProgress: opts.onProgress,
+        cleanup: () => opts.signal?.removeEventListener("abort", abort) });
+      opts.signal?.addEventListener("abort", abort, { once: true });
       sock.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
     });
   }
@@ -203,7 +219,7 @@ export class CodarClient {
     params: {
       intent: string;
       lang?: string;
-      context?: { file?: string; before?: string; indent?: string; indent_unit?: string };
+      context?: { file?: string; before?: string; after?: string; selected?: string; indent?: string; indent_unit?: string };
       options?: { stages?: number[]; audit?: boolean; hints?: boolean; mode?: string; stream?: boolean };
     },
     opts: { onProgress?: (d: string) => void; signal?: AbortSignal } = {},

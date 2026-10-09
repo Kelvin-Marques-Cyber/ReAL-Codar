@@ -78,6 +78,14 @@ def describe(parser: argparse.ArgumentParser) -> list[Command]:
             cmd.positionals[1:2] = [dyn["config"]]
         elif name == "extras":
             cmd.positionals[1:] = [["studio", "llm", "all"]]
+        elif name == "toolchains":
+            from codar.toolchains import TOOLS
+
+            cmd.positionals[1:] = [sorted(TOOLS)]
+        elif name == "skills":
+            from codar.plugin_loader import discover
+
+            cmd.positionals[1:] = [sorted(s.id for s in discover({}).skills)]
         out.append(cmd)
     return out
 

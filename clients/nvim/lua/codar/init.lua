@@ -217,9 +217,12 @@ local function translate(buf, first, last, intent, mode)
     if not vim.api.nvim_buf_is_valid(buf) then
       return
     end
+    if res.complete == false then
+      notify("resposta incompleta; código preservado. Selecione um trecho menor ou aumente model.max_tokens", vim.log.levels.WARN)
+      return show_scratch(res.code, ft, "codar://resultado")
+    end
     -- atomicidade: se o trecho mudou enquanto o daemon respondia, não sobrescreve; mostra o código ao lado
-    if vim.api.nvim_buf_get_changedtick(buf) ~= tick
-        and not vim.deep_equal(vim.api.nvim_buf_get_lines(buf, first, last + 1, false), original) then
+    if vim.api.nvim_buf_get_changedtick(buf) ~= tick then
       notify("o texto mudou enquanto o codar respondia; o código abriu numa janela ao lado", vim.log.levels.WARN)
       return show_scratch(res.code, ft, "codar://resultado")
     end

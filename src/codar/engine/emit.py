@@ -1946,9 +1946,9 @@ class DartEmitter(CLikeEmitter):
                 self.close(d))
 
     def n_Import(self, n, d):
-        mod = n.module.partition(" as ")[0]
+        mod, _, alias = n.module.partition(" as ")
         alvo = mod if ":" in mod else f"package:{mod}/{mod}.dart"
-        return [f"{self.i(d)}import '{alvo}';"]
+        return [f"{self.i(d)}import '{alvo}'{' as ' + alias if alias else ''};"]
 
     def n_Sleep(self, n, d):
         self.need("import 'dart:io';")

@@ -164,11 +164,13 @@ class Client:
         return self.call("ping")
 
     def translate(self, intent: str, lang: str | None = None, *, file: str | None = None, before: str = "",
+                  after: str = "", selected: str = "",
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
                   on_delta: Callable[[str], None] | None = None) -> dict:
         params = {"intent": intent, "lang": lang,
-                  "context": {"file": file, "before": before, "indent": indent, "indent_unit": indent_unit},
+                  "context": {"file": file, "before": before, "after": after, "selected": selected,
+                              "indent": indent, "indent_unit": indent_unit},
                   "options": {"stages": list(stages), "audit": audit, "hints": hints, "mode": mode,
                               "stream": on_delta is not None}}
 

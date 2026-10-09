@@ -63,6 +63,7 @@ rag_min_score = 0.25
 cache_size = 256
 context_lines = 12            # linhas de contexto do editor enviadas ao SLM
 max_block_lines = 30          # Ctrl+G com várias linhas selecionadas: tamanho máximo do bloco
+max_edit_chars = 12000        # seleção de edição: recusa trechos maiores em vez de cortá-los
 max_block_ai_lines = 8        # num bloco, no máximo N linhas vão para a IA (o resto vira TODO): tempo e RAM previsíveis
 
 [audit]

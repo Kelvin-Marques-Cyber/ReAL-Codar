@@ -7,6 +7,11 @@ const CODE_KEYWORDS = new Set(
     "match case switch default struct enum interface type val mut").split(" "),
 );
 
+export function wantsEdit(intent: string): boolean {
+  const text = intent.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return /^(?:por favor[, ]+)?(?:corri[gj]\w*|consert\w*|arrum\w*|refator\w*|reescrev\w*|substitu\w*|sobrescrev\w*|complet\w*|melhor\w*|otimiz\w*|ajust\w*|fix|rewrite|refactor|replace|overwrite|complete|improve|optimize)\b/.test(text);
+}
+
 /** A linha é uma frase (pseudocódigo) e não código? "x é igual a 10" sim, "for i in range(3):" não. */
 export function looksLikeIntent(line: string): boolean {
   let text = line.trim();

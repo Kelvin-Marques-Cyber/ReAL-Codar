@@ -37,11 +37,13 @@ class DicaPacote:
     motivo: str
     comando: str
     curta: str  # para a barra de status
+    cwd: Path | None = None
 
     def como_sugestao(self) -> dict:
         """No formato das sugestões do consultor (F8), para a lista do Studio."""
         return {"id": self.id, "title": self.titulo, "reason": self.motivo, "category": "pacotes", "impact": "high",
                 "source": "pacotes", "comando": self.comando,
+                "cwd": str(self.cwd) if self.cwd else None,
                 "options": [{"id": "instalar", "label": "Instalar", "reason": self.motivo,
                              "steps": [f"$ {self.comando}"]}]}
 
@@ -214,4 +216,47 @@ def dicas(raiz: Path, arquivo: Path, codigo: str, lang: str | None, caminho: str
         return dicas_js(raiz, arquivo, codigo, caminho)
     if lang == "python":
         return dicas_python(raiz, arquivo, codigo)
+    if lang == "dart":
+        return dicas_dart(raiz, arquivo, codigo)
     return []
+
+
+def dicas_dart(raiz: Path, arquivo: Path, codigo: str) -> list[DicaPacote]:
+    from codar.dart import project_for
+
+    project = project_for(arquivo, raiz)
+    packages = list(dict.fromkeys(re.findall(
+        r"^\s*(?:import|export)\s+['\"]package:([a-zA-Z_]\w*)/", codigo, re.M)))
+    if not project:
+        if not packages:
+            return []  # Dart puro com dart:io/dart:convert não precisa de pubspec.
+        flutter = "flutter" in packages
+        return [DicaPacote("pacotes:pubspec", "o projeto precisa de pubspec.yaml",
+                           "Imports package: precisam de um projeto. Crie o projeto numa pasta nova e abra-a no Studio.",
+                           "flutter create novo_app" if flutter else "dart create novo_app", "SEM PUBSPEC", raiz)]
+    installed = set()
+    try:
+        cfg = json.loads((project.root / ".dart_tool" / "package_config.json").read_text(encoding="utf-8"))
+        installed = {p["name"] for p in cfg.get("packages", [])}
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    missing = [p for p in packages if p != project.name and p not in installed]
+    declared = [p for p in missing if p in project.dependencies]
+    out = []
+    if declared:
+        out.append(DicaPacote("pacotes:pub:get", f"faltam as dependências: {', '.join(declared)}",
+                              "Estão no pubspec.yaml, mas não foram resolvidas em .dart_tool/package_config.json.",
+                              f"{project.tool} pub get", "RODE PUB GET", project.root))
+    for p in missing:
+        if p in declared:
+            continue
+        if p in ("flutter", "flutter_test", "flutter_driver"):
+            # Bibliotecas do SDK não são pacotes publicados no pub.dev.
+            out.append(DicaPacote(f"pacotes:sdk:{p}", f"{p} exige o SDK Flutter no pubspec",
+                                  f"Declare {p}: com sdk: flutter no pubspec.yaml e resolva as dependências.",
+                                  "flutter pub get", "CONFIGURE FLUTTER", project.root))
+        else:
+            out.append(DicaPacote(f"pacotes:dart:{p}", f"{p} não está instalado",
+                                  f"O arquivo importa package:{p}, ausente nas dependências resolvidas.",
+                                  f"{project.tool} pub add {p}", f"{p.upper()} FALTA", project.root))
+    return out

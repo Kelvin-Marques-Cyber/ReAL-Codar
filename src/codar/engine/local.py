@@ -34,10 +34,12 @@ class LocalClient:
         self.store.close()
 
     def translate(self, intent: str, lang: str | None = None, *, file: str | None = None, before: str = "",
+                  after: str = "", selected: str = "",
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
                   on_delta: Callable[[str], None] | None = None) -> dict:
         req = Request(intent=intent, lang=lang, lang_explicit=bool(lang), file=file, before=before, indent=indent,
+                      after=after, selected=selected,
                       indent_unit=indent_unit, stages=tuple(stages), audit=audit, hints=hints, mode=mode)
         try:
             return asyncio.run(self.router.translate(req, on_token=on_delta)).as_dict()

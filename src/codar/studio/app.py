@@ -34,6 +34,7 @@ from codar import __version__, langs
 from codar.advisor import pacotes
 from codar.studio import comandos, estado
 from codar.studio.backend import StudioBackend
+from codar.studio.edits import EditTarget, wants_edit
 from codar.studio.explorer import SKIP, Explorer
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
@@ -44,7 +45,7 @@ from codar.textutil import looks_like_intent
 from codar.vocab import EXAMPLES
 
 STAGE_NAMES = {"0": "S0 COMPILER", "1": "S1 PATTERN", "2:tools": "S2 TOOLS", "2:adapt": "S2 ADAPT", "2:gen": "S2 SLM",
-               "2:pseudo": "S2 PSEUDO"}
+               "2:pseudo": "S2 PSEUDO", "2:edit": "S2 EDIT"}
 TS_LANG = {"python": "python", "javascript": "javascript", "typescript": "javascript", "go": "go", "rust": "rust",
            "java": "java", "bash": "bash", "sql": "sql", "html": "html", "css": "css", "yaml": "yaml", "markdown": "markdown"}
 EXT_TS = {".json": "json", ".toml": "toml", ".md": "markdown", ".xml": "xml", ".yml": "yaml", ".yaml": "yaml"}
@@ -483,7 +484,7 @@ class Studio(App):
         lang = langs.from_path(path) if path else langs.try_resolve(self.current_lang())
         ts = EXT_TS.get(Path(path).suffix.lower()) if path else None
         ts = ts or (TS_LANG.get(lang.id) if lang else None)
-        ed = CodeEditor.code_editor(text, language=ts, theme="monokai", soft_wrap=False)
+        ed = CodeEditor.code_editor(text, language=ts, theme="monokai", soft_wrap=False, id=f"code-{self.tab_seq}")
         ed.path, ed.saved_text = path, text
         ed.lang_id = lang.id if lang else None
         nome = f"codar-{self.theme}"
@@ -679,12 +680,20 @@ class Studio(App):
         indent = recuo if indent is None else indent
         if original is None:
             original = ed.document.get_line(row) if ed is not None and row is not None else None
+        target = EditTarget.capture(ed.text, mode, ed.cursor_location, (ed.selection.start, ed.selection.end),
+                                    row, original) if ed is not None else None
+        if target is not None:
+            before = target.before
+            if mode == "edit":
+                line = ed.document.get_line(target.start[0])
+                indent = line[:len(line) - len(line.lstrip())]
+                self.feed(f"EDIT · substituindo {target.selected.count(chr(10)) + 1} linha(s)", "orange")
         self.feed(f"TX · {intent[:70]}", "text")
         out = self.query_one("#output", RichLog)
         out.write(f"[{C['red']}]▸ INTENÇÃO[/] [{C['text']}]{_esc(intent)}[/]")
         self.streaming = False
-        self.translate_worker(intent, self.current_lang(), mode, ed.path if ed else None, before, indent, unit, row,
-                              original, ed.id if ed else None)
+        self.translate_worker(intent, self.current_lang(), mode, ed.path if ed else None, before, indent, unit,
+                              target, ed.id if ed else None)
 
     def max_linhas_bloco(self) -> int:
         from codar import config
@@ -692,7 +701,7 @@ class Studio(App):
         return int(config.load()["router"].get("max_block_lines", 30))
 
     @work(thread=True, group="translate")
-    def translate_worker(self, intent, lang, mode, path, before, indent, unit, row, original, editor_id) -> None:
+    def translate_worker(self, intent, lang, mode, path, before, indent, unit, target, editor_id) -> None:
         from codar.client import RpcError
 
         def on_delta(d: str) -> None:
@@ -700,7 +709,9 @@ class Studio(App):
 
         try:
             res = self.backend.translate(intent, lang, file=path, before=before,
-                                         indent=indent if mode in ("line", "block") else "",
+                                         after=target.after if target else "",
+                                         selected=target.selected if target and mode == "edit" else "", mode=mode,
+                                         indent=indent if mode in ("line", "block", "edit") else "",
                                          indent_unit=unit, stages=tuple(sorted(self.stages)), hints=self.hints,
                                          on_delta=on_delta)
         except RpcError as exc:
@@ -709,7 +720,7 @@ class Studio(App):
         except Exception as exc:
             self.call_from_thread(self._failed, intent, f"{type(exc).__name__}: {exc}", [])
             return
-        self.call_from_thread(self._apply, res, mode, row, original, editor_id, indent)
+        self.call_from_thread(self._apply, res, target, editor_id, indent)
 
     def _delta(self, d: str) -> None:
         out = self.query_one("#output", RichLog)
@@ -727,8 +738,7 @@ class Studio(App):
             out.write(f"[{C['dim']}]  candidato {c['id']} ({c['score']:.2f}) {c['title']}[/]")
         self.notify(message[:120], severity="error", title="não resolvido")
 
-    def _apply(self, res: dict, mode: str, row: int | None, original: str | None, editor_id: str | None,
-               indent: str) -> None:
+    def _apply(self, res: dict, target: EditTarget | None, editor_id: str | None, indent: str) -> None:
         self.last = res
         self.render_last()
         self.query_one("#radar", OrbitRadar).ping(res["stage"])
@@ -737,64 +747,34 @@ class Studio(App):
         hist = self.query_one("#history", ListView)
         hist.insert(0, [ListItem(Static(f"[{STAGE_COLORS.get(res['stage'], C['orange'])}]●[/] "
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
-        code = res.get("annotated") if self.hints and res.get("annotated") else None
-        body = code if code else res["body"]
-        ed = self.query_one(f"#{editor_id}", CodeEditor) if editor_id else self.current_editor()
+        self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
+        if not res.get("complete", True):
+            self.notify("resposta incompleta: seu código foi preservado. Selecione um trecho menor ou aumente "
+                        "model.max_tokens", severity="warning", timeout=8)
+            return
+        body = (res.get("annotated_body") if self.hints else None) or res["body"]
+        matches = list(self.query(f"#{editor_id}")) if editor_id else []
+        if editor_id and not matches:
+            self.notify("a aba foi fechada; resultado disponível em SAÍDA", severity="warning")
+            return
+        ed = matches[0] if matches else None
         if ed is None:
             self.call_later(self._new_buffer_with, res)
             return
-        if mode in ("line", "block") and row is not None and original is not None:
-            fim = row + original.count("\n")
-            atual = "\n".join(ed.document.get_line(r) for r in range(row, fim + 1)) \
-                if fim < ed.document.line_count else None
-            if atual != original:
-                self.notify("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA", severity="warning")
-                self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
-                return
-            start, end = (row, 0), (fim, len(ed.document.get_line(fim)))
-            ed.replace(body, start, end)
-        else:
-            r, _c = ed.cursor_location
-            line = ed.document.get_line(r)
-            base = line[: len(line) - len(line.lstrip())]
-            block = "\n".join((base + ln) if ln.strip() else ln for ln in body.split("\n"))
-            if line.strip():
-                start = (r, len(line))
-                ed.insert("\n" + block, start)
-                start = (r + 1, 0)
-            else:
-                start = (r, 0)
-                last_line = r == ed.document.line_count - 1
-                ed.replace(block + ("\n" if last_line else ""), (r, 0), (r, len(line)))
-        n_lines = body.count("\n")
-        added = self._hoist_imports(ed, res)
-        start = (start[0] + added, 0)
-        end_row = start[0] + n_lines
+        if target is None or ed.text != target.text:
+            self.notify("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA", severity="warning")
+            return
+        text, start_row, end_row = target.apply(body, res.get("imports", []), res["lang"], indent)
+        ed.replace(text, (0, 0), ed.document.end)  # corpo e imports na mesma operação de desfazer
+        end_row = min(end_row, ed.document.line_count - 1)
         ed.move_cursor((end_row, len(ed.document.get_line(end_row))))
-        ed.destacar(start[0], end_row)
+        ed.destacar(start_row, end_row)
         ed.focus()
-        self._show_findings(res.get("findings", []), start[0])
+        self._show_findings(res.get("findings", []), start_row)
         if res.get("imports"):
             self.verificar_pacotes(ed)
         for note in res.get("notes", []):
             self.notify(note, title="codar")
-
-    def _hoist_imports(self, ed: CodeEditor, res: dict) -> int:
-        """Insere no topo os imports que faltam (depois do package/shebang/<?php). Retorna quantas linhas entraram."""
-        existing = {ln.strip() for ln in ed.text.split("\n")}
-        missing = [imp for imp in res.get("imports", []) if imp.strip() not in existing]
-        if not missing:
-            return 0
-        lines = ed.text.split("\n")
-        at = 0
-        while at < len(lines) and (lines[at].startswith(("#!", "package ", "<?php")) or
-                                   (res["lang"] == "python" and lines[at].startswith(("from __future__", '"""')))):
-            at += 1
-        block = "\n".join(missing) + "\n"
-        if at < len(lines) and lines[at].strip() and not any(lines[at].startswith(k) for k in ("import", "from", "use", "#include", "using", "require")):
-            block += "\n"
-        ed.insert(block, (at, 0))
-        return block.count("\n")
 
     async def _new_buffer_with(self, res: dict) -> None:
         lang = langs.LANGS.get(res["lang"])
@@ -845,7 +825,9 @@ class Studio(App):
         if pedido is not None:  # "crie o arquivo main.py", "crie a pasta src", "abra conta.py"
             await self.executar_pedido(pedido)
             return
-        self.request(text, "insert", self.current_editor(), None)
+        ed = self.current_editor()
+        edit = ed is not None and (ed.selection.start != ed.selection.end or (ed.text.strip() and wants_edit(text)))
+        self.request(text, "edit" if edit else "insert", ed, None)
 
     async def executar_pedido(self, pedido: comandos.PedidoArquivo) -> None:
         explorer = self.query_one("#explorer", Explorer)
@@ -1142,19 +1124,36 @@ class Studio(App):
             return
         python = pacotes.python_do_projeto(self.root)
         cmd = [part.replace("{file}", ed.path).replace("{python}", python) for part in runner]
+        from codar import toolchains
+
+        cmd[0] = shutil.which(cmd[0], path=toolchains.environment(self.terminal.ambiente).get("PATH")) or cmd[0]
+        if not shutil.which(cmd[0], path=toolchains.environment(self.terminal.ambiente).get("PATH")):
+            tool = "flutter" if runner[0] == "flutter" else lang.id
+            self.notify(f"{runner[0]} não encontrado. Rode `codar toolchains install {tool}` no terminal (Ctrl+T)",
+                        severity="warning", timeout=8)
+            return
         try:  # na tela, o comando curto: "python perguntas.py" em vez dos caminhos completos
             nome = str(Path(ed.path).relative_to(self.root))
         except ValueError:
             nome = Path(ed.path).name
         visivel = [nome if p == "{file}" else "python" if p == "{python}" else p for p in runner]
         juntar = (lambda partes: " ".join(shlex.quote(c) for c in partes)) if os.name != "nt" else subprocess.list2cmdline
-        self.run_command(juntar(cmd), visivel=juntar(visivel))
+        cwd = self.root
+        if lang.id == "dart":
+            from codar.dart import runner as dart_runner
+
+            _, cwd = dart_runner(Path(ed.path), self.root)
+        self.run_command(juntar(cmd), visivel=juntar(visivel), cwd=cwd)
 
     def _executor(self, lang, arquivo: Path) -> tuple[str, ...] | None:
         """Como rodar o arquivo: TypeScript e JSX com o bun quando ele existe (o Node não entende JSX e só roda .ts
         a partir da 22.18); o resto, pelo executor da linguagem."""
         if lang is None:
             return None
+        if lang.id == "dart":
+            from codar.dart import runner as dart_runner
+
+            return dart_runner(arquivo, self.root)[0]
         caminho = self.terminal.ambiente.get("PATH")
         if arquivo.suffix in (".ts", ".tsx", ".jsx", ".mts") and shutil.which("bun", path=caminho):
             return ("bun", "{file}")
@@ -1166,9 +1165,9 @@ class Studio(App):
     def terminal(self) -> TerminalPainel:
         return self._terminal
 
-    def run_command(self, cmd: str, visivel: str | None = None) -> None:
+    def run_command(self, cmd: str, visivel: str | None = None, cwd: Path | None = None) -> None:
         self.query_one("#panel", TabbedContent).active = "tab-terminal"
-        self.terminal.executar(cmd, visivel)
+        self.terminal.executar(cmd, visivel, cwd=cwd)
 
     def process_running(self) -> bool:
         return self.terminal.sessao.rodando()
@@ -1370,7 +1369,7 @@ class Studio(App):
         s = self.advice[idx]
         if s.get("source") == "pacotes":  # instala no terminal, à vista (e confere de novo quando terminar)
             self.instalando = s
-            self.run_command(s["comando"])
+            self.run_command(s["comando"], cwd=Path(s["cwd"]) if s.get("cwd") else self.root)
             return
         self.push_screen(AdviceScreen(s), lambda oid, s=s: self._accept_advice(s, oid))
 

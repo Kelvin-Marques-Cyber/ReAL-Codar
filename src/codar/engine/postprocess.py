@@ -11,7 +11,7 @@ from codar.textutil import fold
 _FENCE = re.compile(r"^\s*```[\w+#-]*\s*$")
 
 
-def clean_generation(text: str, lang: str) -> str:
+def clean_generation(text: str, lang: str, *, repair: bool = True) -> str:
     lines = text.replace("\r\n", "\n").split("\n")
     while lines and (not lines[0].strip() or _FENCE.match(lines[0])):
         lines.pop(0)
@@ -24,15 +24,34 @@ def clean_generation(text: str, lang: str) -> str:
             break
         if out and ln.strip() and ln == out[-1]:
             repeat += 1
-            if repeat >= 3:
+            if repair and repeat >= 3:
                 continue
         else:
             repeat = 0
         out.append(ln.rstrip())
     code = textwrap.dedent("\n".join(out)).strip("\n")
-    if lang == "python":
+    if repair and lang == "python":
         code = repair_python(code)
     return code
+
+
+def strip_context_echo(code: str, before: str = "", after: str = "") -> str:
+    """Remove sobreposições contíguas com as bordas do contexto, nunca linhas soltas em qualquer lugar.
+
+    Uma instrução repetida pode ser intencional: só remove duas ou mais linhas não vazias.
+    Não se aplica a edições, cuja resposta precisa preservar a seleção inteira.
+    """
+    lines = code.split("\n")
+    left, right = before.rstrip("\n").split("\n"), after.lstrip("\n").split("\n")
+    for size in range(min(len(left), len(lines)), 1, -1):
+        if sum(bool(ln.strip()) for ln in lines[:size]) >= 2 and lines[:size] == left[-size:]:
+            lines = lines[size:]
+            break
+    for size in range(min(len(right), len(lines)), 1, -1):
+        if sum(bool(ln.strip()) for ln in lines[-size:]) >= 2 and lines[-size:] == right[:size]:
+            lines = lines[:-size]
+            break
+    return "\n".join(lines).strip("\n")
 
 
 def repair_python(code: str) -> str:
