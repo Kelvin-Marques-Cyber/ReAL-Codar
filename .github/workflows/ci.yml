@@ -71,7 +71,7 @@ jobs:
           sudo tar xzf /tmp/nfpm.tgz -C /usr/local/bin nfpm
       - run: pip install build
       - run: packaging/build.sh
-      - run: packaging/test-containers.sh debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 alpine:latest archlinux:latest
+      - run: packaging/test-containers.sh debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 opensuse/leap:16.0 alpine:latest archlinux:latest
       - uses: actions/upload-artifact@v4
         with:
           name: pacotes

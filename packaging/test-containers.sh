@@ -7,7 +7,7 @@
 set -u
 root="$(cd "$(dirname "$0")/.." && pwd)"
 docker="${DOCKER:-docker}"
-images="${*:-debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 alpine:latest archlinux:latest}"
+images="${*:-debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 opensuse/leap:16.0 alpine:latest archlinux:latest}"
 deb="$(ls "$root"/dist/codar_*_all.deb | tail -1)"
 rpm="$(ls "$root"/dist/codar-*.noarch.rpm | tail -1)"
 apk="$(ls "$root"/dist/codar_*_noarch.apk | tail -1)"

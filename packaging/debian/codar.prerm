@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+# Remove os .pyc gerados no postinst; numa atualização, o postinst da versão nova recompila.
+case "$1" in
+    remove | deconfigure)
+        rm -rf /usr/lib/codar/codar/__pycache__ /usr/lib/codar/codar/*/__pycache__ \
+            /usr/lib/codar/codar/*/*/__pycache__ /usr/lib/codar/codar/*/*/*/__pycache__
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

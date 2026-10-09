@@ -1,0 +1,24 @@
+Source: codar
+Section: devel
+Priority: optional
+Maintainer: Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), python3 (>= 3.10), python3-tomli
+Standards-Version: 4.7.0
+Homepage: https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
+Vcs-Browser: https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
+Vcs-Git: https://github.com/Kelvin-Marques-Cyber/ReAL-Codar.git
+Rules-Requires-Root: no
+
+Package: codar
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.10), python3 (>= 3.11) | python3-tomli
+Recommends: python3-venv
+Suggests: neovim, vim
+Description: tradução de pseudocódigo e intenções em código, 100% offline
+ Você escreve a lógica linha por linha, em português ou inglês, e o codar
+ escreve o código em 14 linguagens. Um compilador de regras, um banco de
+ padrões testados e uma IA local (opcional) cabem em 3 GB de RAM.
+ .
+ Inclui a IDE no terminal, plugins para Neovim e Vim, módulo PowerShell,
+ completar com Tab para bash, zsh e fish, auditoria estática e consultor
+ de projeto.

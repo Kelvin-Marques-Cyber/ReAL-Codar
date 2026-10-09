@@ -5,7 +5,7 @@ O CODAR é publicado em seis formatos, todos gerados de uma única árvore de in
 | Formato | Gerenciador | Distros testadas |
 |---|---|---|
 | `.deb` | apt | Debian 12, Ubuntu 22.04 e 24.04 |
-| `.rpm` | zypper, dnf | openSUSE Tumbleweed e Leap 15.6, Fedora |
+| `.rpm` | zypper, dnf | openSUSE Tumbleweed, Leap 15.6 e 16.0, Fedora |
 | `.apk` | apk | Alpine (apk-tools 2 e 3) |
 | `.pkg.tar.zst` | pacman | Arch |
 | wheel e sdist | pip, pipx | qualquer sistema com Python 3.10+ |
@@ -73,11 +73,56 @@ Em máquinas com SELinux, os contêineres de teste rodam com `--security-opt lab
 3. O fluxo [`release.yml`](../.github/workflows/release.yml) confere se a tag bate com a versão e gera todos os formatos. Ele testa a instalação nas oito imagens e publica os arquivos na página de Releases.
 4. O [instalador](../packaging/install.sh) (`curl … | sh`) passa a baixar essa versão.
 
-## Próximos passos de distribuição
+## Repositório para `apt install`, `zypper install` e `dnf install`
 
-Hoje os pacotes ficam na página de Releases e o instalador baixa de lá. Para `sudo apt install codar` ou `sudo zypper install codar` sem baixar nada à mão, é preciso um repositório assinado:
+Os pacotes da página de Releases instalam com o arquivo baixado (`sudo apt install ./codar_…_all.deb`). Para instalar só pelo nome e receber atualizações com `apt upgrade` ou `zypper up`, o CODAR precisa estar num repositório assinado. O [Open Build Service](https://build.opensuse.org) (OBS) faz isso de graça: um único projeto gera e assina repositórios para Debian, Ubuntu, openSUSE e Fedora, compilando a partir do código-fonte.
 
-- **[Open Build Service](https://build.opensuse.org)** (openSUSE): gera repositórios para openSUSE, Fedora, Debian e Ubuntu a partir do mesmo código-fonte, com assinatura. É o caminho mais curto para zypper e dnf.
+As receitas de código-fonte ficam no repositório e são testadas com as mesmas ferramentas que o OBS usa:
+
+| Receita | Distros | Ferramenta |
+|---|---|---|
+| [`packaging/debian/`](../packaging/debian) | Debian 12+, Ubuntu 22.04+ | `dpkg-buildpackage` (e `lintian`) |
+| [`packaging/rpm/codar.spec`](../packaging/rpm/codar.spec) | openSUSE Tumbleweed, Leap 15.6 e 16.0, Fedora | `rpmbuild` |
+
+```bash
+packaging/test-source-builds.sh       # compila, instala, atualiza e remove em contêineres de cada distro
+```
+
+### Publicar no OBS (uma vez)
+
+1. Crie uma conta em [build.opensuse.org](https://build.opensuse.org); o projeto pessoal `home:<usuário>` vem junto.
+2. No projeto, em **Repositories → Add from a Distribution**, marque as distros: openSUSE Tumbleweed, Leap 16.0 e 15.6, Fedora, Debian 12 e 13, Ubuntu 22.04 e 24.04.
+3. Crie o pacote `codar` (**Create Package**) e instale o cliente de linha de comando: `sudo zypper install osc` (ou `pip install osc`).
+
+### Enviar uma versão
+
+```bash
+packaging/obs/prepare.sh                       # monta build/obs/: tarball, codar.spec, codar.dsc e debian.*
+osc checkout home:<usuário>/codar
+cd home:<usuário>/codar
+cp ~/ReAL-Codar/build/obs/* .
+osc addremove && osc commit -m "codar 0.1.0"
+```
+
+O OBS compila em todas as distros marcadas e publica os repositórios assinados. A página `https://software.opensuse.org/download/package?package=codar&project=home:<usuário>` mostra os comandos de instalação de cada distro. Por exemplo:
+
+```bash
+# openSUSE Leap 16.0
+sudo zypper addrepo https://download.opensuse.org/repositories/home:<usuário>/16.0/home:<usuário>.repo
+sudo zypper install codar
+
+# Ubuntu 24.04
+curl -fsSL https://download.opensuse.org/repositories/home:<usuário>/xUbuntu_24.04/Release.key \
+  | gpg --dearmor | sudo tee /etc/apt/keyrings/codar.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/codar.gpg] https://download.opensuse.org/repositories/home:/<usuário>/xUbuntu_24.04/ /" \
+  | sudo tee /etc/apt/sources.list.d/codar.list
+sudo apt update && sudo apt install codar
+```
+
+Os nomes exatos dos repositórios (`16.0`, `xUbuntu_24.04`, `Debian_12`, `Fedora_44`…) aparecem na página do projeto no OBS depois da primeira compilação.
+
+## Outros canais
+
 - **AUR** (Arch): um `PKGBUILD` que chama `packaging/stage.sh "$pkgdir"`.
-- **PPA** (Ubuntu) ou **Copr** (Fedora): alternativas por distro.
+- **PPA** (Ubuntu): `packaging/debian/` já serve; é preciso uma conta no Launchpad e uma chave GPG para assinar o envio.
 - **PyPI**: `pipx install codar`. O sdist e a wheel já saem do `build.sh`; falta configurar a publicação confiável (*trusted publishing*) no PyPI.

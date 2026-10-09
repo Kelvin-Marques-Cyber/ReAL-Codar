@@ -31,7 +31,7 @@ jobs:
         run: cd clients/vscode && npm ci && npm run compile
       - run: pip install build
       - run: packaging/build.sh
-      - run: packaging/test-containers.sh debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 alpine:latest archlinux:latest
+      - run: packaging/test-containers.sh debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 opensuse/leap:16.0 alpine:latest archlinux:latest
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true

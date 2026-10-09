@@ -55,7 +55,7 @@ O instalador detecta apt, zypper, dnf, pacman ou apk, baixa o pacote da última 
 | Distro | Comando |
 |---|---|
 | Debian 12+, Ubuntu 22.04+ | `sudo apt install ./codar_0.1.0-1_all.deb` |
-| openSUSE Tumbleweed e Leap | `sudo zypper install --allow-unsigned-rpm ./codar-0.1.0-1.noarch.rpm` |
+| openSUSE Tumbleweed, Leap 16.0 e 15.6 | `sudo zypper install --allow-unsigned-rpm ./codar-0.1.0-1.noarch.rpm` |
 | Fedora | `sudo dnf install ./codar-0.1.0-1.noarch.rpm` |
 | Arch | `sudo pacman -U ./codar-0.1.0-1-any.pkg.tar.zst` |
 | Alpine | `sudo apk add --allow-untrusted ./codar_0.1.0-r1_noarch.apk` |

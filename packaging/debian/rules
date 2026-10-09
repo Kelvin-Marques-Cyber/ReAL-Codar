@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+# O codar é Python puro, sem dependências: não há o que compilar. O layout de instalação vem de packaging/stage.sh,
+# o mesmo dos pacotes gerados pelo nfpm.
+
+%:
+	dh $@
+
+override_dh_auto_build:
+
+override_dh_auto_test:
+	CODAR_HOME=$$(mktemp -d) PYTHONPATH=src python3 -m codar run --local "x é igual a 10" | grep -qx "x = 10"
+
+override_dh_auto_install:
+	VIM_DIRS=vimfiles sh packaging/stage.sh debian/codar /usr
+	# no Debian, a licença vai em /usr/share/doc/codar/copyright (dh_installdocs) e o histórico de mudanças vira
+	# /usr/share/doc/codar/changelog.gz (dh_installchangelogs)
+	rm -rf debian/codar/usr/share/licenses debian/codar/usr/share/doc/codar/CHANGELOG.md
+
+override_dh_installchangelogs:
+	dh_installchangelogs CHANGELOG.md
