@@ -1,7 +1,7 @@
 # CODAR
 
 **Você escreve a intenção em pseudocódigo. O CODAR escreve o código.**
-Um ambiente de programação para o terminal, com IA local, que roda 100% offline e cabe em 3 GB de RAM.
+Um ambiente de programação para o terminal, com tradução offline, IA local opcional e orçamento de 3 GB de RAM para o daemon.
 
 ![CODAR Studio: o editor no terminal, com a linha "se total maior que 100 imprimir 'frete grátis'" já traduzida para Python](docs/img/studio.png)
 
@@ -18,6 +18,8 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
+**Versão do código: 0.1.1.** A branch `main` recebe as mudanças mais recentes. Pacotes binários só ficam disponíveis depois que uma tag é compilada e publicada em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases). Para instalar ou atualizar a partir do código atual, use o fluxo com `pipx` abaixo.
+
 ## Por que existe
 
 Gerar o programa inteiro com IA tem três custos: você para de aprender, não percebe quando a IA errou (ninguém revisa 3 mil linhas) e fica dependente de internet e assinatura.
@@ -31,50 +33,116 @@ Cada linha passa por três camadas, da mais barata para a mais cara:
 | Camada | O que faz | Tempo típico* |
 |---|---|---|
 | **0 · Compilador** | Regras determinísticas para atribuições, condições, laços, impressão, contas e expressões em português ("o tamanho de pedidos", "a média entre x e y"), além de abreviações HTML e CSS no estilo Emmet. Sem IA. | < 1 ms |
-| **1 · Banco de padrões** | 101 padrões com boas práticas, testados automaticamente: calculadora, Dijkstra, CPF/CNPJ (incluindo o CNPJ alfanumérico), Pix copia e cola, programas de linha de comando, gravação atômica de arquivos, CI, Dockerfile e mais. Usado quando você pede uma funcionalidade ("criar uma calculadora"). | < 5 ms |
+| **1 · Banco de padrões** | 125 padrões incluídos: calculadora, Dijkstra, CPF/CNPJ (incluindo o CNPJ alfanumérico), Pix copia e cola, programas de linha de comando, gravação atômica de arquivos, CI, Dockerfile e mais. Usado quando você pede uma funcionalidade ("criar uma calculadora"). | < 5 ms |
 | **2 · IA local** | Qwen2.5-Coder 1.5B via llama.cpp, em **modo literal**: traduz só o que a linha diz, sem inventar funções, imports ou dados de exemplo. Usa o código acima do cursor como contexto. | ~2 s |
 
 \* Medido num notebook Intel i7-7500U (2 núcleos, 2016), sem GPU. A primeira frase de cada linguagem que não foi pré-aquecida leva cerca de 10 s.
 
 Além da tradução:
 
-- **Auditoria estática a cada geração**: segredos no código, injeção de SQL, comandos de shell que apagam o próprio arquivo e outras 140 regras (Python, JavaScript, PowerShell, Bash, SQL, Docker e mais), cada uma com a correção sugerida.
+- **Auditoria estática a cada geração**: 117 regras nos plugins, além das verificações de AST Python e segredos. Detecta casos como injeção de SQL e comandos de shell que apagam o próprio arquivo, com sugestões de correção.
 - **Consultor de projeto**: "O projeto usa npm. pnpm e Bun instalam as mesmas dependências bem mais rápido…". Você escolhe a opção e ele executa a migração.
 - **19 linguagens** de programação: Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Swift, Dart, C#, C, C++, PHP, Ruby, Lua, R, Julia, Bash e PowerShell, mais HTML e CSS.
 
 ## Instalação
 
-### Linux, pelo gerenciador de pacotes (recomendado)
+### Código atual da branch `main` (pipx)
+
+Requer **Python 3.10+, Git e pipx**. Execute no seu usuário, sem `sudo`. O extra `studio` instala a interface de terminal; o modelo de IA é opcional e separado.
+
+```bash
+pipx install 'codar[studio] @ git+https://github.com/Kelvin-Marques-Cyber/ReAL-Codar.git@main'
+pipx ensurepath --prepend
+```
+
+Abra um novo terminal depois do `ensurepath`. Em Linux, o executável normalmente fica em `~/.local/bin/codar`; consulte `pipx environment --value PIPX_BIN_DIR` se você personalizou esse diretório.
+
+### Atualizar uma instalação existente com pipx
+
+Feche o Studio antes de atualizar. Este comando busca `main` novamente, inclusive quando dois commits declaram o mesmo número de versão:
+
+```bash
+pipx install --force --pip-args='--no-cache-dir' \
+  'codar[studio] @ git+https://github.com/Kelvin-Marques-Cyber/ReAL-Codar.git@main'
+```
+
+Depois, no Bash ou Zsh:
+
+```bash
+export PATH="$(pipx environment --value PIPX_BIN_DIR):$PATH"
+hash -r
+codar version --verbose
+codar restart
+codar doctor
+codar servir --help
+```
+
+O `version --verbose` mostra o caminho do código e o **commit instalado**. Assim você consegue distinguir revisões que ainda têm o mesmo número de versão. `codar version --json` fornece esses dados para scripts. Configurações, modelos e plugins do usuário ficam fora do ambiente do pipx e não são apagados por essa atualização.
+
+No Linux, o instalador também oferece esse fluxo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh -s -- --pipx
+```
+
+Ele instala/atualiza `main` com Studio e imprime os passos de reinício. Não use `sudo` nesse modo. `pipx upgrade codar` segue a origem registrada na instalação anterior; para mudar de uma instalação antiga/local para este repositório, use o comando completo com `--force` acima.
+
+### Se ainda aparecer a versão antiga
+
+```bash
+type -a codar
+readlink -f "$(command -v codar)"
+pipx list
+codar version --verbose
+codar status
+```
+
+| Resultado | O que verificar |
+|---|---|
+| `~/.local/bin/codar` aponta para um ambiente `pipx/venvs/codar` | Atualize pelo `pipx`. Instalar um RPM em `/usr/bin` não atualiza essa cópia. |
+| `/usr/bin/codar` vem antes no PATH | Use o caminho retornado por `pipx environment --value PIPX_BIN_DIR` ou ajuste o PATH com os comandos acima. |
+| `/bin/codar` e `/usr/bin/codar` aparecem juntos | Podem ser o mesmo arquivo por causa de links do sistema; compare com `readlink -f`. |
+| `--version` e `status` mostram versões diferentes | O daemon antigo continua na memória. Execute `restart` pelo executável atualizado. |
+| A versão continua igual, mas o commit mudou | O código foi atualizado; números de versão não são incrementados a cada commit. |
+| `version --verbose` não é reconhecido | Essa CLI é anterior à correção; execute a instalação forçada e confira o caminho do executável. |
+
+O serviço opcional `codar.service` usa **`/usr/bin/codar`**. Se você o ativou e quer passar a usar pipx, pare e desative esse serviço com `systemctl --user disable --now codar`, depois execute o `codar restart` da instalação pipx. Se vai continuar no pacote da distro, use `systemctl --user restart codar` após atualizar o pacote. Reabra o Studio para carregar o código novo.
+
+### Linux, por uma Release publicada
+
+Use esta opção quando houver uma Release com o pacote da sua distro. **O instalador padrão não instala `main` e não atualiza uma instalação pipx.** Sem uma Release disponível, use a opção anterior.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 ```
 
-O instalador detecta apt, zypper, dnf, pacman ou apk, baixa o pacote da última versão em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases) e instala. Se preferir fazer à mão, baixe o pacote da sua distro e:
+O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.1.1` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
 
 | Distro | Comando |
 |---|---|
-| Debian 12+, Ubuntu 22.04+ | `sudo apt install ./codar_0.1.0-1_all.deb` |
-| openSUSE Tumbleweed, Leap 16.0 e 15.6 | `sudo zypper install --allow-unsigned-rpm ./codar-0.1.0-1.noarch.rpm` |
-| Fedora | `sudo dnf install ./codar-0.1.0-1.noarch.rpm` |
-| Arch | `sudo pacman -U ./codar-0.1.0-1-any.pkg.tar.zst` |
-| Alpine | `sudo apk add --allow-untrusted ./codar_0.1.0-r1_noarch.apk` |
+| Debian 12+, Ubuntu 22.04+ | `sudo apt install ./codar_<versao>-1_all.deb` |
+| openSUSE Tumbleweed, Leap 16.0 e 15.6 | `sudo zypper install --allow-unsigned-rpm ./codar-<versao>-1.noarch.rpm` |
+| Fedora | `sudo dnf install ./codar-<versao>-1.noarch.rpm` |
+| Arch | `sudo pacman -U ./codar-<versao>-1-any.pkg.tar.zst` |
+| Alpine | `sudo apk add --allow-untrusted ./codar_<versao>-r1_noarch.apk` |
 
 O pacote traz o comando `codar`, a página de manual (`man codar`), o completar com Tab para bash, zsh e fish, os plugins de Neovim e Vim já ativos e um serviço opcional do systemd (`systemctl --user enable --now codar`). Ele depende só do Python 3.10+ do sistema. A cada mudança, o CI instala o pacote em contêineres limpos de todas essas distros, usa o codar e remove o pacote ([docs/PACKAGING.md](docs/PACKAGING.md)).
-
-### Qualquer sistema com Python 3.10+
-
-```bash
-pipx install git+https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
-```
 
 ### Depois de instalar
 
 ```bash
 codar run "x é igual a 10"     # o compilador e o banco de padrões já funcionam, sem nada extra
-codar extras install           # Studio (IDE no terminal) e IA local, instalados só no seu usuário
-codar init                     # configuração e o modelo de IA padrão (~1,1 GB)
+codar studio .                  # já disponível se você instalou com [studio]
+codar extras install studio     # para quem instalou só o núcleo/pacote da distro
 codar doctor                   # confere o ambiente e diz o que falta
+```
+
+Para habilitar também a IA local:
+
+```bash
+codar extras install llm
+codar init                     # configuração e modelo de IA padrão (~1,1 GB)
+codar restart
 ```
 
 Sem o modelo, só as frases que nem o compilador nem o banco entendem ficam sem resposta, com uma mensagem dizendo como instalar o modelo. Testado em Linux, inclusive Ubuntu Server via SSH. O código também cobre macOS e Windows (Named Pipe, Job Object), mas essas plataformas ainda não têm testes automatizados.
@@ -100,6 +168,20 @@ O Studio funciona em qualquer terminal, inclusive via SSH; no console puro do Li
 
 ![Ajuda do Studio (F1) com os atalhos agrupados](docs/img/ajuda.png)
 
+O Studio também tem explorer de arquivos, abas, terminal integrado, execução com **F5**, auditoria com **F6**, modo de estudo com **F7** e consultor com **F8**. `Ctrl+E`, `Ctrl+T` e `Esc` alternam o foco entre explorer, terminal e editor. `codar explicar -- python app.py` executa um programa e explica erros reconhecidos; também aceita a saída pelo stdin.
+
+### Ver o projeto no celular
+
+No Studio, **F4** mostra a prévia na rede local com QR Code; **F5** em uma página HTML também abre a prévia. Pelo terminal:
+
+```bash
+codar servir .                 # páginas, imagens e gráficos salvos nesta pasta
+codar servir --proxy 5173       # repassa um servidor de desenvolvimento local
+codar servir . --local         # acesso somente neste computador
+```
+
+O celular precisa alcançar o computador pela rede (por exemplo, no mesmo Wi-Fi). Em SSH, o endereço pertence ao servidor remoto e precisa estar acessível ao celular. O programa avisa quando detecta uma possível regra de firewall bloqueando a porta. A prévia de pasta usa um código aleatório na URL e oculta arquivos como `.env` e `.git`; compartilhe somente a pasta necessária, em rede confiável, e pare com `Ctrl+C`. No modo proxy, o conteúdo e as permissões são os do servidor de desenvolvimento.
+
 ## Atalhos
 
 Os mesmos gestos em todos os lugares:
@@ -112,6 +194,8 @@ Os mesmos gestos em todos os lugares:
 | **Tab** | aceita a sugestão do autocompletar; em `.html`, `.css` e `.jsx` expande abreviações (`ul>li*3`, `a:blank`, `df+jcc`) | Studio |
 | **→** | aceita a sugestão (no editor e na barra de intenção) | Studio |
 | **Tab** no shell | completa comandos, opções, linguagens, modelos e padrões do `codar` | bash, zsh, fish |
+| **F4** | prévia do projeto no celular, com QR Code | Studio |
+| **F5** / **F7** | executa o arquivo / abre o modo de estudo | Studio |
 
 O autocompletar do Studio sugere palavras do próprio arquivo, palavras-chave da linguagem e o vocabulário do pseudocódigo ("imprimir", "enquanto", "senão"…). A barra de intenção sugere o que você já pediu e frases de exemplo.
 
@@ -124,12 +208,25 @@ Todos falam com o mesmo daemon local, que sobe sozinho no primeiro uso.
 | **Studio** | `codar studio .` (depois de `codar extras install`) |
 | **Neovim** 0.10+ | com o pacote do sistema, o plugin já está instalado: ponha `require("codar").setup()` no `init.lua`. Do repositório: `{ dir = "~/ReAL-Codar/clients/nvim", config = function() require("codar").setup() end }` no lazy.nvim |
 | **Vim** 8+ | com o pacote do sistema, já está ativo. Do repositório: `set runtimepath+=~/ReAL-Codar/clients/vim` no `.vimrc` |
-| **bash, zsh, fish** | `eval "$(codar shell-init bash)"` no `.bashrc` (Ctrl+G no prompt + completar com Tab) |
+| **bash / zsh** | `eval "$(codar shell-init bash)"` no `.bashrc`; no `.zshrc`, troque `bash` por `zsh` |
+| **fish** | `codar shell-init fish \| source` no `config.fish` |
 | **PowerShell** | `Import-Module /usr/share/codar/powershell/Codar` (pacote) ou `Import-Module ./clients/powershell/Codar` (repositório); depois `cdr "x é igual a 10"` e `Enable-CodarKeyHandler` |
 | **Qualquer app** | `codar hook install` mostra como criar um atalho global no seu sistema |
 | **VS Code** | `code --install-extension codar.vsix` ([clients/vscode](clients/vscode)) |
 
 No Neovim: `:Codar <intenção>` insere abaixo do cursor, `:CodarAudit` mostra a auditoria como diagnósticos, `:CodarAdvise` abre o consultor, `:CodarStatus` mostra RAM e modelo e `:CodarStudio` abre o Studio numa aba. Detalhes em [clients/nvim](clients/nvim) e [clients/vim](clients/vim).
+
+A extensão do **VS Code é atualizada separadamente** da CLI. Para compilar a partir do repositório atualizado:
+
+```bash
+cd clients/vscode
+npm ci
+npm run compile
+npm run package
+code --install-extension codar.vsix --force
+```
+
+Recarregue a janela do VS Code. Se houver instalações duplicadas, configure `codar.executable` com o caminho absoluto da CLI desejada (por exemplo, `/home/kelvin/.local/bin/codar`, substituindo pelo seu usuário).
 
 ## Memória: teto de 3 GB
 
@@ -168,7 +265,7 @@ codar restart
 
 ## Privacidade
 
-Nada sai do seu computador. O daemon escuta só localmente (Unix socket com permissão `0600`, Named Pipe no Windows ou TCP em `127.0.0.1` com token). A rede só é usada por `codar model pull`, `codar extras install` e pelos comandos que você aprova no consultor, como instalar o pnpm.
+A tradução e a auditoria rodam localmente. O daemon escuta só localmente (Unix socket com permissão `0600`, Named Pipe no Windows ou TCP em `127.0.0.1` com token). Instalação, atualização, download de modelos/extras e comandos aprovados no consultor podem acessar a rede. `codar servir` e F4 no Studio compartilham a prévia pela rede quando solicitados; use `--local` para restringi-la ao computador. Programas que você executa no terminal seguem o próprio comportamento de rede.
 
 ## Estendendo
 
@@ -188,6 +285,7 @@ git clone https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
 cd ReAL-Codar
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,studio]"
+python packaging/check_versions.py        # versões dos pacotes, fonte Python e changelog
 pytest                                   # motor, compilador, Emmet, roteamento e completar
 python -m codar.evals.patternlint        # sintaxe de cada padrão + testes executáveis
 tests/clients/run.sh "$(command -v codar)"   # plugins de Neovim e Vim contra o daemon real

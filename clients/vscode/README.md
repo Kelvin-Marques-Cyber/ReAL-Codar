@@ -18,5 +18,17 @@ Fora das linhas que parecem frase, o `Ctrl+Enter` mantém o comportamento padrã
 Requisito: a CLI `codar` instalada (pacote do sistema, `pipx install` ou `pip install -e .` no repositório). Se ela não
 estiver no PATH, aponte `codar.executable` para o caminho completo (ex.: `~/ReAL-Codar/.venv/bin/codar`).
 
-Instalação: `code --install-extension codar.vsix` (o arquivo vem em cada versão na página de Releases e, no pacote do
-sistema, em `/usr/share/codar/vscode/codar.vsix`).
+Instalação: `code --install-extension codar.vsix --force`. Quando houver uma Release publicada com a extensão,
+baixe o arquivo nela; um pacote do sistema que inclua a extensão instala o arquivo em `/usr/share/codar/vscode/codar.vsix`.
+
+Para acompanhar a branch `main`, atualize seu checkout e rode em `clients/vscode`:
+
+```bash
+npm ci
+npm run compile
+npm run package
+code --install-extension codar.vsix --force
+```
+
+Recarregue a janela. Atualizar a CLI com pipx não reinstala a extensão. Para evitar outra CLI no PATH, configure
+`codar.executable` com o caminho absoluto do executável desejado. `codar version --verbose` mostra a revisão da CLI.

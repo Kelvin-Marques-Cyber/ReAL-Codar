@@ -297,7 +297,8 @@ def cmd_stop(args) -> int:
 
 
 def cmd_restart(args) -> int:
-    cmd_stop(args)
+    if cmd_stop(args) != EXIT_OK:
+        return EXIT_ERR
     args.foreground = False
     return cmd_start(args)
 
@@ -336,6 +337,10 @@ def cmd_status(args) -> int:
     for stage, m in sorted(s.get("stages", {}).items()):
         rows.append(hud.kv(f"estágio {stage}", f"n={m['n']}  p50={m['p50_ms']}ms  p95={m['p95_ms']}ms", "cyan"))
     print(hud.panel("codar daemon", rows))
+    from codar.installation import daemon_mismatch
+
+    if mismatch := daemon_mismatch(s):
+        print(f"codar: {mismatch}; rode `codar restart` com o executável atualizado", file=sys.stderr)
     return EXIT_OK
 
 
@@ -526,6 +531,20 @@ def cmd_repl(args) -> int:
 
 
 def cmd_version(args) -> int:
+    if getattr(args, "json", False) or getattr(args, "verbose", False):
+        from codar.installation import installation_info
+
+        info = installation_info()
+        if getattr(args, "json", False):
+            print(json.dumps(info, ensure_ascii=False, indent=2))
+            return EXIT_OK
+        print(f"codar {__version__} (Python {info['python']}, {info['platform']})")
+        for label, key in (("Python", "executable"), ("Código", "module"), ("Origem", "source"),
+                           ("Referência", "ref"), ("Commit", "commit")):
+            print(f"{label}: {info[key] or 'não registrado'}")
+        if info["dirty"]:
+            print("Checkout com alterações locais; o commit não inclui essas alterações.")
+        return EXIT_OK
     print(f"codar {__version__} (Python {sys.version.split()[0]}, {sys.platform})")
     return EXIT_OK
 
@@ -680,7 +699,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--line", type=int)
     p.set_defaults(fn=cmd_vscode)
 
-    sub.add_parser("version", help="versão").set_defaults(fn=cmd_version)
+    p = sub.add_parser("version", help="versão e procedência da instalação")
+    p.add_argument("--verbose", "-v", action="store_true", help="mostra caminhos, origem e commit instalado")
+    p.add_argument("--json", action="store_true", help="diagnóstico da instalação em JSON")
+    p.set_defaults(fn=cmd_version)
     return ap
 
 

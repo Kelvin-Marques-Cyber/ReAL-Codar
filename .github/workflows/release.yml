@@ -1,6 +1,6 @@
 name: Release
 
-# Publique uma versão com: git tag v0.1.0 && git push origin v0.1.0
+# Veja docs/PACKAGING.md antes de criar uma tag v*.
 on:
   push:
     tags: ["v*"]
@@ -19,17 +19,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Confere se a tag bate com a versão do código
+      - name: Confere tag, changelog e versões de todos os pacotes
+        run: python packaging/check_versions.py --tag "$GITHUB_REF_NAME"
+      - name: Testes antes de publicar
         run: |
-          versao="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/codar/__init__.py)"
-          test "v$versao" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, código $versao"; exit 1; }
+          pip install -e ".[dev,studio]" build
+          pytest
       - name: Instala o nfpm
         run: |
           curl -fsSL -o /tmp/nfpm.tgz https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_x86_64.tar.gz
           sudo tar xzf /tmp/nfpm.tgz -C /usr/local/bin nfpm
       - name: Extensão do VS Code
         run: cd clients/vscode && npm ci && npm run compile
-      - run: pip install build
       - run: packaging/build.sh
       - run: packaging/test-containers.sh debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest opensuse/tumbleweed opensuse/leap:15.6 opensuse/leap:16.0 alpine:latest archlinux:latest
       - uses: softprops/action-gh-release@v2

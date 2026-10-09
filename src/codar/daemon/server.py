@@ -87,6 +87,10 @@ def _load_usage() -> dict[str, int]:
 
 class Daemon:
     def __init__(self, cfg: dict) -> None:
+        from codar.installation import installation_info
+
+        # Congelado na inicialização: atualizar os arquivos não atualiza o processo em memória.
+        self.installation = installation_info()
         self.cfg = cfg
         self.started = time.time()
         self.requests = 0
@@ -270,7 +274,7 @@ class Daemon:
 
     # ------------------------------------------------------------------ métodos
     async def m_ping(self, conn, p, rid):
-        return {"pong": True, "version": __version__, "pid": os.getpid()}
+        return {"pong": True, "version": __version__, "pid": os.getpid(), "installation": self.installation}
 
     async def m_auth(self, conn, p, rid):
         if self.endpoint and secrets.compare_digest(str(p.get("token", "")), self.endpoint.token):
@@ -309,7 +313,8 @@ class Daemon:
         return self.router.audit(code, lang.id, bool(p.get("hints")))
 
     async def m_stats(self, conn, p, rid):
-        return {"version": __version__, "pid": os.getpid(), "uptime_s": round(time.time() - self.started),
+        return {"version": __version__, "installation": self.installation,
+                "pid": os.getpid(), "uptime_s": round(time.time() - self.started),
                 "endpoint": self.endpoint.uri() if self.endpoint else None, "requests": self.requests,
                 "connections": len(self.conns), "memory": self.memguard.as_dict(), "model": self.stage2.info(),
                 "patterns": self.store.stats(), "plugins": len(self.bundle.plugins), "rules": len(self.router.auditor.rules),

@@ -1,6 +1,6 @@
 # Empacotamento e publicação
 
-O CODAR é publicado em seis formatos, todos gerados de uma única árvore de instalação:
+O build do CODAR prepara seis formatos, todos gerados de uma única árvore de instalação. Eles só estão disponíveis para download depois de uma Release publicada; a branch `main` pode ser instalada diretamente com pipx conforme o [README](../README.md#instalação).
 
 | Formato | Gerenciador | Distros testadas |
 |---|---|---|
@@ -68,10 +68,14 @@ Em máquinas com SELinux, os contêineres de teste rodam com `--security-opt lab
 
 ## Publicar uma versão
 
-1. Atualize `__version__` em `src/codar/__init__.py` e o [CHANGELOG](../CHANGELOG.md).
-2. Crie a tag: `git tag v0.1.0 && git push origin v0.1.0`.
-3. O fluxo [`release.yml`](../.github/workflows/release.yml) confere se a tag bate com a versão e gera todos os formatos. Ele testa a instalação nas oito imagens e publica os arquivos na página de Releases.
-4. O [instalador](../packaging/install.sh) (`curl … | sh`) passa a baixar essa versão.
+1. Atualize `__version__` em `src/codar/__init__.py`. O `pyproject.toml` obtém a versão desse atributo; não adicione outra versão Python.
+2. Sincronize `clients/vscode/package.json`, os dois campos de versão do projeto em `clients/vscode/package-lock.json`, `clients/powershell/Codar/Codar.psd1`, `packaging/rpm/codar.spec` e `packaging/codar.1`. Adicione uma entrada em `packaging/debian/changelog`, preservando o histórico.
+3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.1.1` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
+4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.1.1 && git push origin v0.1.1`. Não reaproveite uma tag publicada.
+5. O fluxo [`release.yml`](../.github/workflows/release.yml) confere tag, manifestos e changelog, roda os testes Python, gera os formatos e testa a instalação nas nove imagens antes de publicar os arquivos.
+6. Confira os artefatos na página de Releases. O [instalador](../packaging/install.sh) padrão passa a baixar essa versão. Criar um commit, atualizar o README ou mudar a numeração, sozinho, não publica pacotes.
+
+O CI também executa a checagem de versões em alterações comuns. O modo `packaging/install.sh --pipx` instala `main` diretamente e independe de Releases. Para confirmar a revisão Git instalada, use `codar version --verbose`; wheels e pacotes nativos podem não registrar um commit. Após atualizar, reinicie o daemon e reabra o Studio. O serviço systemd distribuído usa `/usr/bin/codar`, não a instalação do pipx.
 
 ## Repositório para `apt install`, `zypper install` e `dnf install`
 
@@ -101,7 +105,7 @@ packaging/obs/prepare.sh                       # monta build/obs/: tarball, coda
 osc checkout home:<usuário>/codar
 cd home:<usuário>/codar
 cp ~/ReAL-Codar/build/obs/* .
-osc addremove && osc commit -m "codar 0.1.0"
+osc addremove && osc commit -m "codar 0.1.1"
 ```
 
 O OBS compila em todas as distros marcadas e publica os repositórios assinados. A página `https://software.opensuse.org/download/package?package=codar&project=home:<usuário>` mostra os comandos de instalação de cada distro. Por exemplo:
@@ -125,4 +129,4 @@ Os nomes exatos dos repositórios (`16.0`, `xUbuntu_24.04`, `Debian_12`, `Fedora
 
 - **AUR** (Arch): um `PKGBUILD` que chama `packaging/stage.sh "$pkgdir"`.
 - **PPA** (Ubuntu): `packaging/debian/` já serve; é preciso uma conta no Launchpad e uma chave GPG para assinar o envio.
-- **PyPI**: `pipx install codar`. O sdist e a wheel já saem do `build.sh`; falta configurar a publicação confiável (*trusted publishing*) no PyPI.
+- **PyPI**: canal ainda sem publicação configurada neste repositório. Use a URL Git explícita do README; `pipx install codar` consulta o índice de pacotes e não garante instalar este projeto. O sdist e a wheel já saem do `build.sh`; falta configurar a publicação confiável (*trusted publishing*) no PyPI.

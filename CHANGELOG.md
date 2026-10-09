@@ -4,6 +4,23 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.1.1] - 2026-10-09
+
+### Correções de atualização
+- A versão Python passa a ter uma única fonte: `codar.__version__`. A wheel e o sdist usam esse valor.
+- Versões de VS Code, PowerShell, RPM, Debian e manual sincronizadas; CI, build e Release conferem divergências.
+- `packaging/install.sh --pipx` instala ou atualiza `main` com Studio, mesmo quando a versão declarada não mudou.
+- O instalador de pacotes informa quando não consegue obter uma Release e avisa se outro `codar` tem prioridade no PATH.
+- `codar version --verbose` e `--json` identificam Python, código, origem e commit (quando disponível).
+- `doctor` e `status` avisam quando o daemon usa outra versão, instalação ou commit. `restart` não informa sucesso se a parada falhar.
+- README distingue `main` de Releases, explica a atualização com pipx e a reinstalação separada da extensão do VS Code.
+
+### Recursos incorporados desde 0.1.0
+- Prévia no celular por QR Code: F4 no Studio e `codar servir`, incluindo proxy para servidor de desenvolvimento.
+- Explorer, abas, terminais integrados, execução com F5, modo de estudo com F7 e explicação de erros.
+
+Esta seção descreve a versão do código; os pacotes binários dependem da publicação de uma Release.
+
 ## [0.1.0] - 2026-10-08
 
 Primeira versão pública.

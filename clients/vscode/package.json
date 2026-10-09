@@ -2,7 +2,7 @@
   "name": "codar",
   "displayName": "Codar — intenção para código (offline)",
   "description": "Pseudocódigo e intenções em PT/EN viram código: compilador determinístico, banco de padrões verificados e SLM local (≤3 GB de RAM), com auditoria estática e consultor de projeto.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "codar",
   "private": true,
   "engines": {

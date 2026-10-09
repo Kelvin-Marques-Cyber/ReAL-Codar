@@ -28,6 +28,11 @@ def _meminfo() -> tuple[int, int]:
 def checks() -> list[tuple[str, str, str, str]]:
     """[(status ok|warn|fail, item, detalhe, correção)]"""
     out = []
+    from codar.installation import daemon_mismatch, installation_info
+
+    installation = installation_info()
+    revision = f" · commit {installation['commit'][:12]}" if installation["commit"] else ""
+    out.append(("ok", "codar", f"{installation['version']}{revision} · {installation['module']}", ""))
     cfg = config.load()
     v = sys.version_info
     out.append(("ok" if v >= (3, 10) else "fail", "python", sys.version.split()[0], "use Python >= 3.10"))
@@ -100,7 +105,10 @@ def checks() -> list[tuple[str, str, str, str]]:
 
             with Client.connect(autostart=False, timeout=3) as c:
                 info = c.ping()
-            out.append(("ok", "daemon", f"online pid {info['pid']} em {ep.uri()}", ""))
+            mismatch = daemon_mismatch(info, installation)
+            detail = f"online pid {info['pid']} · versão {info['version']} em {ep.uri()}"
+            out.append(("warn" if mismatch else "ok", "daemon", detail + (f"; {mismatch}" if mismatch else ""),
+                        "codar restart" if mismatch else ""))
         except Exception as exc:
             out.append(("warn", "daemon", f"endpoint existe mas não responde ({exc})", "codar restart"))
     else:

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codar"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Framework offline de tradução de intenção para código, com auditoria estática e teto de 3GB de RAM"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,6 +54,9 @@ codar = "codar.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "codar.__version__"}
 
 [tool.setuptools.package-data]
 codar = ["plugins/**/*.toml", "plugins/**/*.md", "studio/*.tcss", "evals/*.toml"]

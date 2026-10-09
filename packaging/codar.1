@@ -1,5 +1,5 @@
 '\" -*- coding: utf-8 -*-
-.TH CODAR 1 "outubro de 2026" "codar 0.1.0" "Comandos do usuário"
+.TH CODAR 1 "outubro de 2026" "codar 0.1.1" "Comandos do usuário"
 .SH NOME
 codar \- traduz pseudocódigo e intenções em código, 100% offline
 .SH SINOPSE
@@ -73,7 +73,19 @@ Banco de padrões.
 Configuração.
 .TP
 .B doctor
-Diagnóstico do ambiente, com o que falta e como resolver.
+Diagnóstico do ambiente e de divergências entre a instalação do CLI e o daemon.
+.TP
+.B version \-\-verbose
+Mostra versão, Python, caminho do código, origem e commit instalado quando registrado.
+.B \-\-json
+mostra os mesmos dados em JSON. Não consulta a rede nem inicia o daemon.
+.TP
+.BR servir " [" \fIdiretório\fR ]
+Prévia na rede local com QR code para o celular.
+.B \-\-proxy PORTA
+repassa um servidor de desenvolvimento local.
+.B \-\-local
+restringe a prévia ao computador.
 .TP
 .BI "shell\-init " shell
 Integração com bash, zsh, fish e pwsh: Ctrl+G troca a linha digitada pelo comando.
@@ -122,6 +134,8 @@ O daemon escuta só localmente (Unix socket com permissão 0600). A rede é usad
 .BR "codar model pull" ,
 .B codar extras install
 e pelos comandos que você aprova no consultor.
+O comando servir (F4 no Studio) expõe a prévia na rede local quando solicitado.
+Compartilhe o endereço apenas com quem deve ter acesso e use uma rede confiável.
 .SH VEJA TAMBÉM
 .BR nvim (1),
 .BR vim (1),

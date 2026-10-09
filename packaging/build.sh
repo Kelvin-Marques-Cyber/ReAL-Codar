@@ -7,6 +7,7 @@
 set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
+python3 packaging/check_versions.py
 formats="${*:-deb rpm apk archlinux}"
 nfpm="${NFPM:-nfpm}"
 version="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/codar/__init__.py)"
