@@ -13,6 +13,12 @@ from codar.engine.stage2 import GenResult  # noqa: E402
 from codar.plugin_loader import discover  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _sem_shell_do_usuario(monkeypatch):
+    """O Studio lê o ambiente do seu shell (bash -i) ao abrir; nos testes, não roda o .bashrc de quem testa."""
+    monkeypatch.setenv("CODAR_SHELL_ENV", "0")
+
+
 class FakeStage2:
     """Stage2 falso: registra os prompts e devolve respostas programadas (sem carregar modelo)."""
 

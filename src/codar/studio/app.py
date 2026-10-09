@@ -8,14 +8,10 @@ telemetria à direita, barra de intenção e medidor de RAM embaixo.
 from __future__ import annotations
 
 import asyncio
-import codecs
 import os
 import re
 import random
-import select
 import shlex
-import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -33,9 +29,11 @@ from textual.theme import Theme
 from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, ListView, RichLog, Static,
                              TabbedContent, TabPane, TextArea)
 
-from codar import __version__, langs, paths
+from codar import __version__, langs
+from codar.studio import estado
 from codar.studio.backend import StudioBackend
 from codar.studio.explorer import SKIP, Explorer
+from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, HelpScreen, PromptScreen
 from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, aplicar_paleta,
@@ -99,23 +97,6 @@ BOTOES_EXPLORER = [("novo_arquivo", "+arquivo"), ("nova_pasta", "+pasta"), ("col
 PILULAS = [("s0", "◎ S0", "toggle_stage(0)"), ("s1", "• S1", "toggle_stage(1)"), ("s2", "✳ S2", "toggle_stage(2)"),
            ("audit", "☉ AUDIT", "toggle_audit"), ("hints", "✎ HINTS", "toggle_hints")]
 _SENAO = re.compile(r"^\s*(sen[aã]o|caso contr[aá]rio|do contr[aá]rio|else|elif)\b", re.I)
-TERM_IDLE = "$ comando no diretório do projeto (Enter executa)"
-TERM_RUNNING = "entrada do programa (Enter envia · Ctrl+C interrompe)"
-
-
-class TerminalInput(Input):
-    """Campo do terminal: com um programa rodando, Ctrl+C interrompe o programa em vez de copiar."""
-
-    BINDINGS = [Binding("ctrl+c", "interromper", "Interromper", show=False, priority=True)]
-
-    def action_interromper(self) -> None:
-        studio = self.app
-        if isinstance(studio, Studio) and studio.process_running():
-            studio.interrupt_process()
-        else:
-            self.action_copy()
-
-
 TIPS = [
     "termine a frase com espaço e aperte Enter: a linha vira código",
     "Ctrl+Enter ou Ctrl+G traduz a linha do cursor; com seleção, traduz o bloco",
@@ -156,7 +137,7 @@ class Studio(App):
     BINDINGS = [
         Binding("ctrl+s", "save", "Salvar", priority=True),
         # Ctrl+Enter chega como ctrl+enter (kitty, WezTerm, foot…) ou ctrl+j (terminais clássicos); Ctrl+G em qualquer um
-        Binding("ctrl+g,ctrl+enter,ctrl+j", "translate_line", "Traduzir linha"),
+        Binding("ctrl+g,ctrl+enter,ctrl+j", "translate_line", "Traduzir", show=False),
         # ir para cada área sem o mouse; Esc volta ao editor
         Binding("ctrl+e", "focus_explorer", "Explorer", priority=True),
         Binding("ctrl+t", "focus_terminal", "Terminal", priority=True),
@@ -166,12 +147,13 @@ class Studio(App):
         Binding("ctrl+pagedown", "next_tab", "Próxima aba", show=False, priority=True),
         Binding("ctrl+pageup", "prev_tab", "Aba anterior", show=False, priority=True),
         Binding("f5", "run_file", "Executar", priority=True),
-        Binding("f6", "audit_file", "Auditar", priority=True),
+        Binding("f6", "audit_file", "Auditar", show=False, priority=True),
         Binding("f8", "advise", "Consultor", priority=True),
-        Binding("ctrl+n", "new_file", "Novo", priority=True),
-        Binding("ctrl+w", "close_tab", "Fechar aba", priority=True),
+        Binding("ctrl+n", "new_file", "Novo", show=False, priority=True),
+        Binding("ctrl+w", "close_tab", "Fechar aba", show=False, priority=True),
         Binding("ctrl+b", "toggle_left", "Mostrar explorer", show=False, priority=True),
         Binding("f9", "toggle_panel", "Painel", show=False, priority=True),
+        Binding("f12", "shell", "Seu shell", show=False, priority=True),
         Binding("ctrl+q", "quit", "Sair", priority=True),
         Binding("f1", "help", "Ajuda", priority=True),
     ]
@@ -186,9 +168,6 @@ class Studio(App):
         self.hints = False
         self.last: dict | None = None
         self.tab_seq = 0
-        self.term_proc: subprocess.Popen | None = None
-        self.term_fd: int | None = None  # lado mestre do pseudoterminal do processo em execução
-        self.term_waiting = ""  # pergunta do programa esperando entrada (texto sem quebra de linha)
         self.mem: dict = {}
         self.intents: list[str] = []
         self.online = False
@@ -216,8 +195,8 @@ class Studio(App):
                     with TabPane("PROBLEMAS", id="tab-problems"):
                         yield DataTable(id="problems", cursor_type="row")
                     with TabPane("TERMINAL", id="tab-terminal"):
-                        yield RichLog(id="term-log", markup=False, wrap=False, max_lines=3000)
-                        yield TerminalInput(placeholder=TERM_IDLE, id="term-input")
+                        self._terminal = TerminalPainel(self.root, id="terminal")
+                        yield self._terminal
                     with TabPane("SAÍDA", id="tab-output"):
                         yield RichLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
                     with TabPane("CONSULTOR", id="tab-advisor"):
@@ -249,7 +228,7 @@ class Studio(App):
                        "footer-key-foreground": SENTRY["mint"], "footer-description-foreground": SENTRY["text"],
                        "border": SENTRY["mint"], "border-blurred": SENTRY["orange"]}))
         self.theme_changed_signal.subscribe(self, self._tema_mudou)
-        salvo = _estado().get("tema")
+        salvo = estado.ler().get("tema")
         self.theme = salvo if salvo and self.get_theme(salvo) else "sentry"
         for wid, title in (("#explorer", "EXPLORER"), ("#radar", "PIPELINE ORBIT"), ("#feed", "SOURCE / EVENT FEED"),
                            ("#editors", "EDITOR"), ("#welcome", "BEM-VINDO"), ("#panel", "PAINEL"), ("#last-card", "LAST TRANSLATION"),
@@ -294,8 +273,8 @@ class Studio(App):
         self.query_one("#radar", OrbitRadar).refresh()
         if self.mem:
             self.refresh_telemetry()
-        if tema.name != _estado().get("tema", "sentry"):
-            _salvar_estado(tema=tema.name)
+        if tema.name != estado.ler().get("tema", "sentry"):
+            estado.salvar(tema=tema.name)
 
     @staticmethod
     def hud_meta() -> str:
@@ -362,15 +341,18 @@ class Studio(App):
 
     def context_hint(self) -> str:
         """O que dá para fazer agora, de acordo com o foco e a linha do cursor."""
-        if self.term_waiting:
+        terminal = self.terminal
+        if terminal.sessao is not None and terminal.sessao.esperando:
             return "O PROGRAMA ESPERA ENTRADA · DIGITE NO TERMINAL"
         focused = self.focused
         if isinstance(focused, Input) and focused.id == "intent":
             return "ENTER GERA · → COMPLETA · ESC EDITOR" if focused.value else "DESCREVA O CÓDIGO · ESC EDITOR"
         if isinstance(focused, Explorer):
             return "N NOVO · P PASTA · R RENOMEAR · C/X/V COPIAR · DEL APAGAR · ESC EDITOR"
-        if isinstance(focused, Input) and focused.id == "term-input":
-            return "ENTER ENVIA · CTRL+C INTERROMPE" if self.process_running() else "ENTER EXECUTA · ESC EDITOR"
+        if isinstance(focused, TerminalInput):
+            if terminal.sessao.rodando():
+                return "ENTER ENVIA · CTRL+C INTERROMPE · CTRL+T OUTRO TERMINAL"
+            return "ENTER EXECUTA · ↑ HISTÓRICO · CTRL+T OUTRO TERMINAL · F12 SEU SHELL"
         if isinstance(focused, DataTable):
             return "ENTER VAI PARA A LINHA · ESC EDITOR"
         if isinstance(focused, ListView) and focused.id == "advice-list":
@@ -773,8 +755,12 @@ class Studio(App):
         if explorer.cursor_line < 0:
             explorer.cursor_line = 0
 
-    def action_focus_terminal(self) -> None:
+    async def action_focus_terminal(self) -> None:
+        """Ctrl+T: vai para o terminal; já estando nele, abre outro terminal (o primeiro continua rodando)."""
         panel = self.query_one("#panel", TabbedContent)
+        if isinstance(self.focused, TerminalInput) and panel.display:
+            await self.terminal.nova_sessao()
+            return
         panel.display = True
         panel.active = "tab-terminal"
         self.query_one("#term-input", Input).focus()
@@ -790,6 +776,9 @@ class Studio(App):
         self.push_screen(CommandPalette(providers=[ArquivosProvider], placeholder="abrir arquivo: digite parte do nome…"))
 
     def _trocar_aba(self, passo: int) -> None:
+        if isinstance(self.focused, TerminalInput):  # no terminal, troca de terminal
+            self.terminal.trocar(passo)
+            return
         tabs = self.query_one("#editors", TabbedContent)
         ids = [p.id for p in tabs.query(TabPane) if p.id]
         if not ids:
@@ -950,149 +939,51 @@ class Studio(App):
         juntar = (lambda partes: " ".join(shlex.quote(c) for c in partes)) if os.name != "nt" else subprocess.list2cmdline
         self.run_command(juntar(cmd), visivel=juntar(visivel))
 
-    @on(Input.Submitted, "#term-input")
-    def _term(self, event: Input.Submitted) -> None:
-        texto = event.value
-        event.input.value = ""
-        if self.process_running():  # com um programa rodando, a linha vai para a entrada dele (input(), read…)
-            self.send_to_process(texto)
-            return
-        cmd = texto.strip()
-        if cmd == "clear":
-            self.query_one("#term-log", RichLog).clear()
-        elif cmd:
-            self.run_command(cmd)
-
-    def process_running(self) -> bool:
-        return self.term_proc is not None and self.term_proc.poll() is None
-
-    def send_to_process(self, texto: str) -> None:
-        if self.term_fd is not None:  # pseudoterminal: o próprio terminal ecoa o que foi digitado
-            os.write(self.term_fd, (texto + "\n").encode())
-        elif self.term_proc is not None and self.term_proc.stdin is not None:  # Windows: pipe, eco manual
-            self.term_proc.stdin.write((texto + "\n").encode())
-            self.term_proc.stdin.flush()
-            self.query_one("#term-log", RichLog).write(Text(self.term_waiting + texto, style=C["text"]))
-        self._prompt_waiting("")
-
-    def interrupt_process(self) -> None:
-        """Ctrl+C no terminal: SIGINT para o programa (KeyboardInterrupt no Python)."""
-        if not self.process_running():
-            return
-        if os.name == "posix":
-            os.killpg(self.term_proc.pid, signal.SIGINT)
-        else:
-            self.term_proc.terminate()
-
-    def _prompt_waiting(self, pergunta: str) -> None:
-        """O programa imprimiu uma pergunta sem quebra de linha e está esperando: mostra a pergunta no campo do
-        terminal e põe o cursor lá."""
-        campo = self.query_one("#term-input", Input)
-        self.term_waiting = pergunta
-        if pergunta:
-            campo.placeholder = f"{pergunta.strip() or '>'}   ← o programa espera: digite e tecle Enter"
-            self.query_one("#panel", TabbedContent).active = "tab-terminal"
-            campo.focus()
-        else:
-            campo.placeholder = TERM_RUNNING if self.process_running() else TERM_IDLE
-        self.render_status()
+    @property
+    def terminal(self) -> TerminalPainel:
+        return self._terminal
 
     def run_command(self, cmd: str, visivel: str | None = None) -> None:
-        if self.process_running():
-            self.notify("já há um programa rodando: Ctrl+C no terminal interrompe", severity="warning")
-            return
         self.query_one("#panel", TabbedContent).active = "tab-terminal"
-        self.query_one("#term-log", RichLog).write(Text(f"$ {visivel or cmd}", style=f"bold {C['mint']}"))
-        self.term_worker(cmd)
+        self.terminal.executar(cmd, visivel)
 
-    @work(thread=True, group="terminal")
-    def term_worker(self, cmd: str) -> None:
-        """Roda o comando num pseudoterminal: o programa se comporta como num terminal de verdade (input() mostra a
-        pergunta na hora, a saída não fica presa em buffer, Ctrl+C e getpass funcionam). No Windows, pipes."""
-        log = self.query_one("#term-log", RichLog)
-        t0 = time.monotonic()
-        env = {**os.environ, "PYTHONUNBUFFERED": "1", "TERM": "dumb"}
-        master = None
-        try:
-            if os.name == "posix":
-                import fcntl
-                import pty
-                import struct
-                import termios
-
-                master, slave = pty.openpty()
-                colunas = max(40, log.size.width - 2)
-                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, colunas, 0, 0))
-                # setsid -c: sessão nova com o pseudoterminal como terminal de controle (Ctrl+C, getpass)
-                argv = ["setsid", "-c", "sh", "-c", cmd] if shutil.which("setsid") else ["sh", "-c", cmd]
-                self.term_proc = subprocess.Popen(argv, cwd=self.root, stdin=slave, stdout=slave, stderr=slave,
-                                                  env=env, close_fds=True, start_new_session=argv[0] != "setsid")
-                os.close(slave)
-            else:
-                self.term_proc = subprocess.Popen(cmd, shell=True, cwd=self.root, stdin=subprocess.PIPE,
-                                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, bufsize=0)
-        except OSError as exc:
-            if master is not None:
-                os.close(master)
-            self.call_from_thread(log.write, Text(str(exc), style=C["red"]))
-            return
-        self.term_fd = master
-        self.call_from_thread(self._prompt_waiting, "")
-        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        pendente = ""  # texto depois da última quebra de linha (a pergunta de um input(), por exemplo)
-        avisado = ""
-        ociosos = 0
-        while True:
-            chunk = self._read_output(master, 0.15)
-            if chunk is None:  # nada chegou: se sobrou texto sem quebra de linha, o programa está esperando
-                if pendente and pendente != avisado and self.process_running():
-                    avisado = pendente
-                    self.call_from_thread(self._prompt_waiting, pendente)
-                if not self.process_running():  # terminou, mas um filho em segundo plano segura o terminal
-                    ociosos += 1
-                    if ociosos > 6:
-                        break
-                continue
-            if not chunk:
-                break
-            texto = pendente + decoder.decode(chunk).replace("\r\n", "\n")
-            *linhas, pendente = texto.split("\n")
-            for linha in linhas:  # "\r" sozinho (barras de progresso): fica o que foi escrito por último
-                self.call_from_thread(log.write, Text.from_ansi(linha.rsplit("\r", 1)[-1], style=C["text"]))
-            if linhas and avisado:
-                avisado = ""
-                self.call_from_thread(self._prompt_waiting, "")
-        code = self.term_proc.wait()
-        if pendente.strip():
-            self.call_from_thread(log.write, Text.from_ansi(pendente, style=C["text"]))
-        if master is not None:
-            os.close(master)
-        self.term_fd = None
-        self.call_from_thread(self._prompt_waiting, "")
-        style = C["mint"] if code == 0 else C["error"]
-        self.call_from_thread(log.write, Text(f"[exit {code} · {time.monotonic() - t0:.2f}s]", style=f"bold {style}"))
-        self.call_from_thread(self.feed, f"RUN · exit {code}", "green" if code == 0 else "red")
-
-    def _read_output(self, master: int | None, timeout: float) -> bytes | None:
-        """Bytes disponíveis da saída do programa; None se nada chegou no prazo; b"" no fim."""
-        if master is not None:
-            pronto, _, _ = select.select([master], [], [], timeout)
-            if not pronto:
-                return None
-            try:
-                return os.read(master, 4096)
-            except OSError:  # EIO: o programa terminou e fechou o terminal
-                return b""
-        assert self.term_proc is not None and self.term_proc.stdout is not None
-        return self.term_proc.stdout.read1(4096) if hasattr(self.term_proc.stdout, "read1") else \
-            self.term_proc.stdout.read(1)
+    def process_running(self) -> bool:
+        return self.terminal.sessao.rodando()
 
     def action_stop_process(self) -> None:
-        if self.process_running():
-            if os.name == "posix":
-                os.killpg(self.term_proc.pid, signal.SIGTERM)  # o sh e o programa que ele iniciou
-            else:
-                self.term_proc.terminate()
+        self.terminal.parar()
+
+    def action_terminal(self, numero: int) -> None:
+        self.query_one("#panel", TabbedContent).active = "tab-terminal"
+        self.terminal.ativar_numero(numero)
+
+    async def action_novo_terminal(self) -> None:
+        self.query_one("#panel", TabbedContent).active = "tab-terminal"
+        await self.terminal.nova_sessao()
+
+    def action_shell(self) -> None:
+        """F12: o seu terminal de verdade (aliases, histórico, menus com setas, vim) no lugar do Studio; exit volta."""
+        shell = os.environ.get("SHELL") or ("cmd.exe" if os.name == "nt" else "/bin/sh")
+        pasta = self.terminal.sessao.cwd
+        try:
+            with self.suspend():
+                print(f"\n  Seu terminal ({Path(shell).name}) em {pasta}\n  Digite exit para voltar ao CODAR Studio.\n",
+                      flush=True)
+                subprocess.run([shell], cwd=pasta, env={**os.environ, "CODAR_STUDIO": "1"})
+        except Exception as exc:  # suspender não existe em todo terminal (ex.: navegador)
+            self.notify(f"não deu para abrir o shell aqui: {exc}", severity="error")
+            return
+        self.query_one("#explorer", Explorer).reload()
+
+    def terminal_mudou(self) -> None:
+        self.render_status()
+
+    def programa_terminou(self, sessao, codigo: int) -> None:
+        self.feed(f"RUN · exit {codigo}", "green" if codigo == 0 else "red")
+
+    def servidor_detectado(self, sessao, url: str) -> None:
+        self.feed(f"SERVIDOR · {url}", "cyan")
+        self.notify(f"servidor no ar: {url}", title=f"terminal {sessao.numero}")
 
     # ------------------------------------------------------------------ consultor de projeto
     def action_advise(self) -> None:
@@ -1145,14 +1036,14 @@ class Studio(App):
         from codar.advisor.apply import ApplyError, apply_steps, find_option
         from codar.plugin_loader import discover
 
-        log = self.query_one("#term-log", RichLog)
+        escrever = partial(self.call_from_thread, self.terminal.escrever)
         bundle = discover(config.load())
         try:
             title, opt, steps = find_option(self.root, bundle, sid, oid)
-            self.call_from_thread(log.write, Text(f"▶ {title} → {opt['label']}", style=f"bold {C['mint']}"))
-            apply_steps(self.root, steps, bundle, lambda s: self.call_from_thread(log.write, Text(s, style=C["text"])))
+            escrever(Text(f"▶ {title} → {opt['label']}", style=f"bold {C['mint']}"))
+            apply_steps(self.root, steps, bundle, lambda s: escrever(Text(s, style=C["text"])))
         except ApplyError as exc:
-            self.call_from_thread(log.write, Text(f"✖ {exc}", style=f"bold {C['red']}"))
+            escrever(Text(f"✖ {exc}", style=f"bold {C['error']}"))
             self.call_from_thread(self.feed, f"ADVISOR · falhou: {str(exc)[:50]}", "red")
             return
         self.call_from_thread(self.feed, f"ADVISOR · aplicado: {opt['label']}", "green")
@@ -1235,35 +1126,16 @@ class Studio(App):
             ("Codar: Carregar modelo", "pré-aquece o SLM", lambda: self.model_worker("model.load")),
             ("Codar: Descarregar modelo", "devolve a RAM do SLM ao sistema", lambda: self.model_worker("model.unload")),
             ("Codar: Novo arquivo…", "Ctrl+N", self.action_new_file),
-            ("Codar: Parar processo do terminal", "encerra o processo em execução", self.action_stop_process),
+            ("Codar: Parar processo do terminal", "encerra o processo do terminal ativo", self.action_stop_process),
+            ("Codar: Novo terminal", "Ctrl+T dentro do terminal — o outro continua rodando", self.action_novo_terminal),
+            ("Codar: Abrir o meu shell", "F12 — o seu terminal de verdade; exit volta ao Studio", self.action_shell),
             ("Codar: Mostrar/ocultar explorer", "Ctrl+B", self.action_toggle_left),
             ("Codar: Mostrar/ocultar painel", "F9", self.action_toggle_panel),
         ]
 
     def on_unmount(self) -> None:
-        self.action_stop_process()
+        self.terminal.parar_tudo()
         self.backend.close()
-
-
-def _estado() -> dict:
-    """Preferências do Studio entre sessões (tema escolhido)."""
-    import json
-
-    try:
-        return json.loads((paths.data_dir() / "studio.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-
-
-def _salvar_estado(**valores) -> None:
-    import json
-
-    arquivo = paths.data_dir() / "studio.json"
-    try:
-        arquivo.parent.mkdir(parents=True, exist_ok=True)
-        arquivo.write_text(json.dumps({**_estado(), **valores}, ensure_ascii=False), encoding="utf-8")
-    except OSError:
-        pass
 
 
 def _budget_gb() -> str:
