@@ -17,7 +17,7 @@ from pathlib import Path
 
 from codar.engine.postprocess import join_imports, split_imports
 from codar.plugin_loader import Pattern, _norm
-from codar.textutil import SPECIFIC, analyze, fold
+from codar.textutil import SPECIFIC, analyze, concept_set, fold
 
 SCHEMA = """
 PRAGMA journal_mode = WAL;
@@ -309,6 +309,9 @@ class PatternStore:
             except sqlite3.OperationalError:
                 return []
         intent_concepts = {_norm(c) for _, cs, _ in terms for c in cs}
+        # o tipo do arquivo citado conta para as palavras obrigatórias: "ler o arquivo vendas.csv" é um pedido de CSV
+        tipos = {_norm(c) for k in ("path", "dest") if slots.get(k) and "." in slots[k]
+                 for c in concept_set(slots[k].rsplit(".", 1)[-1].lower())}
         intent_specific = intent_concepts & SPECIFIC
         total_w = sum(w for _, _, w in terms)
         out: list[Match] = []
@@ -316,10 +319,10 @@ class PatternStore:
             p = self.get(row["pid"])
             if p is None:
                 continue
-            if p.require and not ({_norm(c) for c in _concepts_of(p.require)} & intent_concepts):
+            if p.require and not ({_norm(c) for c in _concepts_of(p.require)} & (intent_concepts | tipos)):
                 continue
             p_specific = p.core & SPECIFIC
-            if p_specific - intent_concepts:
+            if p_specific - intent_concepts - tipos:
                 continue
             matched = sum(w for word, cs, w in terms if {_norm(c) for c in cs} & p.concepts
                           or any(k.startswith(word[:5]) for k in p.concepts if len(word) >= 5))

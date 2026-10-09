@@ -1,0 +1,291 @@
+# Visão computacional com OpenCV. Use o pacote opencv-python-headless: é o OpenCV sem as janelas (cv2.imshow), mais
+# leve e o que funciona em servidores e via SSH. Por isso estes exemplos salvam o resultado em arquivo em vez de
+# abrir janelas; no Studio, a imagem salva pode ser vista no celular pelo endereço de rede. O OpenCV usa as cores na
+# ordem BGR (azul, verde, vermelho), não RGB. Os exemplos funcionam no OpenCV 4 e no 5.
+
+[[pattern]]
+id = "visao.ler_imagem"
+title = "Abrir uma imagem com OpenCV e ver tamanho e canais"
+keywords = "abrir ler carregar imagem foto figura opencv cv2 imread tamanho largura altura pixels canais"
+require = ["imagem", "imagens", "foto", "fotos", "image", "opencv", "cv2"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png" }
+
+[pattern.code]
+python = '''
+import cv2
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:  # o OpenCV não dá erro: devolve None quando não consegue abrir
+    raise SystemExit("não consegui abrir {{path}}: confira o caminho e o formato")
+altura, largura = imagem.shape[:2]
+canais = 1 if imagem.ndim == 2 else imagem.shape[2]
+print(f"{largura}x{altura} pixels, {canais} canais (ordem BGR)")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+img = np.zeros((120, 200, 3), dtype=np.uint8)
+cv2.rectangle(img, (20, 20), (80, 80), (255, 255, 255), -1)
+cv2.circle(img, (150, 60), 30, (0, 255, 0), -1)
+cv2.imwrite("foto.png", img)
+'''
+python = '''
+assert (largura, altura, canais) == (200, 120, 3)
+'''
+
+[[pattern]]
+id = "visao.cinza"
+title = "Converter uma imagem para tons de cinza e salvar"
+keywords = "converter imagem foto tons de cinza escala de cinza preto e branco grayscale cvtcolor opencv cv2 salvar"
+require = ["cinza", "grayscale", "gray", "preto"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png", dest = "foto_cinza.png" }
+
+[pattern.code]
+python = '''
+import cv2
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:
+    raise SystemExit("não consegui abrir {{path}}")
+cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)  # 1 canal: 0 (preto) a 255 (branco)
+cv2.imwrite("{{dest}}", cinza)
+print("salvo em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+img = np.zeros((60, 80, 3), dtype=np.uint8)
+img[:, 40:] = (255, 255, 255)
+cv2.imwrite("foto.png", img)
+'''
+python = '''
+salva = cv2.imread("foto_cinza.png", cv2.IMREAD_UNCHANGED)
+assert salva.ndim == 2 and salva[0, 0] == 0 and salva[0, 79] == 255
+'''
+
+[[pattern]]
+id = "visao.redimensionar"
+title = "Redimensionar uma imagem mantendo a proporção"
+keywords = "redimensionar reduzir diminuir aumentar mudar tamanho largura imagem foto miniatura resize proporcao opencv cv2"
+require = ["redimensionar", "resize", "reduzir", "diminuir", "miniatura", "tamanho"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png", dest = "foto_menor.png", largura = "100" }
+
+[pattern.code]
+python = '''
+import cv2
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:
+    raise SystemExit("não consegui abrir {{path}}")
+altura, largura = imagem.shape[:2]
+nova_largura = {{largura}}
+nova_altura = round(altura * nova_largura / largura)  # mesma proporção: a imagem não fica esticada
+# INTER_AREA é o melhor para reduzir; para aumentar, use cv2.INTER_CUBIC
+menor = cv2.resize(imagem, (nova_largura, nova_altura), interpolation=cv2.INTER_AREA)
+cv2.imwrite("{{dest}}", menor)
+print(f"{largura}x{altura} -> {nova_largura}x{nova_altura}, salvo em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+cv2.imwrite("foto.png", np.full((120, 200, 3), 128, dtype=np.uint8))
+'''
+python = '''
+assert cv2.imread("foto_menor.png").shape[:2] == (60, 100)
+'''
+
+[[pattern]]
+id = "visao.bordas"
+title = "Detectar bordas numa imagem (Canny) e salvar o resultado"
+keywords = "detectar bordas contornos arestas edges canny desfoque gaussiano imagem foto opencv cv2 visao computacional"
+require = ["bordas", "borda", "arestas", "edges", "canny"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png", dest = "bordas.png" }
+
+[pattern.code]
+python = '''
+import cv2
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:
+    raise SystemExit("não consegui abrir {{path}}")
+cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+suave = cv2.GaussianBlur(cinza, (5, 5), 0)  # tira o ruído antes: menos bordas falsas
+bordas = cv2.Canny(suave, 50, 150)  # limiares: abaixo de 50 descarta, acima de 150 é borda com certeza
+cv2.imwrite("{{dest}}", bordas)
+print(f"{int((bordas > 0).sum())} pixels de borda, salvo em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+img = np.zeros((120, 200, 3), dtype=np.uint8)
+cv2.rectangle(img, (20, 20), (80, 80), (255, 255, 255), -1)
+cv2.imwrite("foto.png", img)
+'''
+python = '''
+assert (bordas > 0).sum() > 100 and bordas[50, 50] == 0
+'''
+
+[[pattern]]
+id = "visao.contornos"
+title = "Contar objetos numa imagem e marcar cada um com um retângulo (contornos)"
+keywords = "contar objetos contornos findcontours retangulo marcar caixas segmentar limiar threshold imagem foto opencv cv2"
+require = ["contornos", "contorno", "objetos", "contours", "contar"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png", dest = "objetos.png" }
+
+[pattern.code]
+python = '''
+import cv2
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:
+    raise SystemExit("não consegui abrir {{path}}")
+cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+# Otsu escolhe sozinho o limiar que separa objeto e fundo
+_, mascara = cv2.threshold(cinza, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+contornos, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+objetos = [c for c in contornos if cv2.contourArea(c) > 50]  # ignora pontinhos de ruído
+for c in objetos:
+    x, y, largura, altura = cv2.boundingRect(c)
+    cv2.rectangle(imagem, (x, y), (x + largura, y + altura), (0, 0, 255), 2)
+cv2.imwrite("{{dest}}", imagem)
+print(f"{len(objetos)} objeto(s), marcados em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+img = np.zeros((120, 200, 3), dtype=np.uint8)
+cv2.rectangle(img, (20, 20), (80, 80), (255, 255, 255), -1)
+cv2.circle(img, (150, 60), 30, (255, 255, 255), -1)
+cv2.imwrite("foto.png", img)
+'''
+python = '''
+assert len(objetos) == 2
+'''
+
+[[pattern]]
+id = "visao.rostos"
+title = "Detectar rostos numa imagem (OpenCV 4 com Haar, offline; OpenCV 5 com o detector YuNet)"
+keywords = "detectar reconhecer encontrar rostos rosto faces face pessoas haar cascade yunet classificador imagem foto opencv cv2 visao computacional"
+require = ["rosto", "rostos", "face", "faces"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png", dest = "rostos.png", modelo = "face_detection_yunet_2023mar.onnx" }
+
+[pattern.code]
+python = '''
+from pathlib import Path
+
+import cv2
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:
+    raise SystemExit("não consegui abrir {{path}}")
+rostos = []
+if hasattr(cv2, "CascadeClassifier"):  # OpenCV 4: classificador Haar, que vem no próprio pacote (offline)
+    classificador = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cinza = cv2.equalizeHist(cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY))  # equalizar ajuda com pouca luz
+    rostos = list(classificador.detectMultiScale(cinza, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)))
+elif Path("{{modelo}}").exists():  # OpenCV 5: detector YuNet (rede neural), mais preciso que o Haar
+    altura, largura = imagem.shape[:2]
+    detector = cv2.FaceDetectorYN.create("{{modelo}}", "", (largura, altura), score_threshold=0.8)
+    _, achados = detector.detect(imagem)
+    rostos = [] if achados is None else [tuple(int(v) for v in r[:4]) for r in achados]
+else:
+    print("o OpenCV 5 detecta rostos com o modelo YuNet; baixe uma vez (230 KB) e salve como {{modelo}}:")
+    print("https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx")
+for x, y, largura_r, altura_r in rostos:
+    cv2.rectangle(imagem, (x, y), (x + largura_r, y + altura_r), (0, 255, 0), 2)
+cv2.imwrite("{{dest}}", imagem)
+print(f"{len(rostos)} rosto(s) encontrado(s), marcados em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+cv2.imwrite("foto.png", np.full((200, 200, 3), 200, dtype=np.uint8))
+'''
+python = '''
+import os
+assert len(rostos) == 0 and os.path.exists("rostos.png")
+if hasattr(cv2, "CascadeClassifier"):
+    assert not classificador.empty()
+'''
+
+[[pattern]]
+id = "visao.cor"
+title = "Encontrar uma cor numa imagem (máscara em HSV) e medir quanto da imagem ela ocupa"
+keywords = "detectar encontrar separar cor verde vermelho azul mascara hsv inrange segmentar imagem foto opencv cv2"
+require = ["cor", "cores", "hsv", "mascara", "color"]
+tags = ["visao", "opencv"]
+slots = { path = "foto.png", dest = "mascara.png" }
+
+[pattern.code]
+python = '''
+import cv2
+import numpy as np
+
+imagem = cv2.imread("{{path}}")
+if imagem is None:
+    raise SystemExit("não consegui abrir {{path}}")
+hsv = cv2.cvtColor(imagem, cv2.COLOR_BGR2HSV)  # em HSV a cor (matiz) fica separada do brilho: mais fácil de filtrar
+# verde: matiz de 35 a 85 (no OpenCV a matiz vai de 0 a 179); ajuste para outras cores
+mascara = cv2.inRange(hsv, np.array([35, 60, 40]), np.array([85, 255, 255]))
+cv2.imwrite("{{dest}}", mascara)
+print(f"a cor ocupa {mascara.mean() / 255:.1%} da imagem; máscara salva em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["cv2", "numpy"]
+python_setup = '''
+import cv2, numpy as np
+img = np.zeros((100, 100, 3), dtype=np.uint8)
+img[:, :25] = (0, 255, 0)
+cv2.imwrite("foto.png", img)
+'''
+python = '''
+assert abs(mascara.mean() / 255 - 0.25) < 0.01
+'''
+
+[[pattern]]
+id = "visao.miniatura_pillow"
+title = "Criar miniaturas de imagens com Pillow (mais leve que o OpenCV)"
+keywords = "miniatura miniaturas thumbnail reduzir imagens fotos pasta pillow pil redimensionar jpg png"
+require = ["miniatura", "miniaturas", "thumbnail", "pillow", "pil"]
+tags = ["visao", "pillow"]
+slots = { path = "foto.png", dest = "miniatura.png", largura = "128" }
+
+[pattern.code]
+python = '''
+from PIL import Image
+
+with Image.open("{{path}}") as imagem:
+    imagem.thumbnail(({{largura}}, {{largura}}))  # cabe num quadrado de {{largura}} px, mantendo a proporção
+    imagem.save("{{dest}}")
+    print(f"miniatura {imagem.width}x{imagem.height} salva em {{dest}}")
+'''
+
+[pattern.test]
+modules = ["PIL"]
+python_setup = '''
+from PIL import Image
+Image.new("RGB", (400, 200), "white").save("foto.png")
+'''
+python = '''
+from PIL import Image
+assert Image.open("miniatura.png").size == (128, 64)
+'''

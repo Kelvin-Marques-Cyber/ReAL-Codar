@@ -24,7 +24,8 @@ class Conceito:
     relacionados: tuple[str, ...] = ()
 
 
-TRILHAS = {"fundamentos": "FUNDAMENTOS", "poo": "ORIENTAÇÃO A OBJETOS", "web": "JAVASCRIPT E WEB"}
+TRILHAS = {"fundamentos": "FUNDAMENTOS", "poo": "ORIENTAÇÃO A OBJETOS", "web": "JAVASCRIPT E WEB",
+           "dados": "CIÊNCIA DE DADOS E VISÃO"}
 
 CONCEITOS: list[Conceito] = [
     # ------------------------------------------------------------------------------------------- fundamentos
@@ -374,6 +375,75 @@ CONCEITOS: list[Conceito] = [
         palavras=("typescript", "interface", "tipo", "type"),
         exemplos={"js": "interface Produto {\n  nome: string;\n  preco: number;\n}\n\nfunction comDesconto(p: Produto, pct: number): number {\n  return p.preco * (1 - pct / 100);\n}"},
         relacionados=("classe",)),
+]
+
+CONCEITOS += [
+    # ------------------------------------------------------------------------------- ciência de dados e visão
+    Conceito(
+        "dataframe", "DataFrame (tabela do pandas)", "dados",
+        "Um DataFrame é uma tabela na memória: linhas e colunas com nome, como uma planilha. df[\"preco\"] pega uma "
+        "coluna (uma Series); df[df[\"preco\"] > 10] filtra linhas; df.head() mostra o começo e df.describe() resume os "
+        "números. Operações valem para a coluna inteira de uma vez, sem for.",
+        "Leia um CSV, mostre df.shape e df.dtypes e crie uma coluna nova: df[\"total\"] = df[\"preco\"] * df[\"qtd\"].",
+        linha={"py": (r"\bpd\.(?:read_csv|read_excel|DataFrame)\(", r"\bdf(?:\[|\.(?:head|describe|info|shape|loc|iloc)\b)"),
+               "*": (r"\bread\.csv\(|\bdata\.frame\(",)},
+        palavras=("dataframe", "pandas", "planilha", "tabela"),
+        exemplos={"py": 'import pandas as pd\n\ndf = pd.read_csv("vendas.csv")\nprint(df.head())\n'
+                        'caros = df[df["preco"] > 10]\ndf["total"] = df["preco"] * df["quantidade"]'},
+        relacionados=("agrupamento", "grafico")),
+    Conceito(
+        "agrupamento", "Agrupar e resumir", "dados",
+        "groupby separa a tabela em grupos (por categoria, por mês) e calcula um resumo de cada um: soma, média, "
+        "contagem. É a pergunta \"quanto vendeu cada categoria?\" em uma linha.",
+        "Agrupe uma tabela por uma coluna de texto e mostre a média e a soma de uma coluna numérica.",
+        linha={"py": (r"\.groupby\(", r"\bpivot_table\(", r"\.agg\("), "*": (r"\baggregate\(|\btapply\(",)},
+        palavras=("agrupar", "groupby", "por categoria", "resumo por"),
+        exemplos={"py": 'resumo = df.groupby("categoria")["preco"].agg(["count", "mean", "sum"])\nprint(resumo)'},
+        relacionados=("dataframe",)),
+    Conceito(
+        "grafico", "Gráficos em arquivo", "dados",
+        "matplotlib desenha gráficos. Em servidor ou via SSH não há tela, então use o backend Agg e salve com "
+        "plt.savefig(\"grafico.png\"); no Studio, a imagem pode ser aberta no celular. Feche com plt.close() para não "
+        "acumular memória ao gerar vários.",
+        "Faça um gráfico de barras de uma coluna agrupada e salve em PNG.",
+        linha={"py": (r"\bplt\.", r"\bmatplotlib\b", r"\.plot\(", r"\bsavefig\("), "*": (r"\bpng\(|\bbarplot\(|\bhist\(",)},
+        palavras=("grafico", "gráfico", "plotar", "matplotlib", "histograma"),
+        exemplos={"py": 'import matplotlib\n\nmatplotlib.use("Agg")\nimport matplotlib.pyplot as plt\n\n'
+                        'plt.bar(["a", "b"], [3, 5])\nplt.savefig("grafico.png")\nplt.close()'},
+        relacionados=("dataframe",)),
+    Conceito(
+        "treino_teste", "Treino e teste (aprendizado de máquina)", "dados",
+        "Um modelo aprende com exemplos (fit) e depois prevê (predict). Para saber se ele aprendeu de verdade, e não só "
+        "decorou, separe dados que ele nunca viu: train_test_split guarda uma parte para o teste. A nota que vale é a "
+        "do teste.",
+        "Treine uma regressão linear com train_test_split e compare o R² do treino com o do teste.",
+        linha={"py": (r"\btrain_test_split\b", r"\.fit\(", r"\.predict\(", r"\bfrom sklearn\b"), "*": (r"\blm\(|\bpredict\(",)},
+        palavras=("treinar", "modelo", "machine learning", "aprendizado de máquina", "prever", "classificar"),
+        exemplos={"py": "from sklearn.linear_model import LinearRegression\nfrom sklearn.model_selection import train_test_split\n\n"
+                        "X_treino, X_teste, y_treino, y_teste = train_test_split(X, y, test_size=0.25, random_state=42)\n"
+                        "modelo = LinearRegression().fit(X_treino, y_treino)\nprint(modelo.score(X_teste, y_teste))"},
+        relacionados=("dataframe",)),
+    Conceito(
+        "numpy_array", "Arrays do NumPy", "dados",
+        "Um array do NumPy guarda muitos números do mesmo tipo e faz contas com todos de uma vez: v * 2 dobra cada "
+        "elemento, v.mean() dá a média. É muito mais rápido que um for em Python e é a base do pandas, do "
+        "scikit-learn e do OpenCV (uma imagem é um array).",
+        "Crie um array com 10 números, calcule média e desvio e pegue só os maiores que a média (v[v > v.mean()]).",
+        linha={"py": (r"\bnp\.(?:array|mean|median|std|zeros|ones|arange|linspace|percentile)\(",)},
+        palavras=("numpy", "array", "vetor de números"),
+        exemplos={"py": "import numpy as np\n\nv = np.array([3, 7, 8, 12])\nprint(v * 2, v.mean(), v[v > v.mean()])"},
+        relacionados=("lista",)),
+    Conceito(
+        "imagem_matriz", "Imagem é uma matriz de pixels", "dados",
+        "Para o OpenCV, uma imagem é um array: imagem.shape dá (altura, largura, canais), e cada pixel são 3 números de "
+        "0 a 255 na ordem BGR (azul, verde, vermelho). cv2.imread devolve None se não conseguir abrir (não dá erro), "
+        "então confira antes de usar.",
+        "Abra uma imagem, mostre shape e o valor do pixel do meio, converta para cinza e salve.",
+        linha={"py": (r"\bcv2\.(?:imread|imwrite|cvtColor|resize|GaussianBlur|Canny)\(", r"\bImage\.open\(")},
+        palavras=("imagem", "opencv", "pixel", "visão computacional", "foto"),
+        exemplos={"py": 'import cv2\n\nimagem = cv2.imread("foto.png")\nif imagem is None:\n    raise SystemExit("não abriu")\n'
+                        'altura, largura, canais = imagem.shape\nprint(imagem[altura // 2, largura // 2])  # [B, G, R]'},
+        relacionados=("numpy_array",)),
 ]
 
 POR_ID: dict[str, Conceito] = {c.id: c for c in CONCEITOS}

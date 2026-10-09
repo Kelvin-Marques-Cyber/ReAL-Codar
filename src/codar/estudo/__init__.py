@@ -25,7 +25,8 @@ __all__ = ["CONCEITOS", "POR_ID", "TRILHA_POO", "TRILHAS", "Conceito", "EstadoPo
 
 _GRUPO = {"python": "py", "javascript": "js", "typescript": "js"}
 # a linha "class Poupanca(Conta):" é herança antes de ser classe; "conta = Conta()" é objeto antes de variável
-_PRIORIDADE = ["heranca", "super", "polimorfismo", "composicao", "encapsulamento", "str", "construtor", "metodo",
+_PRIORIDADE = ["treino_teste", "agrupamento", "grafico", "imagem_matriz", "numpy_array", "dataframe",
+               "heranca", "super", "polimorfismo", "composicao", "encapsulamento", "str", "construtor", "metodo",
                "atributo", "objeto", "classe", "componente", "async", "array_metodos", "arrow", "tipos_ts", "main",
                "compreensao", "excecao", "arquivo", "fstring", "conversao", "input", "dicionario", "lista", "for",
                "while", "if", "funcao", "import", "texto", "let_const", "print", "variavel", "indentacao"]

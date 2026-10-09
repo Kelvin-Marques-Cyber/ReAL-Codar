@@ -260,18 +260,27 @@ def run_tests(patterns, timeout: float = 20.0) -> tuple[int, list[str]]:
     from codar.evals.runner import check as run_python
 
     node = shutil.which("node")
+    python = os.environ.get("CODAR_PYTHON") or sys.executable  # ex.: um ambiente com pandas, scikit-learn, OpenCV
     ran, failures = 0, []
+    sem_modulo: dict[str, list[str]] = {}  # módulo -> padrões que não rodaram por falta dele
     for p in patterns:
+        modulos = list(p.tests.get("modules", []))
+        faltam = _modulos_ausentes(python, modulos) if modulos else []
+        for m in faltam:
+            sem_modulo.setdefault(m, []).append(p.id)
         for lang, test in p.tests.items():
             code = p.code.get(lang)
-            if code is None or lang.endswith("_setup"):
+            if code is None or lang.endswith("_setup") or not isinstance(test, str):
+                continue
+            if lang == "python" and faltam:
                 continue
             for slot, default in p.slots.items():
                 code = code.replace("{{" + slot + "}}", default)
             if p.tests.get(f"{lang}_setup"):
                 code = p.tests[f"{lang}_setup"] + "\n" + code
             if lang == "python":
-                ok, err = run_python(code, test, timeout=timeout)
+                ok, err = run_python(code, test, timeout=timeout * (3 if modulos else 1), python=python,
+                                     memoria_mb=2048 if modulos else 768)
             elif lang in ("powershell", "bash") and (pwsh_bin() if lang == "powershell" else shutil.which("bash")):
                 with tempfile.TemporaryDirectory() as tmp:
                     f = Path(tmp, "t.ps1" if lang == "powershell" else "t.sh")
@@ -312,7 +321,19 @@ def run_tests(patterns, timeout: float = 20.0) -> tuple[int, list[str]]:
                 if result:
                     label = " ".join(run.get("args", [])) or "stdin"
                     failures.append(f"{p.id} [{lang}] execução {k + 1} ({label}): {result}")
+    run_tests.sem_modulo = sem_modulo  # type: ignore[attr-defined]  # o relatório mostra o que não rodou
     return ran, failures
+
+
+def _modulos_ausentes(python: str, modulos: list[str]) -> list[str]:
+    import subprocess
+
+    teste = "import importlib.util,sys;print(' '.join(m for m in sys.argv[1:] if importlib.util.find_spec(m) is None))"
+    try:
+        r = subprocess.run([python, "-c", teste, *modulos], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return modulos
+    return r.stdout.split() if r.returncode == 0 else modulos
 
 
 # Programas interativos: arquivo + comando para executar com a sessão digitada na entrada padrão.
@@ -377,6 +398,9 @@ def main() -> int:
         print(f"FALHA {f}")
     if not pwsh_bin():
         print("aviso: pwsh não encontrado; PowerShell não foi validado (instale o PowerShell 7 ou defina CODAR_PWSH)")
+    for modulo, ids in sorted(getattr(run_tests, "sem_modulo", {}).items()):
+        print(f"aviso: {len(ids)} padrão(ões) sem rodar por falta de {modulo} "
+              f"(defina CODAR_PYTHON com um Python que tenha {modulo})")
     print(f"{len(bundle.patterns)} padrões · {checked} variantes validadas · {skipped} sem validador · "
           f"{len(errors)} erros de sintaxe · {ran} testes executados · {len(failures)} falhas")
     return 1 if errors or failures else 0

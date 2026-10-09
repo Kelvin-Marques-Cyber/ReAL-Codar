@@ -19,9 +19,10 @@ from pathlib import Path
 from codar._compat import tomllib
 
 _SANDBOX = r'''
-import resource, sys
+import os, resource, sys
+limite = int(os.environ.get("CODAR_SANDBOX_MB", "768")) << 20  # memória virtual do teste (bibliotecas pedem mais)
 try:
-    resource.setrlimit(resource.RLIMIT_AS, (768 << 20, 768 << 20))
+    resource.setrlimit(resource.RLIMIT_AS, (limite, limite))
 except Exception:
     pass
 code = open(sys.argv[1], encoding="utf-8").read()
@@ -40,15 +41,20 @@ def load_tasks(path: Path | None = None) -> list[dict]:
     return data["task"]
 
 
-def check(code: str, test: str, timeout: float = 10.0) -> tuple[bool, str]:
+def check(code: str, test: str, timeout: float = 10.0, python: str | None = None,
+          memoria_mb: int = 768) -> tuple[bool, str]:
+    """Roda o código e o teste num processo isolado, com limite de memória. `python` escolhe o interpretador (o de
+    um ambiente com pandas/OpenCV, por exemplo); bibliotecas numéricas rodam com uma thread só."""
+    env = {**os.environ, "CODAR_SANDBOX_MB": str(memoria_mb), "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1",
+           "MKL_NUM_THREADS": "1", "MPLBACKEND": "Agg"}
     with tempfile.TemporaryDirectory() as tmp:
         c, t, s = Path(tmp, "c.py"), Path(tmp, "t.py"), Path(tmp, "s.py")
         c.write_text(code, encoding="utf-8")
         t.write_text(test, encoding="utf-8")
         s.write_text(_SANDBOX, encoding="utf-8")
         try:
-            r = subprocess.run([sys.executable, "-I", str(s), str(c), str(t)], capture_output=True, text=True,
-                               timeout=timeout, stdin=subprocess.DEVNULL, cwd=tmp)
+            r = subprocess.run([python or sys.executable, "-I", str(s), str(c), str(t)], capture_output=True,
+                               text=True, timeout=timeout, stdin=subprocess.DEVNULL, cwd=tmp, env=env)
         except subprocess.TimeoutExpired:
             return False, "timeout"
         if r.returncode == 0:

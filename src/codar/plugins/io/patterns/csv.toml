@@ -1,0 +1,84 @@
+# CSV com a biblioteca padrão (sem instalar nada). Para análise de dados maior, os padrões "dados.*" usam pandas.
+
+[[pattern]]
+id = "io.csv_ler"
+title = "Ler um arquivo CSV (biblioteca padrão, sem pandas)"
+keywords = "ler abrir carregar arquivo csv linhas colunas cabecalho separado por virgula planilha dictreader"
+require = ["csv"]
+tags = ["io", "csv"]
+slots = { path = "dados.csv" }
+
+[pattern.code]
+python = '''
+import csv
+
+with open("{{path}}", newline="", encoding="utf-8") as arquivo:
+    linhas = list(csv.DictReader(arquivo))  # cada linha vira um dicionário {coluna: valor}; valores chegam como texto
+print(f"{len(linhas)} linhas; colunas: {', '.join(linhas[0]) if linhas else '-'}")
+for linha in linhas[:5]:
+    print(linha)
+'''
+go = '''
+import (
+	"encoding/csv"
+	"fmt"
+	"log"
+	"os"
+)
+
+arquivo, err := os.Open("{{path}}")
+if err != nil {
+	log.Fatal(err)
+}
+defer arquivo.Close()
+registros, err := csv.NewReader(arquivo).ReadAll() // cada registro é um []string; o primeiro é o cabeçalho
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("%d linhas (com o cabeçalho)\n", len(registros))
+for _, registro := range registros[:min(6, len(registros))] {
+	fmt.Println(registro)
+}
+'''
+r = '''
+df <- read.csv("{{path}}")
+cat(nrow(df), "linhas; colunas:", paste(names(df), collapse = ", "), "\n")
+print(head(df))
+'''
+
+[pattern.test]
+python_setup = '''
+with open("dados.csv", "w", encoding="utf-8") as f:
+    f.write("nome,idade\nAna,30\n\"Silva, Bia\",25\n")
+'''
+python = '''
+assert len(linhas) == 2 and linhas[1]["nome"] == "Silva, Bia" and linhas[0]["idade"] == "30"
+'''
+
+[[pattern]]
+id = "io.csv_gravar"
+title = "Gravar uma lista de registros num arquivo CSV (biblioteca padrão)"
+keywords = "gravar salvar escrever exportar arquivo csv lista registros dicionarios linhas colunas cabecalho dictwriter"
+require = ["csv"]
+tags = ["io", "csv"]
+slots = { path = "saida.csv" }
+
+[pattern.code]
+python = '''
+import csv
+
+registros = [
+    {"nome": "Ana", "idade": 30},
+    {"nome": "Bia", "idade": 25},
+]
+with open("{{path}}", "w", newline="", encoding="utf-8") as arquivo:  # newline="": sem linhas em branco no Windows
+    escritor = csv.DictWriter(arquivo, fieldnames=list(registros[0]))
+    escritor.writeheader()
+    escritor.writerows(registros)
+print(f"{len(registros)} registros gravados em {{path}}")
+'''
+
+[pattern.test]
+python = '''
+assert open("saida.csv", encoding="utf-8").read().splitlines() == ["nome,idade", "Ana,30", "Bia,25"]
+'''

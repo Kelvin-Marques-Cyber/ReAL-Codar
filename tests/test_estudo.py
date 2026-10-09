@@ -32,6 +32,12 @@ from codar import estudo
     ("  const [n, setN] = useState(0);", "typescript", "componente"),
     ("interface Produto {", "typescript", "tipos_ts"),
     ("for _, n := range nums {", "go", "for"),
+    ("df = pd.read_csv('vendas.csv')", "python", "dataframe"),
+    ("resumo = df.groupby('categoria')['preco'].sum()", "python", "agrupamento"),
+    ("plt.savefig('grafico.png')", "python", "grafico"),
+    ("X_treino, X_teste, y_treino, y_teste = train_test_split(X, y)", "python", "treino_teste"),
+    ("imagem = cv2.imread('foto.png')", "python", "imagem_matriz"),
+    ("df <- read.csv('vendas.csv')", "r", "dataframe"),
 ])
 def test_conceito_da_linha(linha, lang, esperado):
     achados = estudo.conceitos_da_linha(linha, lang)

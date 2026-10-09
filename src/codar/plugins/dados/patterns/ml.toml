@@ -1,0 +1,147 @@
+# Aprendizado de máquina com scikit-learn e estatística com NumPy. Os exemplos que não dependem dos seus dados usam
+# conjuntos que vêm dentro do scikit-learn (iris): funcionam offline, sem baixar nada. Treinos com uma CPU só
+# (n_jobs=1): mais lentos que o máximo, mas sem esquentar o notebook.
+
+[[pattern]]
+id = "dados.regressao_linear"
+title = "Regressão linear com scikit-learn: treinar, testar e medir o erro"
+keywords = "regressao linear prever previsao numero valor treinar modelo machine learning aprendizado de maquina scikit sklearn treino teste erro r2 coeficiente csv"
+require = ["regressao", "regression", "prever", "previsao"]
+tags = ["dados", "ml", "sklearn"]
+slots = { path = "imoveis.csv", field = "area", alvo = "preco" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
+
+df = pd.read_csv("{{path}}")
+X = df[["{{field}}"]]  # o que explica (pode listar mais colunas)
+y = df["{{alvo}}"]  # o que queremos prever
+# separa dados que o modelo nunca viu, para medir se ele generaliza (e não só decora)
+X_treino, X_teste, y_treino, y_teste = train_test_split(X, y, test_size=0.25, random_state=42)
+modelo = LinearRegression().fit(X_treino, y_treino)
+previsto = modelo.predict(X_teste)
+print(f"R²: {r2_score(y_teste, previsto):.3f} (1 = perfeito) · erro médio: {mean_absolute_error(y_teste, previsto):.2f}")
+print(f"{{alvo}} ≈ {modelo.coef_[0]:.2f} × {{field}} + {modelo.intercept_:.2f}")
+'''
+r = '''
+df <- read.csv("{{path}}")
+set.seed(42)
+treino <- sample(nrow(df), floor(0.75 * nrow(df)))  # separa dados que o modelo nunca viu
+modelo <- lm({{alvo}} ~ {{field}}, data = df[treino, ])
+previsto <- predict(modelo, df[-treino, ])
+cat("erro médio:", round(mean(abs(df[-treino, "{{alvo}}"] - previsto)), 2), "\n")
+print(summary(modelo))  # coeficientes, R² e significância
+'''
+
+[pattern.test]
+modules = ["pandas", "sklearn"]
+python_setup = '''
+import csv, random
+random.seed(7)
+with open("imoveis.csv", "w", newline="", encoding="utf-8") as f:
+    w = csv.writer(f)
+    w.writerow(["area", "preco"])
+    for _ in range(80):
+        area = random.uniform(30, 200)
+        w.writerow([round(area, 1), round(3000 * area + 20000 + random.gauss(0, 15000))])
+'''
+python = '''
+assert r2_score(y_teste, previsto) > 0.9
+assert 2500 < modelo.coef_[0] < 3500
+'''
+
+[[pattern]]
+id = "dados.classificacao"
+title = "Classificar com Random Forest e medir a acurácia (exemplo com o conjunto iris, offline)"
+keywords = "classificar classificacao classificador categoria prever classe random forest floresta arvore decisao treinar modelo machine learning aprendizado de maquina sklearn acuracia iris"
+require = ["classificar", "classificacao", "classificador", "classification", "classifier", "forest"]
+tags = ["dados", "ml", "sklearn"]
+
+[pattern.code]
+python = '''
+from sklearn.datasets import load_iris
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import train_test_split
+
+X, y = load_iris(return_X_y=True, as_frame=True)  # vem com o scikit-learn: troque pelos seus dados (X = colunas, y = classe)
+X_treino, X_teste, y_treino, y_teste = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+modelo = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=1).fit(X_treino, y_treino)
+previsto = modelo.predict(X_teste)
+print(f"acurácia: {accuracy_score(y_teste, previsto):.1%}")
+print(classification_report(y_teste, previsto))
+importancia = sorted(zip(modelo.feature_importances_, X.columns), reverse=True)
+print("colunas que mais pesaram:", ", ".join(f"{nome} ({peso:.0%})" for peso, nome in importancia[:3]))
+'''
+
+[pattern.test]
+modules = ["sklearn", "pandas"]
+python = '''
+assert accuracy_score(y_teste, previsto) > 0.85
+'''
+
+[[pattern]]
+id = "dados.normalizar"
+title = "Normalizar colunas numéricas (média 0 e desvio 1) antes de treinar um modelo"
+keywords = "normalizar padronizar escalar escala standardscaler minmax colunas numericas preprocessamento machine learning sklearn pandas"
+require = ["normalizar", "padronizar", "escalar", "normalize", "standardize", "scaler"]
+tags = ["dados", "ml", "sklearn"]
+slots = { path = "imoveis.csv" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+
+df = pd.read_csv("{{path}}")
+numericas = df.select_dtypes("number").columns
+escala = StandardScaler()  # guarde este objeto: os dados novos precisam da MESMA transformação (escala.transform)
+df[numericas] = escala.fit_transform(df[numericas])
+print(df[numericas].describe().loc[["mean", "std"]].round(3))  # médias ~0 e desvios ~1
+'''
+
+[pattern.test]
+modules = ["pandas", "sklearn"]
+python_setup = '''
+import csv
+with open("imoveis.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["area", "preco", "bairro"], [50, 100, "a"], [70, 150, "b"], [90, 210, "c"]])
+'''
+python = '''
+assert abs(df["area"].mean()) < 1e-9 and list(df["bairro"]) == ["a", "b", "c"]
+'''
+
+[[pattern]]
+id = "dados.estatisticas_numpy"
+title = "Estatísticas de uma lista de números com NumPy (média, mediana, desvio, percentis)"
+keywords = "estatisticas numpy media mediana desvio padrao variancia percentil quartil minimo maximo lista numeros array"
+require = ["numpy", "mediana", "desvio", "percentil", "percentis", "variancia"]
+tags = ["dados", "numpy"]
+slots = { valores = "[3, 7, 8, 5, 12, 14, 21, 13, 18]" }
+
+[pattern.code]
+python = '''
+import numpy as np
+
+valores = np.array({{valores}}, dtype=float)
+print(f"média {valores.mean():.2f} · mediana {np.median(valores):.2f} · desvio {valores.std(ddof=1):.2f}")
+q1, q3 = np.percentile(valores, [25, 75])
+print(f"mínimo {valores.min():g} · 1º quartil {q1:g} · 3º quartil {q3:g} · máximo {valores.max():g}")
+fora = valores[(valores < q1 - 1.5 * (q3 - q1)) | (valores > q3 + 1.5 * (q3 - q1))]  # regra do boxplot
+print(f"valores fora do padrão: {fora.tolist() or 'nenhum'}")
+'''
+r = '''
+valores <- c(3, 7, 8, 5, 12, 14, 21, 13, 18)
+cat("média", round(mean(valores), 2), "· mediana", median(valores), "· desvio", round(sd(valores), 2), "\n")
+print(quantile(valores))  # mínimo, quartis e máximo
+'''
+
+[pattern.test]
+modules = ["numpy"]
+python = '''
+assert np.median(valores) == 12 and fora.tolist() == []
+'''

@@ -1,0 +1,4 @@
+[plugin]
+name = "dados"
+version = "1.0.0"
+description = "Ciência de dados: pandas, NumPy, gráficos com matplotlib (salvos em arquivo, funcionam em servidor) e aprendizado de máquina com scikit-learn; variantes em R"

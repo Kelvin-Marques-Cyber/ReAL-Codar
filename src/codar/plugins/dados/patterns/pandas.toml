@@ -1,0 +1,378 @@
+# Análise de dados com pandas: ler, resumir, filtrar, agrupar, limpar, juntar e desenhar gráficos. Os gráficos usam o
+# backend Agg do matplotlib e são salvos em arquivo: funcionam via SSH e em servidores sem tela (o Studio mostra a
+# imagem no celular pelo endereço de rede). Variantes em R com o R básico, sem pacotes extras.
+
+[[pattern]]
+id = "dados.ler_csv"
+title = "Ler um arquivo CSV com pandas e ver as primeiras linhas"
+keywords = "ler abrir carregar importar arquivo csv planilha tabela dados dataframe pandas primeiras linhas colunas tipos read_csv"
+require = ["pandas", "dataframe"]  # sem pandas na frase, vale o leitor de CSV da biblioteca padrão
+tags = ["dados", "pandas"]
+slots = { path = "vendas.csv" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+print(f"{len(df)} linhas x {len(df.columns)} colunas")
+print(df.head())  # as 5 primeiras linhas
+print(df.dtypes)  # o tipo de cada coluna: números viram int64/float64
+'''
+r = '''
+df <- read.csv("{{path}}")
+cat(nrow(df), "linhas x", ncol(df), "colunas\n")
+print(head(df))  # as 6 primeiras linhas
+str(df)  # o tipo de cada coluna
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["produto", "categoria", "preco", "quantidade"], ["caneta", "papelaria", 2.5, 10],
+                             ["caderno", "papelaria", 15.0, 3], ["mouse", "informatica", 49.9, 2],
+                             ["teclado", "informatica", 89.9, 1], ["cola", "papelaria", 4.0, ""]])
+'''
+python = '''
+assert df.shape == (5, 4)
+assert list(df.columns) == ["produto", "categoria", "preco", "quantidade"]
+'''
+
+[[pattern]]
+id = "dados.resumo"
+title = "Resumo estatístico de uma tabela: média, desvio, quartis e valores faltando"
+keywords = "resumo estatistico estatisticas descritivas describe media desvio padrao quartis minimo maximo nulos faltando ausentes tabela dataframe csv pandas explorar"
+require = ["resumo", "estatistica", "estatisticas", "describe", "descritiva", "descritivas"]
+tags = ["dados", "pandas"]
+slots = { path = "vendas.csv" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+print(df.describe().T)  # por coluna numérica: contagem, média, desvio, mínimo, quartis, máximo
+faltando = df.isna().sum()
+print("valores faltando por coluna:")
+print(faltando[faltando > 0] if faltando.any() else "nenhum")
+print(df.nunique().rename("valores distintos"))
+'''
+r = '''
+df <- read.csv("{{path}}")
+print(summary(df))  # mínimo, quartis, média e máximo de cada coluna
+cat("valores faltando por coluna:\n")
+print(colSums(is.na(df)))
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["produto", "preco", "quantidade"], ["caneta", 2.5, 10], ["caderno", 15.0, 3],
+                             ["mouse", 49.9, ""]])
+'''
+python = '''
+assert faltando["quantidade"] == 1 and faltando["preco"] == 0
+'''
+
+[[pattern]]
+id = "dados.filtrar"
+title = "Filtrar as linhas de uma tabela por uma condição"
+keywords = "filtrar selecionar linhas onde condicao maior menor que valor coluna tabela dataframe csv pandas query subset"
+require = ["filtrar", "filtro", "filtra", "filter", "subset"]
+tags = ["dados", "pandas"]
+slots = { path = "vendas.csv", field = "preco", n = "10" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+filtrado = df[df["{{field}}"] > {{n}}]  # a condição gera True/False por linha; ficam as True
+print(f"{len(filtrado)} de {len(df)} linhas com {{field}} > {{n}}")
+print(filtrado)
+'''
+r = '''
+df <- read.csv("{{path}}")
+filtrado <- subset(df, {{field}} > {{n}})
+cat(nrow(filtrado), "de", nrow(df), "linhas com {{field}} > {{n}}\n")
+print(filtrado)
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["produto", "preco"], ["caneta", 2.5], ["caderno", 15.0], ["mouse", 49.9]])
+'''
+python = '''
+assert list(filtrado["produto"]) == ["caderno", "mouse"]
+'''
+
+[[pattern]]
+id = "dados.agrupar"
+title = "Agrupar por categoria e calcular contagem, média e soma"
+keywords = "agrupar agrupamento groupby por categoria grupo media soma contagem total agregar aggregate tabela dataframe csv pandas"
+require = ["agrupar", "agrupa", "agrupamento", "groupby", "agregar", "aggregate", "grupo", "grupos"]
+tags = ["dados", "pandas"]
+slots = { path = "vendas.csv", grupo = "categoria", field = "preco" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+resumo = df.groupby("{{grupo}}")["{{field}}"].agg(["count", "mean", "sum"]).sort_values("sum", ascending=False)
+print(resumo.round(2))
+'''
+r = '''
+df <- read.csv("{{path}}")
+resumo <- aggregate({{field}} ~ {{grupo}}, data = df, FUN = function(x) c(quantidade = length(x), media = mean(x), soma = sum(x)))
+print(resumo)
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["produto", "categoria", "preco"], ["caneta", "papelaria", 2.0], ["caderno", "papelaria", 16.0],
+                             ["mouse", "informatica", 50.0]])
+'''
+python = '''
+assert resumo.loc["informatica", "sum"] == 50.0
+assert resumo.loc["papelaria", "count"] == 2 and resumo.loc["papelaria", "mean"] == 9.0
+assert list(resumo.index) == ["informatica", "papelaria"]
+'''
+
+[[pattern]]
+id = "dados.nulos"
+title = "Tratar valores faltando numa tabela (preencher números e remover o resto)"
+keywords = "valores faltando nulos ausentes vazios na nan limpar limpeza tratar preencher fillna dropna mediana tabela dataframe csv pandas"
+require = ["nulos", "nulo", "faltando", "ausentes", "vazios", "nan", "limpeza", "limpar", "fillna", "dropna"]
+tags = ["dados", "pandas", "limpeza"]
+slots = { path = "vendas.csv" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+print("faltando antes:", int(df.isna().sum().sum()))
+numericas = df.select_dtypes("number").columns
+df[numericas] = df[numericas].fillna(df[numericas].median())  # números: a mediana resiste a valores extremos
+df = df.dropna()  # o que sobrou sem valor (textos): a linha sai
+print(f"{len(df)} linhas depois da limpeza")
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["produto", "preco"], ["caneta", 2.0], ["caderno", ""], ["", 50.0], ["mouse", 4.0]])
+'''
+python = '''
+assert len(df) == 3 and df["preco"].tolist() == [2.0, 4.0, 4.0]
+'''
+
+[[pattern]]
+id = "dados.juntar"
+title = "Juntar duas tabelas por uma coluna em comum (merge)"
+keywords = "juntar unir combinar cruzar duas tabelas merge join coluna em comum chave csv dataframe pandas"
+require = ["juntar", "unir", "combinar", "cruzar", "merge", "join"]
+tags = ["dados", "pandas"]
+slots = { path = "pedidos.csv", dest = "clientes.csv", field = "cliente_id" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+pedidos = pd.read_csv("{{path}}")
+clientes = pd.read_csv("{{dest}}")
+# how="left": todo pedido fica, mesmo sem cliente correspondente (as colunas do cliente vêm vazias)
+juntos = pedidos.merge(clientes, on="{{field}}", how="left", validate="many_to_one")
+sem_par = juntos[juntos.isna().any(axis=1)]
+print(juntos)
+print(f"{len(sem_par)} pedido(s) sem cliente correspondente")
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("pedidos.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["pedido", "cliente_id", "valor"], [1, 10, 50.0], [2, 11, 20.0], [3, 99, 5.0]])
+with open("clientes.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["cliente_id", "nome"], [10, "Ana"], [11, "Bia"]])
+'''
+python = '''
+assert juntos.loc[juntos["pedido"] == 1, "nome"].item() == "Ana"
+assert len(sem_par) == 1
+'''
+
+[[pattern]]
+id = "dados.grafico"
+title = "Gráfico de barras de uma tabela salvo em PNG (funciona em servidor, sem tela)"
+keywords = "grafico graficos barras plotar plot desenhar visualizar figura imagem png salvar matplotlib pandas tabela csv por categoria"
+require = ["grafico", "graficos", "plotar", "plot", "barras", "chart", "matplotlib"]
+tags = ["dados", "pandas", "matplotlib"]
+slots = { path = "vendas.csv", grupo = "categoria", field = "preco", dest = "grafico.png" }
+
+[pattern.code]
+python = '''
+import matplotlib
+
+matplotlib.use("Agg")  # sem janela: desenha direto no arquivo (funciona via SSH e em servidores)
+import matplotlib.pyplot as plt
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+totais = df.groupby("{{grupo}}")["{{field}}"].sum().sort_values(ascending=False)
+ax = totais.plot(kind="bar", title="{{field}} por {{grupo}}", color="#2f7ed8")
+ax.set_xlabel("{{grupo}}")
+ax.set_ylabel("{{field}}")
+plt.tight_layout()
+plt.savefig("{{dest}}", dpi=120)
+plt.close()
+print("gráfico salvo em {{dest}}")
+'''
+r = '''
+df <- read.csv("{{path}}")
+totais <- sort(tapply(df${{field}}, df${{grupo}}, sum), decreasing = TRUE)
+png("{{dest}}", width = 900, height = 600)  # desenha direto no arquivo (funciona sem tela)
+barplot(totais, main = "{{field}} por {{grupo}}", xlab = "{{grupo}}", ylab = "{{field}}", col = "#2f7ed8")
+invisible(dev.off())
+cat("gráfico salvo em {{dest}}\n")
+'''
+
+[pattern.test]
+modules = ["pandas", "matplotlib"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["produto", "categoria", "preco"], ["caneta", "papelaria", 2.0], ["mouse", "informatica", 50.0]])
+'''
+python = '''
+import os
+assert os.path.getsize("grafico.png") > 1000
+assert open("grafico.png", "rb").read(4) == b"\x89PNG"
+'''
+
+[[pattern]]
+id = "dados.histograma"
+title = "Histograma de uma coluna numérica salvo em PNG"
+keywords = "histograma distribuicao frequencia faixas coluna numerica grafico png salvar matplotlib pandas csv"
+require = ["histograma", "distribuicao", "histogram"]
+tags = ["dados", "pandas", "matplotlib"]
+slots = { path = "vendas.csv", field = "preco", dest = "histograma.png" }
+
+[pattern.code]
+python = '''
+import matplotlib
+
+matplotlib.use("Agg")  # sem janela: desenha direto no arquivo
+import matplotlib.pyplot as plt
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+valores = df["{{field}}"].dropna()
+plt.hist(valores, bins="auto", color="#2f7ed8", edgecolor="white")
+plt.axvline(valores.mean(), color="#d9534f", linestyle="--", label=f"média {valores.mean():.2f}")
+plt.title("Distribuição de {{field}}")
+plt.xlabel("{{field}}")
+plt.ylabel("frequência")
+plt.legend()
+plt.tight_layout()
+plt.savefig("{{dest}}", dpi=120)
+plt.close()
+print("histograma salvo em {{dest}}")
+'''
+r = '''
+df <- read.csv("{{path}}")
+png("{{dest}}", width = 900, height = 600)
+hist(df${{field}}, main = "Distribuição de {{field}}", xlab = "{{field}}", ylab = "frequência", col = "#2f7ed8")
+abline(v = mean(df${{field}}, na.rm = TRUE), col = "#d9534f", lty = 2)
+invisible(dev.off())
+cat("histograma salvo em {{dest}}\n")
+'''
+
+[pattern.test]
+modules = ["pandas", "matplotlib"]
+python_setup = '''
+import csv, random
+random.seed(1)
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["preco"]] + [[round(random.gauss(50, 10), 2)] for _ in range(200)])
+'''
+python = '''
+import os
+assert os.path.getsize("histograma.png") > 1000
+'''
+
+[[pattern]]
+id = "dados.correlacao"
+title = "Correlação entre as colunas numéricas de uma tabela"
+keywords = "correlacao correlacoes correlacionadas relacao entre colunas numericas corr pearson matriz tabela dataframe csv pandas"
+require = ["correlacao", "correlacoes", "correlacionadas", "correlation", "corr"]
+tags = ["dados", "pandas"]
+slots = { path = "vendas.csv" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+correlacao = df.corr(numeric_only=True)  # de -1 (uma sobe, a outra desce) a 1 (sobem juntas); 0 = sem relação linear
+print(correlacao.round(2))
+'''
+r = '''
+df <- read.csv("{{path}}")
+numericas <- df[sapply(df, is.numeric)]
+print(round(cor(numericas, use = "complete.obs"), 2))  # de -1 a 1; 0 = sem relação linear
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["area", "preco", "nome"], [50, 100, "a"], [70, 140, "b"], [90, 185, "c"], [120, 240, "d"]])
+'''
+python = '''
+assert correlacao.loc["area", "preco"] > 0.99 and "nome" not in correlacao
+'''
+
+[[pattern]]
+id = "dados.pivot"
+title = "Tabela dinâmica (pivot) com totais por linha e coluna"
+keywords = "tabela dinamica pivot pivot_table cruzar linhas colunas totais soma por mes categoria pandas csv"
+require = ["pivot", "dinamica", "pivotar"]
+tags = ["dados", "pandas"]
+slots = { path = "vendas.csv", linhas = "categoria", colunas = "mes", field = "preco" }
+
+[pattern.code]
+python = '''
+import pandas as pd
+
+df = pd.read_csv("{{path}}")
+tabela = pd.pivot_table(df, index="{{linhas}}", columns="{{colunas}}", values="{{field}}", aggfunc="sum",
+                        fill_value=0, margins=True, margins_name="Total")
+print(tabela)
+'''
+
+[pattern.test]
+modules = ["pandas"]
+python_setup = '''
+import csv
+with open("vendas.csv", "w", newline="", encoding="utf-8") as f:
+    csv.writer(f).writerows([["categoria", "mes", "preco"], ["papelaria", "jan", 10], ["papelaria", "fev", 5],
+                             ["informatica", "jan", 50]])
+'''
+python = '''
+assert tabela.loc["Total", "Total"] == 65 and tabela.loc["informatica", "fev"] == 0
+'''

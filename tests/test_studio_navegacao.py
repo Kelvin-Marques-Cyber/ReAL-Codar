@@ -66,6 +66,7 @@ def test_atalhos_levam_a_cada_area_e_esc_volta_ao_editor(tmp_path, monkeypatch):
         async with app.run_test(size=(150, 42)) as pilot:
             await app.open_file(tmp_path / "a.py")
             await app.open_file(tmp_path / "b.py")
+            await pilot.pause(0.3)  # a troca de aba devolve o foco ao editor um instante depois de abrir
             await pilot.press("ctrl+e")
             assert isinstance(app.focused, Explorer)
             await pilot.press("escape")
@@ -134,7 +135,7 @@ def test_ctrl_g_traduz_o_bloco_selecionado_com_limite(tmp_path, monkeypatch):
 
 async def _abrir(app, pilot, caminho):
     await app.open_file(caminho)
-    await pilot.pause()
+    await pilot.pause(0.3)
     ed = app.current_editor()
     ed.focus()
     ed.move_cursor(ed.document.end)

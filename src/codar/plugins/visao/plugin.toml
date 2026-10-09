@@ -1,0 +1,4 @@
+[plugin]
+name = "visao"
+version = "1.0.0"
+description = "Visão computacional com OpenCV (versão headless, sem janelas: funciona em servidor) e Pillow: abrir, converter, filtrar, detectar bordas, contornos e rostos"
