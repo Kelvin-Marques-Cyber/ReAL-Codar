@@ -39,7 +39,9 @@ all = ["codar[llm,studio]"]
 dev = ["pytest>=8", "pyflakes>=3", "tree-sitter>=0.23", "tree-sitter-python", "tree-sitter-javascript", "tree-sitter-typescript",
        "tree-sitter-go", "tree-sitter-rust", "tree-sitter-java", "tree-sitter-c", "tree-sitter-cpp",
        "tree-sitter-c-sharp", "tree-sitter-bash", "tree-sitter-powershell", "tree-sitter-lua", "tree-sitter-php",
-       "tree-sitter-ruby", "tree-sitter-sql", "tree-sitter-json", "tree-sitter-yaml", "tree-sitter-toml"]
+       "tree-sitter-ruby", "tree-sitter-sql", "tree-sitter-json", "tree-sitter-yaml", "tree-sitter-toml",
+       "tree-sitter-kotlin", "tree-sitter-swift", "tree-sitter-dart", "tree-sitter-julia",
+       "tree-sitter-language-pack"]  # este último só para R (baixa a gramática na primeira vez)
 
 [project.urls]
 Homepage = "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar"
