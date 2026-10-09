@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -393,13 +394,47 @@ def cmd_extras(args) -> int:
     return EXIT_OK
 
 
+def _terminal_interativo() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _perguntar_sim(pergunta: str) -> bool:
+    """Sim/não com Enter = sim; entrada fechada (pipe, Ctrl+D) = não."""
+    try:
+        resposta = input(f"{pergunta} [S/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return resposta in ("", "s", "sim", "y", "yes")
+
+
+def _reabrir_studio(args) -> None:
+    """Reabre o codar já com os extras: pelo lançador do pacote (que passa a usar o ambiente novo) ou pelo mesmo
+    Python, quando os extras foram instalados no ambiente atual. Não retorna."""
+    from codar import extras
+
+    argv = ["studio", args.path] + (["-l", args.lang] if args.lang else [])
+    launcher = shutil.which("codar") if extras.packaged() else None
+    if launcher:
+        os.execv(launcher, [launcher, *argv])
+    os.execv(sys.executable, [sys.executable, "-m", "codar", *argv])
+
+
 def cmd_studio(args) -> int:
     try:
         from codar.studio.app import run_studio
     except ImportError as exc:
-        from codar.extras import hint
+        from codar import extras
 
-        print(f"codar: o Studio precisa do Textual ({exc}). Instale: {hint('studio')}. "
+        hud = _hud()
+        if _terminal_interativo() and (extras.packaged() or extras.in_venv()):
+            # em vez de cair no REPL sem explicar: oferece instalar e abre o Studio em seguida
+            print(hud.pill("STUDIO", "orange") + " " + hud.c("o Studio (IDE no terminal) ainda não está instalado.", "text"))
+            print(hud.c("  ele e a IA local vêm do PyPI e ficam só no seu usuário (~60 MB, pacotes já compilados)",
+                        "dim"))
+            if _perguntar_sim("Instalar agora?") and extras.install(list(extras.EXTRAS)) == 0:
+                _reabrir_studio(args)
+        print(f"codar: o Studio precisa do Textual ({exc}). Instale com: {extras.hint('studio')}. "
               "Abrindo o REPL.", file=sys.stderr)
         from codar.cli.repl import repl
 

@@ -20,8 +20,11 @@ CPU_WHEELS = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
 EXTRAS: dict[str, dict] = {
     "studio": {"module": "textual", "requirements": ["textual[syntax]>=1.0"], "pip_args": [],
                "what": "Studio (IDE no terminal)"},
+    # --only-binary: sem pacote pronto para esta máquina, falha na hora em vez de compilar o llama.cpp (10+ minutos
+    # de CPU a 100%, ruim para notebooks)
     "llm": {"module": "llama_cpp", "requirements": ["llama-cpp-python>=0.3.16"],
-            "pip_args": ["--prefer-binary", "--extra-index-url", CPU_WHEELS], "what": "IA local (llama.cpp)"},
+            "pip_args": ["--prefer-binary", "--only-binary", "llama-cpp-python", "--extra-index-url", CPU_WHEELS],
+            "what": "IA local (llama.cpp)"},
 }
 
 
