@@ -7,9 +7,13 @@ telemetria à direita, barra de intenção e medidor de RAM embaixo.
 
 from __future__ import annotations
 
+import codecs
 import os
 import random
+import select
 import shlex
+import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -59,6 +63,23 @@ class CodarCommands(Provider):
             score = matcher.match(name)
             if score > 0:
                 yield Hit(score, matcher.highlight(name), cb, help=help_text)
+
+
+TERM_IDLE = "$ comando no diretório do projeto (Enter executa)"
+TERM_RUNNING = "entrada do programa (Enter envia · Ctrl+C interrompe)"
+
+
+class TerminalInput(Input):
+    """Campo do terminal: com um programa rodando, Ctrl+C interrompe o programa em vez de copiar."""
+
+    BINDINGS = [Binding("ctrl+c", "interromper", "Interromper", show=False, priority=True)]
+
+    def action_interromper(self) -> None:
+        studio = self.app
+        if isinstance(studio, Studio) and studio.process_running():
+            studio.interrupt_process()
+        else:
+            self.action_copy()
 
 
 TIPS = [
@@ -122,6 +143,8 @@ class Studio(App):
         self.last: dict | None = None
         self.tab_seq = 0
         self.term_proc: subprocess.Popen | None = None
+        self.term_fd: int | None = None  # lado mestre do pseudoterminal do processo em execução
+        self.term_waiting = ""  # pergunta do programa esperando entrada (texto sem quebra de linha)
         self.mem: dict = {}
         self.intents: list[str] = []
         self.online = False
@@ -145,7 +168,7 @@ class Studio(App):
                         yield DataTable(id="problems", cursor_type="row")
                     with TabPane("TERMINAL", id="tab-terminal"):
                         yield RichLog(id="term-log", markup=False, wrap=False, max_lines=3000)
-                        yield Input(placeholder="$ comando no diretório do projeto (Enter executa)", id="term-input")
+                        yield TerminalInput(placeholder=TERM_IDLE, id="term-input")
                     with TabPane("SAÍDA", id="tab-output"):
                         yield RichLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
                     with TabPane("CONSULTOR", id="tab-advisor"):
@@ -251,6 +274,8 @@ class Studio(App):
 
     def context_hint(self) -> str:
         """O que dá para fazer agora, de acordo com o foco e a linha do cursor."""
+        if self.term_waiting:
+            return "O PROGRAMA ESPERA ENTRADA · DIGITE NO TERMINAL"
         focused = self.focused
         if isinstance(focused, Input) and focused.id == "intent":
             return "ENTER GERA · → COMPLETA" if focused.value else "DESCREVA O CÓDIGO · F1 AJUDA"
@@ -701,47 +726,157 @@ class Studio(App):
             self.notify(f"sem executor configurado para {lang.name if lang else 'este arquivo'}", severity="warning")
             return
         cmd = [part.replace("{file}", ed.path).replace("{python}", sys.executable) for part in lang.runner]
-        self.run_command(" ".join(shlex.quote(c) for c in cmd) if os.name != "nt" else subprocess.list2cmdline(cmd))
+        try:  # na tela, o comando curto: "python perguntas.py" em vez dos caminhos completos
+            nome = str(Path(ed.path).relative_to(self.root))
+        except ValueError:
+            nome = Path(ed.path).name
+        visivel = [nome if p == "{file}" else "python" if p == "{python}" else p for p in lang.runner]
+        juntar = (lambda partes: " ".join(shlex.quote(c) for c in partes)) if os.name != "nt" else subprocess.list2cmdline
+        self.run_command(juntar(cmd), visivel=juntar(visivel))
 
     @on(Input.Submitted, "#term-input")
     def _term(self, event: Input.Submitted) -> None:
-        cmd = event.value.strip()
+        texto = event.value
         event.input.value = ""
+        if self.process_running():  # com um programa rodando, a linha vai para a entrada dele (input(), read…)
+            self.send_to_process(texto)
+            return
+        cmd = texto.strip()
         if cmd == "clear":
             self.query_one("#term-log", RichLog).clear()
         elif cmd:
             self.run_command(cmd)
 
-    def run_command(self, cmd: str) -> None:
-        if self.term_proc and self.term_proc.poll() is None:
-            self.notify("já há um processo rodando (paleta: Parar processo)", severity="warning")
+    def process_running(self) -> bool:
+        return self.term_proc is not None and self.term_proc.poll() is None
+
+    def send_to_process(self, texto: str) -> None:
+        if self.term_fd is not None:  # pseudoterminal: o próprio terminal ecoa o que foi digitado
+            os.write(self.term_fd, (texto + "\n").encode())
+        elif self.term_proc is not None and self.term_proc.stdin is not None:  # Windows: pipe, eco manual
+            self.term_proc.stdin.write((texto + "\n").encode())
+            self.term_proc.stdin.flush()
+            self.query_one("#term-log", RichLog).write(Text(self.term_waiting + texto, style=C["text"]))
+        self._prompt_waiting("")
+
+    def interrupt_process(self) -> None:
+        """Ctrl+C no terminal: SIGINT para o programa (KeyboardInterrupt no Python)."""
+        if not self.process_running():
+            return
+        if os.name == "posix":
+            os.killpg(self.term_proc.pid, signal.SIGINT)
+        else:
+            self.term_proc.terminate()
+
+    def _prompt_waiting(self, pergunta: str) -> None:
+        """O programa imprimiu uma pergunta sem quebra de linha e está esperando: mostra a pergunta no campo do
+        terminal e põe o cursor lá."""
+        campo = self.query_one("#term-input", Input)
+        self.term_waiting = pergunta
+        if pergunta:
+            campo.placeholder = f"{pergunta.strip() or '>'}   ← o programa espera: digite e tecle Enter"
+            self.query_one("#panel", TabbedContent).active = "tab-terminal"
+            campo.focus()
+        else:
+            campo.placeholder = TERM_RUNNING if self.process_running() else TERM_IDLE
+        self.render_status()
+
+    def run_command(self, cmd: str, visivel: str | None = None) -> None:
+        if self.process_running():
+            self.notify("já há um programa rodando: Ctrl+C no terminal interrompe", severity="warning")
             return
         self.query_one("#panel", TabbedContent).active = "tab-terminal"
-        self.query_one("#term-log", RichLog).write(Text(f"$ {cmd}", style=f"bold {C['mint']}"))
+        self.query_one("#term-log", RichLog).write(Text(f"$ {visivel or cmd}", style=f"bold {C['mint']}"))
         self.term_worker(cmd)
 
     @work(thread=True, group="terminal")
     def term_worker(self, cmd: str) -> None:
+        """Roda o comando num pseudoterminal: o programa se comporta como num terminal de verdade (input() mostra a
+        pergunta na hora, a saída não fica presa em buffer, Ctrl+C e getpass funcionam). No Windows, pipes."""
         log = self.query_one("#term-log", RichLog)
         t0 = time.monotonic()
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "TERM": "dumb"}
+        master = None
         try:
-            self.term_proc = subprocess.Popen(cmd, shell=True, cwd=self.root, stdout=subprocess.PIPE,
-                                              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True,
-                                              encoding="utf-8", errors="replace", bufsize=1)
+            if os.name == "posix":
+                import fcntl
+                import pty
+                import struct
+                import termios
+
+                master, slave = pty.openpty()
+                colunas = max(40, log.size.width - 2)
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, colunas, 0, 0))
+                # setsid -c: sessão nova com o pseudoterminal como terminal de controle (Ctrl+C, getpass)
+                argv = ["setsid", "-c", "sh", "-c", cmd] if shutil.which("setsid") else ["sh", "-c", cmd]
+                self.term_proc = subprocess.Popen(argv, cwd=self.root, stdin=slave, stdout=slave, stderr=slave,
+                                                  env=env, close_fds=True, start_new_session=argv[0] != "setsid")
+                os.close(slave)
+            else:
+                self.term_proc = subprocess.Popen(cmd, shell=True, cwd=self.root, stdin=subprocess.PIPE,
+                                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, bufsize=0)
         except OSError as exc:
+            if master is not None:
+                os.close(master)
             self.call_from_thread(log.write, Text(str(exc), style=C["red"]))
             return
-        assert self.term_proc.stdout is not None
-        for line in self.term_proc.stdout:
-            self.call_from_thread(log.write, Text(line.rstrip("\n"), style=C["text"]))
+        self.term_fd = master
+        self.call_from_thread(self._prompt_waiting, "")
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        pendente = ""  # texto depois da última quebra de linha (a pergunta de um input(), por exemplo)
+        avisado = ""
+        ociosos = 0
+        while True:
+            chunk = self._read_output(master, 0.15)
+            if chunk is None:  # nada chegou: se sobrou texto sem quebra de linha, o programa está esperando
+                if pendente and pendente != avisado and self.process_running():
+                    avisado = pendente
+                    self.call_from_thread(self._prompt_waiting, pendente)
+                if not self.process_running():  # terminou, mas um filho em segundo plano segura o terminal
+                    ociosos += 1
+                    if ociosos > 6:
+                        break
+                continue
+            if not chunk:
+                break
+            texto = pendente + decoder.decode(chunk).replace("\r\n", "\n")
+            *linhas, pendente = texto.split("\n")
+            for linha in linhas:  # "\r" sozinho (barras de progresso): fica o que foi escrito por último
+                self.call_from_thread(log.write, Text.from_ansi(linha.rsplit("\r", 1)[-1], style=C["text"]))
+            if linhas and avisado:
+                avisado = ""
+                self.call_from_thread(self._prompt_waiting, "")
         code = self.term_proc.wait()
+        if pendente.strip():
+            self.call_from_thread(log.write, Text.from_ansi(pendente, style=C["text"]))
+        if master is not None:
+            os.close(master)
+        self.term_fd = None
+        self.call_from_thread(self._prompt_waiting, "")
         style = C["mint"] if code == 0 else C["red"]
         self.call_from_thread(log.write, Text(f"[exit {code} · {time.monotonic() - t0:.2f}s]", style=f"bold {style}"))
         self.call_from_thread(self.feed, f"RUN · exit {code}", "green" if code == 0 else "red")
 
+    def _read_output(self, master: int | None, timeout: float) -> bytes | None:
+        """Bytes disponíveis da saída do programa; None se nada chegou no prazo; b"" no fim."""
+        if master is not None:
+            pronto, _, _ = select.select([master], [], [], timeout)
+            if not pronto:
+                return None
+            try:
+                return os.read(master, 4096)
+            except OSError:  # EIO: o programa terminou e fechou o terminal
+                return b""
+        assert self.term_proc is not None and self.term_proc.stdout is not None
+        return self.term_proc.stdout.read1(4096) if hasattr(self.term_proc.stdout, "read1") else \
+            self.term_proc.stdout.read(1)
+
     def action_stop_process(self) -> None:
-        if self.term_proc and self.term_proc.poll() is None:
-            self.term_proc.terminate()
+        if self.process_running():
+            if os.name == "posix":
+                os.killpg(self.term_proc.pid, signal.SIGTERM)  # o sh e o programa que ele iniciou
+            else:
+                self.term_proc.terminate()
 
     # ------------------------------------------------------------------ consultor de projeto
     def action_advise(self) -> None:
@@ -890,8 +1025,7 @@ class Studio(App):
         ]
 
     def on_unmount(self) -> None:
-        if self.term_proc and self.term_proc.poll() is None:
-            self.term_proc.terminate()
+        self.action_stop_process()
         self.backend.close()
 
 
