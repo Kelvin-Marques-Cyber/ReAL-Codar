@@ -12,8 +12,8 @@ import os
 import re
 import random
 import shlex
+import shutil
 import subprocess
-import sys
 import time
 from functools import partial
 from pathlib import Path
@@ -30,6 +30,7 @@ from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, 
                              TabbedContent, TabPane, TextArea)
 
 from codar import __version__, langs
+from codar.advisor import pacotes
 from codar.studio import comandos, estado
 from codar.studio.backend import StudioBackend
 from codar.studio.explorer import SKIP, Explorer
@@ -378,6 +379,8 @@ class Studio(App):
             return "ENTER VAI PARA A LINHA · ESC EDITOR"
         if isinstance(focused, ListView) and focused.id == "advice-list":
             return "ENTER ABRE A SUGESTÃO · ESC EDITOR"
+        if isinstance(focused, CodeEditor) and self._dicas_atuais():
+            return f"{self._dicas_atuais()[0].curta} · F8 INSTALA"
         if isinstance(focused, CodeEditor):
             row, col = focused.cursor_location
             line = focused.document.get_line(row)
@@ -467,7 +470,8 @@ class Studio(App):
         except (UnicodeDecodeError, OSError) as exc:
             self.notify(f"não consegui abrir {path.name}: {exc}", severity="error")
             return
-        await self._add_editor(text, str(path), path.name)
+        ed = await self._add_editor(text, str(path), path.name)
+        self.verificar_pacotes(ed)
 
     async def _add_editor(self, text: str, path: str | None, title: str) -> CodeEditor:
         self.tab_seq += 1
@@ -765,6 +769,8 @@ class Studio(App):
         ed.destacar(start[0], end_row)
         ed.focus()
         self._show_findings(res.get("findings", []), start[0])
+        if res.get("imports"):
+            self.verificar_pacotes(ed)
         for note in res.get("notes", []):
             self.notify(note, title="codar")
 
@@ -1061,6 +1067,7 @@ class Studio(App):
         ed.saved_text = ed.text
         self._update_tab_label(ed)
         self.feed(f"SAVE · {path.name}", "green")
+        self.verificar_pacotes(ed)
         if self.audit_on:
             self.action_audit_file()
 
@@ -1119,17 +1126,31 @@ class Studio(App):
         if ed.dirty:
             self._write(ed)
         lang = langs.from_path(ed.path)
-        if not lang or not lang.runner:
+        runner = self._executor(lang, Path(ed.path))
+        if not lang or not runner:
             self.notify(f"sem executor configurado para {lang.name if lang else 'este arquivo'}", severity="warning")
             return
-        cmd = [part.replace("{file}", ed.path).replace("{python}", sys.executable) for part in lang.runner]
+        python = pacotes.python_do_projeto(self.root)
+        cmd = [part.replace("{file}", ed.path).replace("{python}", python) for part in runner]
         try:  # na tela, o comando curto: "python perguntas.py" em vez dos caminhos completos
             nome = str(Path(ed.path).relative_to(self.root))
         except ValueError:
             nome = Path(ed.path).name
-        visivel = [nome if p == "{file}" else "python" if p == "{python}" else p for p in lang.runner]
+        visivel = [nome if p == "{file}" else "python" if p == "{python}" else p for p in runner]
         juntar = (lambda partes: " ".join(shlex.quote(c) for c in partes)) if os.name != "nt" else subprocess.list2cmdline
         self.run_command(juntar(cmd), visivel=juntar(visivel))
+
+    def _executor(self, lang, arquivo: Path) -> tuple[str, ...] | None:
+        """Como rodar o arquivo: TypeScript e JSX com o bun quando ele existe (o Node não entende JSX e só roda .ts
+        a partir da 22.18); o resto, pelo executor da linguagem."""
+        if lang is None:
+            return None
+        caminho = self.terminal.ambiente.get("PATH")
+        if arquivo.suffix in (".ts", ".tsx", ".jsx", ".mts") and shutil.which("bun", path=caminho):
+            return ("bun", "{file}")
+        if arquivo.suffix in (".ts", ".mts") and not pacotes.node_roda_ts(caminho) and shutil.which("npx", path=caminho):
+            return ("npx", "--yes", "tsx", "{file}")
+        return lang.runner
 
     @property
     def terminal(self) -> TerminalPainel:
@@ -1173,6 +1194,9 @@ class Studio(App):
     def programa_terminou(self, sessao, codigo: int) -> None:
         """Programa terminou: com erro, explica em português (o quê, onde, como corrigir) e marca a linha."""
         self.feed(f"RUN · exit {codigo}", "green" if codigo == 0 else "red")
+        if getattr(self, "instalando", None) and sessao.comando == self.instalando["comando"]:
+            self.instalando = None
+            self.verificar_pacotes(self.current_editor())
         if codigo in (0, 130) or codigo < 0:  # 130 / sinal: interrompido com Ctrl+C
             return
         from codar.explicar import explicar
@@ -1208,9 +1232,42 @@ class Studio(App):
         self.notify(f"servidor no ar: {url}", title=f"terminal {sessao.numero}")
 
     # ------------------------------------------------------------------ consultor de projeto
+    # ------------------------------------------------------------------ dicas de pacotes
+    def verificar_pacotes(self, ed: CodeEditor | None) -> None:
+        if ed is not None and ed.path and ed.lang_id in ("python", "javascript", "typescript"):
+            self.pacotes_worker(ed.path, ed.text, ed.lang_id)
+
+    @work(thread=True, exclusive=True, group="pacotes")
+    def pacotes_worker(self, caminho: str, codigo: str, lang: str) -> None:
+        try:
+            lista = pacotes.dicas(self.root, Path(caminho), codigo, lang, self.terminal.ambiente.get("PATH"))
+        except Exception:  # dica é ajuda, nunca motivo de erro
+            return
+        self.call_from_thread(self._mostrar_pacotes, caminho, lista)
+
+    def _mostrar_pacotes(self, caminho: str, lista: list) -> None:
+        if not hasattr(self, "dicas_pacotes"):
+            self.dicas_pacotes: dict[str, list] = {}
+        antigas = {d.id for d in self.dicas_pacotes.get(caminho, [])}
+        self.dicas_pacotes[caminho] = lista
+        novas = [d for d in lista if d.id not in antigas]
+        for d in novas:
+            self.feed(f"PACOTE · {d.titulo} · F8 instala", "orange")
+        if novas:
+            self.notify(f"{novas[0].titulo}. F8 mostra o comando ({novas[0].comando[:60]}) e Enter instala.",
+                        title="dica de pacote", severity="warning", timeout=8)
+        if getattr(self, "advice", None) is not None:
+            self._show_advice({"suggestions": [s for s in self.advice if s.get("source") != "pacotes"]})
+        self.render_status()
+
+    def _dicas_atuais(self) -> list:
+        ed = self.current_editor()
+        return getattr(self, "dicas_pacotes", {}).get(ed.path, []) if ed is not None and ed.path else []
+
     def action_advise(self) -> None:
         self.query_one("#panel", TabbedContent).active = "tab-advisor"
         self.feed("ADVISOR · analisando o projeto…", "dim")
+        self._show_advice({"suggestions": []}, final=False)
         self.advise_worker()
 
     @work(thread=True, exclusive=True, group="advise")
@@ -1225,15 +1282,19 @@ class Studio(App):
             report = scan_project(self.root, discover(config.load()).advice)
         self.call_from_thread(self._show_advice, report)
 
-    def _show_advice(self, report: dict) -> None:
+    def _show_advice(self, report: dict, final: bool = True) -> None:
         lst = self.query_one("#advice-list", ListView)
         lst.clear()
-        self.advice = report["suggestions"]
+        # pacotes que faltam no arquivo aberto vêm primeiro: são o que trava o programa agora
+        self.advice = [d.como_sugestao() for d in self._dicas_atuais()] + \
+            [s for s in report["suggestions"] if s.get("source") != "pacotes"]
         colors = {"high": C["red"], "medium": C["orange"], "low": C["cyan"]}
         for s in self.advice:
             opts = " · ".join(o["label"] for o in s["options"])
             lst.append(ListItem(Static(f"[b {colors.get(s['impact'], C['text'])}]▶ {_esc(s['title'])}[/]\n"
                                        f"[{C['text']}]{_esc(s['reason'][:150])}[/]\n[{C['mint']}]{_esc(opts)}[/]")))
+        if not final:
+            return
         self.feed(f"ADVISOR · {len(self.advice)} sugestão(ões)", "orange" if self.advice else "green")
         if not self.advice:
             lst.append(ListItem(Static(f"[{C['mint']}]✓ nenhuma sugestão — projeto em ordem[/]")))
@@ -1244,6 +1305,10 @@ class Studio(App):
         if idx is None or not getattr(self, "advice", None) or idx >= len(self.advice):
             return
         s = self.advice[idx]
+        if s.get("source") == "pacotes":  # instala no terminal, à vista (e confere de novo quando terminar)
+            self.instalando = s
+            self.run_command(s["comando"])
+            return
         self.push_screen(AdviceScreen(s), lambda oid, s=s: self._accept_advice(s, oid))
 
     def _accept_advice(self, s: dict, oid: str | None) -> None:
