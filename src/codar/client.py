@@ -103,6 +103,7 @@ class Client:
     @classmethod
     def connect(cls, autostart: bool = True, timeout: float = 600.0, endpoint: paths.Endpoint | None = None,
                 start_timeout: float = 30.0) -> Client:
+        autostart = autostart and os.environ.get("CODAR_NO_AUTOSTART") != "1"  # testes e CI: nunca sobe daemon sozinho
         ep = endpoint or paths.discover_endpoint()
         if ep is None and autostart:
             from codar.daemonctl import start_daemon

@@ -7,6 +7,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
+from codar.studio.widgets import C
 from codar.vocab import EXAMPLES
 
 
@@ -26,8 +27,9 @@ class AdviceScreen(ModalScreen[str | None]):
             yield Static(s["reason"], id="advice-reason")
             with VerticalScroll(id="advice-options"):
                 for o in s["options"]:
-                    yield Static(f"[b #47FFA9]{o['label']}[/]" + (f"\n[#6b551f]{o['reason']}[/]" if o.get("reason") else "") +
-                                 "\n" + "\n".join(f"[#39d6c8]  {st}[/]" for st in o["steps"]), classes="advice-plan")
+                    yield Static(f"[b {C['mint']}]{o['label']}[/]" +
+                                 (f"\n[{C['dim']}]{o['reason']}[/]" if o.get("reason") else "") +
+                                 "\n" + "\n".join(f"[{C['cyan']}]  {st}[/]" for st in o["steps"]), classes="advice-plan")
             with Horizontal(id="advice-buttons"):
                 for o in s["options"]:
                     yield Button(f"✓ {o['label']}", id=f"opt-{o['id']}", classes="accept")
@@ -90,11 +92,11 @@ class HelpScreen(ModalScreen[None]):
             card.border_subtitle = "Esc fecha"
             with VerticalScroll(id="help-body"):
                 for group, items in SHORTCUTS:
-                    yield Static(f"[b #FF4747]{group}[/]", classes="help-group")
-                    yield Static("\n".join(f"  [b #47FFA9]{k:<24}[/] [#f0b32a]{v}[/]" for k, v in items),
+                    yield Static(f"[b {C['red']}]{group}[/]", classes="help-group")
+                    yield Static("\n".join(f"  [b {C['mint']}]{k:<24}[/] [{C['text']}]{v}[/]" for k, v in items),
                                  classes="help-items")
-                yield Static("[b #FF4747]EXPERIMENTE[/]", classes="help-group")
-                yield Static("\n".join(f"  [#54ff8a]{e:<40}[/] [#6b551f]{what}[/]" for e, what in EXAMPLES),
+                yield Static(f"[b {C['red']}]EXPERIMENTE[/]", classes="help-group")
+                yield Static("\n".join(f"  [{C['green']}]{e:<40}[/] [{C['dim']}]{what}[/]" for e, what in EXAMPLES),
                              classes="help-items")
 
     def action_close(self) -> None:

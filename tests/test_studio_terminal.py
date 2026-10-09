@@ -30,6 +30,7 @@ def test_input_e_ctrl_c(tmp_path: Path, monkeypatch):
     from codar.studio.app import Studio
 
     monkeypatch.setenv("CODAR_HOME", str(tmp_path / "home"))  # sem daemon: o Studio só precisa do terminal aqui
+    monkeypatch.setenv("CODAR_NO_AUTOSTART", "1")  # e não deixa um daemon órfão rodando depois do teste
     (tmp_path / "perguntas.py").write_text('nome = input("Nome: ")\nprint(f"Olá, {nome}!")\n', encoding="utf-8")
     (tmp_path / "eterno.py").write_text(
         "import time\nprint('rodando')\ntry:\n    while True:\n        time.sleep(0.1)\n"

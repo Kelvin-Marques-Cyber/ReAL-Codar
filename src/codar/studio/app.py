@@ -31,11 +31,12 @@ from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, 
                              TabbedContent, TabPane, TextArea)
 from textual.widgets.text_area import Selection
 
-from codar import __version__, langs
+from codar import __version__, langs, paths
 from codar.studio.backend import StudioBackend
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, HelpScreen, PromptScreen
-from codar.studio.widgets import C, SENTRY_THEME, STAGE_COLORS, TITLE, CodeEditor, OrbitRadar, gauge
+from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, CodeEditor, OrbitRadar, aplicar_paleta, gauge,
+                                  paleta, tema_ansi, tema_editor)
 from codar.textutil import looks_like_intent
 from codar.vocab import EXAMPLES
 
@@ -47,9 +48,31 @@ EXT_TS = {".json": "json", ".toml": "toml", ".md": "markdown", ".xml": "xml", ".
 SKIP = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache", "target", "dist", ".codar"}
 
 
+# Cor do marcador de cada tipo de arquivo no explorer (chaves da paleta C)
+TIPO_COR = {".py": "mint", ".pyw": "mint", ".ipynb": "mint", ".js": "text", ".mjs": "text", ".cjs": "text",
+            ".jsx": "text", ".ts": "blue", ".tsx": "blue", ".html": "red", ".htm": "red", ".css": "cyan",
+            ".scss": "cyan", ".json": "orange", ".toml": "orange", ".yaml": "orange", ".yml": "orange",
+            ".md": "moon", ".txt": "moon", ".sh": "green", ".ps1": "green", ".go": "cyan", ".rs": "orange",
+            ".java": "red", ".c": "blue", ".cpp": "blue", ".h": "blue", ".lua": "blue", ".rb": "red", ".php": "blue",
+            ".sql": "cyan", ".png": "orange", ".jpg": "orange", ".jpeg": "orange", ".svg": "orange", ".csv": "green"}
+
+
 class Explorer(DirectoryTree):
+    ICON_NODE = "▸ "
+    ICON_NODE_EXPANDED = "▾ "
+    ICON_FILE = "• "
+
     def filter_paths(self, paths):
         return [p for p in paths if p.name not in SKIP]
+
+    def render_label(self, node, base_style, style):
+        texto = super().render_label(node, base_style, style)
+        if self.is_mounted and node.data is not None:
+            if node._allow_expand:
+                texto.stylize(f"bold {C['orange']}", 0, 1)
+            else:
+                texto.stylize(C[TIPO_COR.get(Path(node.data.path).suffix.lower(), "dim")], 0, 1)
+        return texto
 
 
 class CodarCommands(Provider):
@@ -187,19 +210,28 @@ class Studio(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.register_theme(Theme(name="sentry", primary=C["orange"], secondary=C["red"], accent=C["mint"],
-                                  warning=C["orange"], error="#ff3b2f", success=C["green"], foreground=C["text"],
-                                  background=C["bg"], surface=C["bg"], panel=C["grid"], dark=True))
-        self.theme = "sentry"
+        self.register_theme(Theme(
+            name="sentry", primary=SENTRY["orange"], secondary=SENTRY["red"], accent=SENTRY["mint"],
+            warning=SENTRY["orange"], error=SENTRY["error"], success=SENTRY["green"], foreground=SENTRY["text"],
+            background=SENTRY["bg"], surface=SENTRY["bg"], panel=SENTRY["grid"], dark=True,
+            variables={"foreground-muted": SENTRY["dim"], "text-muted": SENTRY["dim"],
+                       "block-cursor-background": SENTRY["orange"], "block-cursor-foreground": SENTRY["bg"],
+                       "block-cursor-blurred-background": SENTRY["sel"],
+                       "block-cursor-blurred-foreground": SENTRY["text"], "block-hover-background": SENTRY["grid"],
+                       "input-cursor-background": SENTRY["mint"], "input-cursor-foreground": SENTRY["bg"],
+                       "input-selection-background": SENTRY["sel"], "footer-background": SENTRY["panel"],
+                       "footer-key-foreground": SENTRY["mint"], "footer-description-foreground": SENTRY["text"],
+                       "border": SENTRY["mint"], "border-blurred": SENTRY["orange"]}))
+        self.theme_changed_signal.subscribe(self, self._tema_mudou)
+        salvo = _estado().get("tema")
+        self.theme = salvo if salvo and self.get_theme(salvo) else "sentry"
         for wid, title in (("#explorer", "EXPLORER"), ("#radar", "PIPELINE ORBIT"), ("#feed", "SOURCE / EVENT FEED"),
                            ("#editors", "EDITOR"), ("#welcome", "BEM-VINDO"), ("#panel", "PAINEL"), ("#last-card", "LAST TRANSLATION"),
                            ("#telemetry", "TELEMETRIA"), ("#history", "HISTÓRICO"), ("#intent-bar", "")):
             self.query_one(wid).border_title = title
         table = self.query_one("#problems", DataTable)
         table.add_columns("SEV", "ID", "LINHA", "MENSAGEM")
-        self.query_one("#hud-meta", Static).update(
-            f"[b {C['mint']}]INTENT → CODE ENCOUNTERS[/]\n[{C['dim']}]SRC ·[/] [{C['green']}]S0 COMPILER · S1 BANK · S2 SLM[/]\n"
-            f"[{C['dim']}]OFFLINE · TETO[/] [{C['red']}]{_budget_gb()} GB[/] [{C['dim']}]· v{__version__}[/]")
+        self.query_one("#hud-meta", Static).update(self.hud_meta())
         self.render_pills()
         self.render_last()
         self.feed("BOOT · CODAR STUDIO v" + __version__, "red")
@@ -213,6 +245,37 @@ class Studio(App):
         self.sync_welcome()
         self.query_one("#intent", Input).focus()
 
+    # ------------------------------------------------------------------ tema
+    def get_css_variables(self) -> dict[str, str]:
+        """Variáveis $codar-* do studio.tcss: a paleta do tema ativo (o SENTRY ou a derivada de outro tema)."""
+        variaveis = super().get_css_variables()
+        variaveis.update({f"codar-{k.replace('_', '-')}": v for k, v in paleta(self.current_theme).items()})
+        return variaveis
+
+    def _tema_mudou(self, tema: Theme) -> None:
+        """Troca de tema (Ctrl+P → "theme"): editor, HUD, terminal e telas acompanham, e a escolha fica salva."""
+        aplicar_paleta(paleta(tema))
+        self.ansi_theme_dark = self.ansi_theme_light = tema_ansi()
+        nome = f"codar-{tema.name}"
+        for ed in self.query(CodeEditor):
+            ed.register_theme(tema_editor(nome))
+            ed.theme = nome
+        self.query_one("#hud-meta", Static).update(self.hud_meta())
+        self.query_one("#welcome", Static).update(self.welcome_text())
+        self.render_pills()
+        self.render_last()
+        self.render_status()
+        self.query_one("#radar", OrbitRadar).refresh()
+        if self.mem:
+            self.refresh_telemetry()
+        if tema.name != _estado().get("tema", "sentry"):
+            _salvar_estado(tema=tema.name)
+
+    @staticmethod
+    def hud_meta() -> str:
+        return (f"[b {C['mint']}]INTENT → CODE ENCOUNTERS[/]\n[{C['dim']}]SRC ·[/] [{C['green']}]S0 COMPILER · S1 BANK · "
+                f"S2 SLM[/]\n[{C['dim']}]OFFLINE · TETO[/] [{C['red']}]{_budget_gb()} GB[/] [{C['dim']}]· v{__version__}[/]")
+
     def on_resize(self, event) -> None:
         from textual.css.query import NoMatches
 
@@ -225,7 +288,7 @@ class Studio(App):
 
     # ------------------------------------------------------------------ HUD
     def feed(self, text: str, color: str = "green") -> None:
-        mark = "[#FF4747]▸[/]"
+        mark = f"[{C['red']}]▸[/]"
         self.query_one("#feed", RichLog).write(f"{mark} [{C.get(color, color)}]{_esc(text)}[/]")
 
     def render_pills(self) -> None:
@@ -267,7 +330,7 @@ class Studio(App):
         line.append("  MEMORY BUDGET ", style=C["dim"])
         line.append_text(gauge(total, budget, 26))
         line.append(f" {total:.0f}/{budget} MB ", style=C["mint"])
-        state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["red"])
+        state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["error"])
         line.append(f"  DAEMON {state[0]} ", style=f"bold {state[1]}")
         line.append("  " + time.strftime("%Y-%b-%d %H:%MZ", time.gmtime()).upper(), style=f"bold {C['mint']}")
         self.query_one("#status", Static).update(line)
@@ -309,7 +372,7 @@ class Studio(App):
             self.feed(f"UPLINK PERDIDO · {err[:60]}", "red")
         self.online = False
         self.mem = self.mem or {}
-        self.query_one("#telemetry", Static).update(f"[b {C['red']}]DAEMON OFFLINE[/]\n[{C['dim']}]rode: codar start[/]")
+        self.query_one("#telemetry", Static).update(f"[b {C['error']}]DAEMON OFFLINE[/]\n[{C['dim']}]rode: codar start[/]")
 
     def _telemetry(self, s: dict) -> None:
         first = not self.online
@@ -327,7 +390,7 @@ class Studio(App):
                 (f"[{C['mint']}]●[/]" if model.get("loaded") else f"[{C['orange']}]○[/]"),
                 f"[{C['dim']}]BANCO [/][{C['green']}]{pats.get('patterns', 0)} padrões · {s.get('rules', 0)} regras[/]"]
         for stage, m in sorted((s.get("stages") or {}).items()):
-            rows.append(f"[{C['dim']}]{stage:<7}[/][{C['text']}]n={m['n']} p50={m['p50_ms']}ms[/]")
+            rows.append(f"[{C['dim']}]{stage:<9}[/][{C['text']}]n={m['n']} p50={m['p50_ms']}ms[/]")
         self.query_one("#telemetry", Static).update("\n".join(rows))
         self.render_status()
 
@@ -371,8 +434,9 @@ class Studio(App):
         ed = CodeEditor.code_editor(text, language=ts, theme="monokai", soft_wrap=False)
         ed.path, ed.saved_text = path, text
         ed.lang_id = lang.id if lang else None
-        ed.register_theme(SENTRY_THEME)
-        ed.theme = "sentry"
+        nome = f"codar-{self.theme}"
+        ed.register_theme(tema_editor(nome))
+        ed.theme = nome
         if lang:
             ed.indent_type = "tabs" if lang.indent == "\t" else "spaces"
             ed.indent_width = 4 if lang.indent == "\t" else len(lang.indent)
@@ -465,7 +529,7 @@ class Studio(App):
     def _failed(self, intent: str, message: str, cands: list[dict]) -> None:
         self.feed(f"UNRESOLVED · {message[:60]}", "red")
         out = self.query_one("#output", RichLog)
-        out.write(f"[b {C['red']}]✖ {_esc(message)}[/]")
+        out.write(f"[b {C['error']}]✖ {_esc(message)}[/]")
         for c in cands[:3]:
             out.write(f"[{C['dim']}]  candidato {c['id']} ({c['score']:.2f}) {c['title']}[/]")
         self.notify(message[:120], severity="error", title="não resolvido")
@@ -544,7 +608,7 @@ class Studio(App):
     def _show_findings(self, findings: list[dict], offset: int, absolute: bool = False) -> None:
         table = self.query_one("#problems", DataTable)
         table.clear()
-        sev_color = {"critical": C["red"], "error": C["red"], "warning": C["orange"], "info": C["cyan"]}
+        sev_color = {"critical": C["error"], "error": C["error"], "warning": C["orange"], "info": C["cyan"]}
         for f in findings:
             line = f["line"] if absolute else offset + max(1, f.get("body_line", f["line"]))
             table.add_row(Text(f["severity"].upper(), style=f"bold {sev_color.get(f['severity'], C['text'])}"),
@@ -853,7 +917,7 @@ class Studio(App):
             os.close(master)
         self.term_fd = None
         self.call_from_thread(self._prompt_waiting, "")
-        style = C["mint"] if code == 0 else C["red"]
+        style = C["mint"] if code == 0 else C["error"]
         self.call_from_thread(log.write, Text(f"[exit {code} · {time.monotonic() - t0:.2f}s]", style=f"bold {style}"))
         self.call_from_thread(self.feed, f"RUN · exit {code}", "green" if code == 0 else "red")
 
@@ -1027,6 +1091,27 @@ class Studio(App):
     def on_unmount(self) -> None:
         self.action_stop_process()
         self.backend.close()
+
+
+def _estado() -> dict:
+    """Preferências do Studio entre sessões (tema escolhido)."""
+    import json
+
+    try:
+        return json.loads((paths.data_dir() / "studio.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _salvar_estado(**valores) -> None:
+    import json
+
+    arquivo = paths.data_dir() / "studio.json"
+    try:
+        arquivo.parent.mkdir(parents=True, exist_ok=True)
+        arquivo.write_text(json.dumps({**_estado(), **valores}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _budget_gb() -> str:

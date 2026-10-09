@@ -1,12 +1,31 @@
-/* Codar Studio — paleta "mission control" (fundo #05040A, âmbar, molduras laranja, rótulos vermelhos, dados menta) */
+/* Codar Studio — paleta "mission control" (fundo $codar-bg, âmbar, molduras laranja, rótulos vermelhos, dados menta) */
 
 Screen {
-    background: #05040A;
-    color: #f0b32a;
-    scrollbar-color: #3a2c0a;
-    scrollbar-color-hover: #7a5a14;
-    scrollbar-background: #0a0805;
+    background: $codar-bg;
+    color: $codar-text;
+}
+
+/* todas as barras de rolagem (cada widget tem a sua; regra só no Screen não chega nelas) */
+* {
+    scrollbar-color: $codar-sel;
+    scrollbar-color-hover: $codar-line;
+    scrollbar-color-active: $codar-text;
+    scrollbar-background: $codar-bg;
+    scrollbar-background-hover: $codar-bg;
+    scrollbar-background-active: $codar-bg;
+    scrollbar-corner-color: $codar-bg;
     scrollbar-size-vertical: 1;
+    scrollbar-size-horizontal: 1;
+}
+
+/* pílulas clicáveis (S0, S1, AUDIT…): a cor vem do texto, sem o sublinhado padrão de link */
+#pills, #lang-pill {
+    link-color: $codar-text;
+    link-background: $codar-bg;
+    link-style: none;
+    link-color-hover: $codar-bg;
+    link-background-hover: $codar-mint;
+    link-style-hover: bold;
 }
 
 #workspace {
@@ -26,21 +45,21 @@ Screen {
 }
 
 #explorer, #radar, #feed, #editors, #panel, #last-card, #telemetry, #history, #intent-bar {
-    border: round #F26500;
-    border-title-color: #FF4747;
+    border: round $codar-orange;
+    border-title-color: $codar-red;
     border-title-style: bold;
-    border-title-background: #05040A;
-    border-subtitle-color: #6b551f;
-    background: #05040A;
+    border-title-background: $codar-bg;
+    border-subtitle-color: $codar-dim;
+    background: $codar-bg;
 }
 
 #explorer:focus-within, #editors:focus-within, #panel:focus-within, #intent-bar:focus-within {
-    border: round #47FFA9;
+    border: round $codar-mint;
 }
 
 #explorer {
     height: 1fr;
-    color: #54ff8a;
+    color: $codar-green;
 }
 
 #radar {
@@ -74,7 +93,7 @@ Screen {
 }
 
 #hud-title {
-    color: #47FFA9;
+    color: $codar-mint;
     text-style: bold;
     padding: 1 1 0 1;
     height: 4;
@@ -105,7 +124,7 @@ Screen {
 
 #intent-label {
     width: 13;
-    color: #FF4747;
+    color: $codar-red;
     text-style: bold;
     padding: 0 1;
     content-align: left middle;
@@ -113,12 +132,12 @@ Screen {
 
 #status {
     height: 1;
-    background: #0B0915;
+    background: $codar-panel;
 }
 
 Input {
-    background: #05040A;
-    color: #47FFA9;
+    background: $codar-bg;
+    color: $codar-mint;
     border: none;
     height: 1;
     padding: 0 1;
@@ -126,17 +145,17 @@ Input {
 
 Input:focus {
     border: none;
-    background: #0F0C1C;
+    background: $codar-grid;
 }
 
 Input > .input--placeholder {
-    color: #6b551f;
+    color: $codar-dim;
 }
 
 #term-log, #output {
     height: 1fr;
     padding: 0 1;
-    background: #05040A;
+    background: $codar-bg;
 }
 
 #term-input {
@@ -144,95 +163,152 @@ Input > .input--placeholder {
 }
 
 DirectoryTree {
-    background: #05040A;
+    background: $codar-bg;
 }
 
 DirectoryTree > .directory-tree--folder {
-    color: #f0b32a;
+    color: $codar-text;
     text-style: bold;
 }
 
 DirectoryTree > .directory-tree--file {
-    color: #54ff8a;
+    color: $codar-green;
+}
+
+DirectoryTree > .directory-tree--extension {
+    color: $codar-dim;
+    text-style: none;
+}
+
+DirectoryTree > .directory-tree--hidden {
+    color: $codar-dim;
+}
+
+DirectoryTree > .tree--guides {
+    color: $codar-line;
+}
+
+DirectoryTree > .tree--guides-hover, DirectoryTree > .tree--guides-selected {
+    color: $codar-orange;
+}
+
+DirectoryTree > .tree--cursor {
+    background: $codar-sel;
+    color: $codar-mint;
+    text-style: bold;
+}
+
+DirectoryTree:focus > .tree--cursor {
+    background: $codar-orange;
+    color: $codar-bg;
+}
+
+DirectoryTree > .tree--highlight-line {
+    background: $codar-grid;
+}
+
+/* paleta de comandos (Ctrl+P) */
+CommandPalette > .command-palette--help-text {
+    color: $codar-dim;
+}
+
+CommandPalette > .command-palette--highlight {
+    color: $codar-mint;
+    text-style: bold;
+}
+
+CommandPalette #--input {
+    border: round $codar-orange;
+    background: $codar-bg;
+}
+
+CommandPalette #--results {
+    background: $codar-bg;
+}
+
+Tooltip {
+    background: $codar-panel;
+    color: $codar-text;
+    border: round $codar-line;
 }
 
 DataTable {
-    background: #05040A;
-    color: #54ff8a;
+    background: $codar-bg;
+    color: $codar-green;
 }
 
 DataTable > .datatable--header {
-    background: #0F0C1C;
-    color: #6b551f;
+    background: $codar-grid;
+    color: $codar-red;
     text-style: bold;
 }
 
 DataTable > .datatable--cursor {
-    background: #3a2c0a;
-    color: #47FFA9;
+    background: $codar-sel;
+    color: $codar-mint;
 }
 
 Tabs {
-    background: #05040A;
+    background: $codar-bg;
 }
 
 Tab {
-    color: #6b551f;
+    color: $codar-dim;
 }
 
 Tab.-active {
-    color: #FF4747;
+    color: $codar-red;
     text-style: bold;
 }
 
 Tab:hover {
-    color: #f0b32a;
+    color: $codar-text;
 }
 
 Underline > .underline--bar {
-    color: #F26500;
-    background: #0F0C1C;
+    color: $codar-orange;
+    background: $codar-grid;
 }
 
 ListView {
-    background: #05040A;
+    background: $codar-bg;
 }
 
 ListItem {
-    background: #05040A;
+    background: $codar-bg;
     padding: 0 1;
 }
 
 ListItem.-highlight, ListView > ListItem.-highlight {
-    background: #0F0C1C;
+    background: $codar-grid;
 }
 
 #advice-list > ListItem {
-    border-bottom: dashed #7a5a14;
+    border-bottom: dashed $codar-line;
 }
 
 TextArea {
-    background: #05040A;
+    background: $codar-bg;
     border: none;
 }
 
 Footer {
-    background: #0B0915;
-    color: #f0b32a;
+    background: $codar-panel;
+    color: $codar-text;
 }
 
 FooterKey .footer-key--key {
-    color: #47FFA9;
-    background: #0F0C1C;
+    color: $codar-mint;
+    background: $codar-grid;
 }
 
 FooterKey .footer-key--description {
-    color: #f0b32a;
+    color: $codar-text;
 }
 
 AdviceScreen, PromptScreen {
     align: center middle;
-    background: rgba(5, 4, 10, 0.75);
+    background: $codar-bg 75%;
 }
 
 #advice-card {
@@ -240,19 +316,19 @@ AdviceScreen, PromptScreen {
     max-width: 95%;
     height: auto;
     max-height: 85%;
-    border: round #F26500;
-    border-title-color: #FF4747;
-    background: #05040A;
+    border: round $codar-orange;
+    border-title-color: $codar-red;
+    background: $codar-bg;
     padding: 1 2;
 }
 
 #advice-title {
-    color: #FF4747;
+    color: $codar-red;
     text-style: bold;
 }
 
 #advice-reason {
-    color: #f0b32a;
+    color: $codar-text;
     margin: 1 0;
 }
 
@@ -262,7 +338,7 @@ AdviceScreen, PromptScreen {
 }
 
 .advice-plan {
-    border-left: thick #7a5a14;
+    border-left: thick $codar-line;
     padding: 0 1;
     margin: 0 0 1 0;
 }
@@ -273,57 +349,57 @@ AdviceScreen, PromptScreen {
 }
 
 Button {
-    background: #05040A;
+    background: $codar-bg;
     min-width: 12;
     margin: 0 1;
 }
 
 Button.accept {
-    color: #47FFA9;
-    border: round #47FFA9;
+    color: $codar-mint;
+    border: round $codar-mint;
 }
 
 Button.accept:hover {
-    background: #0F0C1C;
+    background: $codar-grid;
 }
 
 Button.reject {
-    color: #FF4747;
-    border: round #FF4747;
+    color: $codar-red;
+    border: round $codar-red;
 }
 
 #prompt-card {
     width: 70;
     height: 7;
-    border: round #F26500;
-    background: #05040A;
+    border: round $codar-orange;
+    background: $codar-bg;
     padding: 1 2;
 }
 
 #prompt-title {
-    color: #FF4747;
+    color: $codar-red;
     text-style: bold;
 }
 
 #prompt-input {
-    border: round #7a5a14;
+    border: round $codar-line;
     height: 3;
 }
 
 Toast {
-    background: #0B0915;
-    color: #f0b32a;
-    border-left: outer #F26500;
+    background: $codar-panel;
+    color: $codar-text;
+    border-left: outer $codar-orange;
 }
 
 Toast.-error {
-    border-left: outer #FF4747;
+    border-left: outer $codar-red;
 }
 
 /* ---------------------------------------------------------------- ajuda (F1) */
 HelpScreen {
     align: center middle;
-    background: #05040A 70%;
+    background: $codar-bg 70%;
 }
 
 #help-card {
@@ -331,11 +407,11 @@ HelpScreen {
     max-width: 95%;
     height: auto;
     max-height: 90%;
-    border: round #F26500;
-    border-title-color: #FF4747;
+    border: round $codar-orange;
+    border-title-color: $codar-red;
     border-title-style: bold;
-    border-subtitle-color: #6b551f;
-    background: #05040A;
+    border-subtitle-color: $codar-dim;
+    background: $codar-bg;
     padding: 1 2;
 }
 
@@ -349,7 +425,7 @@ HelpScreen {
 }
 
 .help-items {
-    color: #f0b32a;
+    color: $codar-text;
 }
 
 /* ---------------------------------------------------------------- boas-vindas (sem arquivo aberto) */
@@ -357,8 +433,8 @@ HelpScreen {
     height: 1fr;
     content-align: center middle;
     text-align: center;
-    border: round #F26500;
-    border-title-color: #FF4747;
+    border: round $codar-orange;
+    border-title-color: $codar-red;
     border-title-style: bold;
-    background: #05040A;
+    background: $codar-bg;
 }

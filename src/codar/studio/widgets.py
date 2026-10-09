@@ -21,40 +21,104 @@ from textual.widget import Widget
 from textual.widgets import TextArea
 from textual.widgets.text_area import TextAreaTheme
 
-C = {"bg": "#05040A", "panel": "#0B0915", "grid": "#0F0C1C", "text": "#f0b32a", "dim": "#6b551f", "line": "#7a5a14",
-     "red": "#FF4747", "orange": "#F26500", "mint": "#47FFA9", "green": "#54ff8a", "cyan": "#39d6c8",
-     "blue": "#5f7bff", "moon": "#cfd6e6"}
-STAGE_COLORS = {"0": C["mint"], "1": C["green"], "2:tools": C["cyan"], "2:adapt": C["blue"], "2:gen": C["orange"],
-                "2:pseudo": C["cyan"]}
+# Paleta do SENTRY. O Studio inteiro lê as cores de C, que acompanha o tema ativo (Ctrl+P → tema): aplicar_paleta()
+# troca os valores no lugar, então quem importou C vê as cores novas no próximo desenho.
+SENTRY = {"bg": "#05040A", "panel": "#0B0915", "grid": "#0F0C1C", "text": "#f0b32a", "dim": "#6b551f", "line": "#7a5a14",
+          "red": "#FF4747", "orange": "#F26500", "mint": "#47FFA9", "green": "#54ff8a", "cyan": "#39d6c8",
+          "blue": "#5f7bff", "moon": "#cfd6e6", "sel": "#3a2c0a", "error": "#ff3b2f", "guide": "#4a3c16",
+          "guide_faint": "#241d0b", "flash": "#0f2a1f"}
+C = dict(SENTRY)
+STAGE_COLORS: dict[str, str] = {}
 ASCII = os.environ.get("TERM") == "linux" or os.environ.get("CODAR_ASCII") == "1"
 
-SENTRY_THEME = TextAreaTheme(
-    name="sentry",
-    base_style=Style(color=C["text"], bgcolor=C["bg"]),
-    gutter_style=Style(color=C["dim"], bgcolor=C["bg"]),
-    cursor_style=Style(color=C["bg"], bgcolor=C["mint"]),
-    cursor_line_style=Style(bgcolor=C["grid"]),
-    cursor_line_gutter_style=Style(color=C["mint"], bgcolor=C["grid"]),
-    bracket_matching_style=Style(bgcolor="#2a2008", bold=True),
-    selection_style=Style(bgcolor="#3a2c0a"),
-    syntax_styles={
-        "keyword": Style(color=C["red"], bold=True), "keyword.operator": Style(color=C["red"]),
-        "conditional": Style(color=C["red"], bold=True), "repeat": Style(color=C["red"], bold=True),
-        "exception": Style(color=C["red"], bold=True), "include": Style(color=C["red"]),
-        "string": Style(color=C["green"]), "string.documentation": Style(color=C["dim"], italic=True),
-        "comment": Style(color=C["dim"], italic=True), "number": Style(color=C["cyan"]), "float": Style(color=C["cyan"]),
-        "boolean": Style(color=C["orange"], bold=True), "constant": Style(color=C["orange"]),
-        "constant.builtin": Style(color=C["orange"]), "function": Style(color=C["mint"]),
-        "function.call": Style(color=C["mint"]), "method": Style(color=C["mint"]), "method.call": Style(color=C["mint"]),
-        "type": Style(color=C["blue"]), "type.builtin": Style(color=C["blue"]), "class": Style(color=C["blue"]),
-        "operator": Style(color=C["text"]), "variable.parameter": Style(color=C["moon"]),
-        "property": Style(color=C["moon"]), "punctuation.bracket": Style(color=C["line"]),
-        "punctuation.delimiter": Style(color=C["line"]), "tag": Style(color=C["red"]),
-        "heading": Style(color=C["mint"], bold=True), "link": Style(color=C["cyan"], underline=True),
-        "json.label": Style(color=C["mint"]), "yaml.field": Style(color=C["mint"]), "toml.type": Style(color=C["mint"]),
-        "regex.operator": Style(color=C["red"]), "inline_code": Style(color=C["green"]),
-    },
-)
+
+def paleta(tema) -> dict[str, str]:
+    """Cores do Studio para um tema do Textual. O SENTRY tem as suas; nos outros, cada cor vem do papel que cumpre:
+    primária = molduras, secundária = rótulos e palavras-chave, destaque = dados e atalhos, sucesso = textos."""
+    if tema is None or tema.name == "sentry":
+        return dict(SENTRY)
+    from textual.color import Color
+
+    def cor(valor: str | None, padrao: str) -> Color:
+        return Color.parse(valor or padrao)
+
+    try:
+        fundo = cor(tema.background, "#121212" if tema.dark else "#efefef")
+        texto = cor(tema.foreground, "#e0e0e0" if tema.dark else "#1e1e1e")
+        primaria = cor(tema.primary, "#0178D4")
+        secundaria = cor(tema.secondary, tema.primary)
+        destaque = cor(tema.accent, tema.primary)
+        sucesso = cor(tema.success, "#4EBF71")
+        return {"bg": fundo.hex6, "panel": cor(tema.surface, fundo.blend(texto, 0.04).hex6).hex6,
+                "grid": fundo.blend(texto, 0.07).hex6, "text": texto.hex6, "dim": fundo.blend(texto, 0.45).hex6,
+                "line": fundo.blend(primaria, 0.55).hex6, "red": secundaria.hex6, "orange": primaria.hex6,
+                "mint": destaque.hex6, "green": sucesso.hex6, "cyan": destaque.blend(sucesso, 0.5).hex6,
+                "blue": primaria.blend(secundaria, 0.5).hex6, "moon": texto.blend(destaque, 0.2).hex6,
+                "sel": fundo.blend(primaria, 0.3).hex6, "error": cor(tema.error, "#ff3b2f").hex6,
+                "guide": fundo.blend(texto, 0.3).hex6, "guide_faint": fundo.blend(texto, 0.13).hex6,
+                "flash": fundo.blend(sucesso, 0.18).hex6}
+    except Exception:  # tema com cores que não são RGB (ex.: textual-ansi): fica o SENTRY
+        return dict(SENTRY)
+
+
+def aplicar_paleta(nova: dict[str, str]) -> None:
+    C.update(nova)
+    STAGE_COLORS.update({"0": C["mint"], "1": C["green"], "2:tools": C["cyan"], "2:adapt": C["blue"],
+                         "2:gen": C["orange"], "2:pseudo": C["cyan"]})
+
+
+aplicar_paleta(SENTRY)
+
+
+def tema_editor(nome: str) -> TextAreaTheme:
+    """Tema do editor (realce de sintaxe, cursor, seleção) com a paleta ativa."""
+    return TextAreaTheme(
+        name=nome,
+        base_style=Style(color=C["text"], bgcolor=C["bg"]),
+        gutter_style=Style(color=C["dim"], bgcolor=C["bg"]),
+        cursor_style=Style(color=C["bg"], bgcolor=C["mint"]),
+        cursor_line_style=Style(bgcolor=C["grid"]),
+        cursor_line_gutter_style=Style(color=C["mint"], bgcolor=C["grid"]),
+        bracket_matching_style=Style(bgcolor=C["sel"], bold=True),
+        selection_style=Style(bgcolor=C["sel"]),
+        syntax_styles={
+            "keyword": Style(color=C["red"], bold=True), "keyword.operator": Style(color=C["red"]),
+            "conditional": Style(color=C["red"], bold=True), "repeat": Style(color=C["red"], bold=True),
+            "exception": Style(color=C["red"], bold=True), "include": Style(color=C["red"]),
+            "string": Style(color=C["green"]), "string.documentation": Style(color=C["dim"], italic=True),
+            "comment": Style(color=C["dim"], italic=True), "number": Style(color=C["cyan"]),
+            "float": Style(color=C["cyan"]), "boolean": Style(color=C["orange"], bold=True),
+            "constant": Style(color=C["orange"]), "constant.builtin": Style(color=C["orange"]),
+            "function": Style(color=C["mint"]), "function.call": Style(color=C["mint"]),
+            "method": Style(color=C["mint"]), "method.call": Style(color=C["mint"]),
+            "type": Style(color=C["blue"]), "type.builtin": Style(color=C["blue"]), "class": Style(color=C["blue"]),
+            "operator": Style(color=C["text"]), "variable.parameter": Style(color=C["moon"]),
+            "property": Style(color=C["moon"]), "punctuation.bracket": Style(color=C["line"]),
+            "punctuation.delimiter": Style(color=C["line"]), "tag": Style(color=C["red"]),
+            "heading": Style(color=C["mint"], bold=True), "link": Style(color=C["cyan"], underline=True),
+            "json.label": Style(color=C["mint"]), "yaml.field": Style(color=C["mint"]),
+            "toml.type": Style(color=C["mint"]), "regex.operator": Style(color=C["red"]),
+            "inline_code": Style(color=C["green"]),
+        },
+    )
+
+
+def tema_ansi():
+    """Cores ANSI dos programas no terminal integrado (vermelho, verde… de `ls --color`, pytest, git) na paleta."""
+    from rich.terminal_theme import TerminalTheme
+    from textual.color import Color
+
+    def rgb(nome: str, clarear: float = 0.0) -> tuple[int, int, int]:
+        c = Color.parse(C[nome])
+        if clarear:
+            c = c.blend(Color.parse(C["moon"]), clarear)
+        return c.r, c.g, c.b
+
+    normais = [rgb("panel"), rgb("red"), rgb("green"), rgb("text"), rgb("blue"), rgb("orange"), rgb("cyan"),
+               rgb("moon")]
+    claras = [rgb("dim"), rgb("red", .25), rgb("green", .25), rgb("text", .25), rgb("blue", .25), rgb("orange", .25),
+              rgb("cyan", .25), rgb("moon")]
+    return TerminalTheme(rgb("bg"), rgb("text"), normais, claras)
 
 _WORD_BEFORE = re.compile(r"[^\W\d]\w*$")
 _WORDS = re.compile(r"[^\W\d]\w{2,}")
