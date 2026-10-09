@@ -102,6 +102,18 @@ Botao:hover {
     height: 14;
 }
 
+#panel.alto {
+    height: 22;
+}
+
+#estudo {
+    padding: 0 1;
+}
+
+#estudo-acao {
+    margin-top: 1;
+}
+
 #hud-title {
     color: $codar-mint;
     text-style: bold;

@@ -23,7 +23,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.suggester import Suggester
 from textual.theme import Theme
 from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, ListView, RichLog, Static,
@@ -95,7 +95,7 @@ class CodarCommands(Provider):
 
 BOTOES_EXPLORER = [("novo_arquivo", "+arquivo"), ("nova_pasta", "+pasta"), ("colar", "colar"), ("recarregar", "↻")]
 PILULAS = [("s0", "◎ S0", "toggle_stage(0)"), ("s1", "• S1", "toggle_stage(1)"), ("s2", "✳ S2", "toggle_stage(2)"),
-           ("audit", "☉ AUDIT", "toggle_audit"), ("hints", "✎ HINTS", "toggle_hints")]
+           ("audit", "☉ AUDIT", "toggle_audit"), ("hints", "✎ HINTS", "toggle_hints"), ("estudo", "◆ ESTUDO", "estudo")]
 _SENAO = re.compile(r"^\s*(sen[aã]o|caso contr[aá]rio|do contr[aá]rio|else|elif)\b", re.I)
 TIPS = [
     "termine a frase com espaço e aperte Enter: a linha vira código",
@@ -103,6 +103,8 @@ TIPS = [
     "num arquivo .html, escreva ul>li.item*3 e aperte Tab",
     "num arquivo .css, escreva df+jcc+aic e aperte Tab",
     "F1 mostra todos os atalhos",
+    "F7 liga o modo estudo: o painel explica cada linha e mostra o próximo passo da trilha de POO",
+    "comente '# classe Pessoa com nome e idade' com o modo estudo ligado: o exemplo usa esses nomes",
     "Ctrl+E vai para o explorer: n cria arquivo, p cria pasta, r renomeia, Del apaga",
     "Esc volta para o editor de qualquer lugar; Ctrl+T vai para o terminal",
     "selecione várias linhas de pseudocódigo e aperte Ctrl+G: o bloco inteiro vira código",
@@ -155,6 +157,8 @@ class Studio(App):
         Binding("ctrl+b", "toggle_left", "Mostrar explorer", show=False, priority=True),
         Binding("f9", "toggle_panel", "Painel", show=False, priority=True),
         Binding("f12", "shell", "Seu shell", show=False, priority=True),
+        Binding("f7", "estudo", "Estudo", priority=True),
+        Binding("shift+f7", "estudo_aplicar", "Aplicar sugestão do estudo", show=False, priority=True),
         Binding("ctrl+q", "quit", "Sair", priority=True),
         Binding("f1", "help", "Ajuda", priority=True),
     ]
@@ -173,6 +177,12 @@ class Studio(App):
         self.intents: list[str] = []
         self.online = False
         self.streaming = False
+        self.estudo = False  # modo estudo (F7): o painel ESTUDO acompanha o cursor
+        self._estudo_timer = None
+        self._estudo_conceito = None
+        self._estudo_forcado: str | None = None
+        self._estudo_poo = None
+        self.sugestao_estudo = None
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -202,6 +212,10 @@ class Studio(App):
                         yield RichLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
                     with TabPane("CONSULTOR", id="tab-advisor"):
                         yield ListView(id="advice-list")
+                    with TabPane("ESTUDO", id="tab-estudo"):
+                        with VerticalScroll(id="estudo"):
+                            yield Static(self.estudo_vazio(), id="estudo-corpo")
+                            yield Botao(acao="estudo_aplicar", id="estudo-acao")
             with Vertical(id="right"):
                 yield Static(TITLE, id="hud-title")
                 yield Static(id="hud-meta")
@@ -300,7 +314,7 @@ class Studio(App):
     def render_pills(self) -> None:
         """Pílulas (clicáveis): menta = ligado, vermelho = desligado. A barra do explorer também é redesenhada aqui."""
         ligado = {"s0": 0 in self.stages, "s1": 1 in self.stages, "s2": 2 in self.stages, "audit": self.audit_on,
-                  "hints": self.hints}
+                  "hints": self.hints, "estudo": self.estudo}
         for pid, rotulo, _acao in PILULAS:
             self.query_one(f"#pill-{pid}", Botao).update(f"[b {C['mint'] if ligado[pid] else C['red']}] {rotulo} [/]")
         for acao, rotulo in BOTOES_EXPLORER:
@@ -382,6 +396,7 @@ class Studio(App):
     @on(TextArea.SelectionChanged)
     def _cursor_moved(self) -> None:
         self.render_status()
+        self.agendar_estudo()
 
     def on_descendant_focus(self) -> None:
         self.render_status()
@@ -490,6 +505,137 @@ class Studio(App):
         ed = event.text_area
         if isinstance(ed, CodeEditor):
             self._update_tab_label(ed)
+            self.agendar_estudo()
+
+    # ------------------------------------------------------------------ modo estudo
+    @staticmethod
+    def estudo_vazio() -> Text:
+        return Text.assemble(("◆ MODO ESTUDO", f"bold {C['mint']}"), ("  F7 liga e desliga\n\n", C["dim"]),
+                             ("Com ele ligado, este painel explica o conceito da linha onde está o cursor, com um "
+                              "exemplo e um exercício, e acompanha a trilha de orientação a objetos do seu arquivo. "
+                              "Comentários também valem: escreva ", C["text"]),
+                             ("# classe Pessoa com nome e idade", C["green"]),
+                             (" e veja o exemplo com esses nomes. O código é você quem escreve.", C["text"]))
+
+    def action_estudo(self) -> None:
+        """F7: liga/desliga o modo estudo. Logo depois de um erro explicado, abre o conceito daquele erro."""
+        exp = getattr(self, "ultima_explicacao", None)
+        if exp is not None and exp.conceito and not getattr(exp, "estudada", False):
+            exp.estudada = True
+            self._estudo_forcado = exp.conceito
+            self.estudo = True
+        else:
+            self.estudo = not self.estudo
+        panel = self.query_one("#panel", TabbedContent)
+        if self.estudo:
+            panel.display = True
+            panel.active = "tab-estudo"
+            self.atualizar_estudo()
+        elif panel.active == "tab-estudo":
+            panel.active = "tab-terminal"
+        self.render_pills()
+
+    def agendar_estudo(self) -> None:
+        if not self.estudo:
+            return
+        if self._estudo_timer is not None:
+            self._estudo_timer.stop()
+        self._estudo_timer = self.set_timer(0.35, self.atualizar_estudo)
+
+    def atualizar_estudo(self) -> None:
+        from rich.console import Group
+        from rich.syntax import Syntax
+
+        from codar import estudo
+
+        corpo = self.query_one("#estudo-corpo", Static)
+        botao = self.query_one("#estudo-acao", Botao)
+        ed = self.current_editor()
+        if ed is None:
+            corpo.update(self.estudo_vazio())
+            botao.display = False
+            return
+        lang = ed.lang_id
+        linha = ed.document.get_line(ed.cursor_location[0])
+        achados = estudo.conceitos_da_linha(linha, lang)
+        if self._estudo_forcado:
+            conceito = estudo.POR_ID.get(self._estudo_forcado)
+            self._estudo_forcado = None
+        else:
+            conceito = achados[0] if achados else self._estudo_conceito
+        self._estudo_conceito = conceito
+        partes: list = []
+        estado = estudo.trilha_poo(ed.text, lang, uso_externo=self._usado_fora(ed))
+        if estado is not None:
+            self._estudo_poo = (ed, estado)
+        elif self._estudo_poo and self._estudo_poo[0] is ed:  # no meio da digitação: mantém o último estado
+            estado = self._estudo_poo[1]
+        if estado is not None and (estado.feitos["classe"] or (conceito and conceito.trilha == "poo")):
+            feitos = [k for k in estudo.TRILHA_POO if estado.feitos[k]]
+            total = len(estudo.TRILHA_POO)
+            barra = "▰" * len(feitos) + "▱" * (total - len(feitos))
+            prox = estado.proximo
+            partes.append(Text.assemble(("TRILHA POO ", f"bold {C['red']}"), (barra, C["green"]),
+                                        (f" {len(feitos)}/{total}", C["text"]),
+                                        (f" · próximo: {estudo.POR_ID[prox].titulo.split(' (')[0].lower()}" if prox
+                                         else " · completa", C["dim"])))
+            partes.append(Text.assemble(("▶ próximo passo: ", f"bold {C['mint']}"), (estado.passo(lang), C["text"])))
+        self.sugestao_estudo = estudo.sugestao_main(self.root, Path(ed.path), ed.text, lang) if ed.path else None
+        if self.sugestao_estudo is not None:
+            s = self.sugestao_estudo
+            partes.append(Text.assemble(("▶ sugestão: ", f"bold {C['orange']}"), (s.motivo + " ", C["text"]),
+                                        (f"Shift+F7 cria {s.caminho} comentado, para você completar.", C["dim"])))
+            botao.update(f"[b {C['mint']}]▸ criar {s.caminho}[/]")
+        if conceito is not None:
+            if partes:
+                partes.append(Text(""))
+            partes.append(Text.assemble(("◆ ", f"bold {C['orange']}"), (conceito.titulo.upper(), f"bold {C['mint']}"),
+                                        (f"   {estudo.TRILHAS[conceito.trilha]}", C["dim"])))
+            partes.append(Text(conceito.texto, style=C["text"]))
+            pessoal = estudo.pelo_comentario(linha, lang) if linha.strip().startswith(("#", "//")) else None
+            codigo, lang_ex = pessoal or estudo.exemplo(conceito, lang)
+            rotulo = "exemplo com os nomes do seu comentário (para estudar e digitar):" if pessoal else \
+                f"exemplo{'' if lang_ex == (lang or 'python') else ' em ' + lang_ex}:"
+            partes.append(Text(rotulo, style=C["dim"]))
+            partes.append(Syntax(codigo, lang_ex, theme="ansi_dark", background_color=C["bg"], word_wrap=True))
+            partes.append(Text.assemble(("✎ pratique: ", f"bold {C['red']}"), (conceito.pratique, C["text"])))
+            if len(achados) > 1:
+                partes.append(Text("também nesta linha: " + " · ".join(c.titulo for c in achados[1:4]), style=C["dim"]))
+        botao.display = self.sugestao_estudo is not None
+        corpo.update(Group(*partes) if partes else self.estudo_vazio())
+
+    def _usado_fora(self, ed: CodeEditor) -> bool:
+        """A classe do arquivo já é usada (objeto criado) em outro arquivo do projeto, como um main.py?"""
+        if not ed.path or ed.lang_id != "python":
+            return False
+        classes = re.findall(r"^class\s+(\w+)", ed.text, re.M)
+        if not classes:
+            return False
+        for rel in _listar_arquivos(self.root, limite=200):
+            caminho = self.root / rel
+            if rel.endswith(".py") and caminho != Path(ed.path):
+                try:
+                    texto = caminho.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                if any(re.search(rf"\b{c}\(", texto) for c in classes):
+                    return True
+        return False
+
+    async def action_estudo_aplicar(self) -> None:
+        """Shift+F7: cria o arquivo que o modo estudo sugeriu (main.py comentado) e abre para você completar."""
+        s = self.sugestao_estudo
+        if s is None:
+            self.notify("nenhuma sugestão agora: com o modo estudo (F7) ligado, abra um arquivo com uma classe",
+                        severity="warning")
+            return
+        destino = (self.root / s.caminho).resolve()
+        if not destino.exists():
+            destino.write_text(s.conteudo, encoding="utf-8")
+            self.feed(f"ESTUDO · {s.caminho} criado", "mint")
+            self.notify(f"{s.caminho} criado: leia os comentários, troque os valores e rode com F5", title="estudo")
+        await self.query_one("#explorer", Explorer).reload()
+        await self.open_file(destino)
 
     def _update_tab_label(self, ed: CodeEditor) -> None:
         pane = next((p for p in ed.ancestors if isinstance(p, TabPane)), None)
@@ -874,6 +1020,10 @@ class Studio(App):
     def action_toggle_audit(self) -> None:
         self.audit_on = not self.audit_on
         self.render_pills()
+
+    @on(TabbedContent.TabActivated, "#panel")
+    def _aba_do_painel(self, event: TabbedContent.TabActivated) -> None:
+        self.query_one("#panel").set_class(event.pane.id == "tab-estudo", "alto")  # o estudo ganha mais linhas
 
     def action_toggle_hints(self) -> None:
         self.hints = not self.hints
