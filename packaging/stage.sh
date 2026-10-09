@@ -34,7 +34,18 @@ gzip -9n -c "$root/packaging/codar.1" > "$d/share/man/man1/codar.1.gz"
 chmod 0644 "$d/share/man/man1/codar.1.gz"
 copy 0644 "$root/packaging/codar.service" "$d/lib/systemd/user/codar.service"
 
-# completar com Tab no bash, zsh e fish (gerado a partir do parser do próprio CLI)
+# completar com Tab no bash, zsh e fish (gerado a partir do parser do próprio CLI, que precisa do Python 3.10+;
+# no openSUSE Leap 15 o python3 é o 3.6, então procura também python3.1x)
+py="${PYTHON:-}"
+if [ -z "$py" ]; then
+    for c in python3 python3.14 python3.13 python3.12 python3.11 python3.10; do
+        if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+            py="$c"
+            break
+        fi
+    done
+fi
+[ -n "$py" ] || { echo "stage.sh: precisa do Python 3.10 ou mais novo" >&2; exit 1; }
 for sh in bash zsh fish; do
     case "$sh" in
         bash) out="$d/share/bash-completion/completions/codar" ;;
@@ -44,7 +55,7 @@ for sh in bash zsh fish; do
     install -d "$(dirname "$out")"
     # CODAR_HOME vazio: só os plugins do pacote entram (nada da configuração de quem está empacotando)
     home="$(mktemp -d)"
-    CODAR_HOME="$home" PYTHONPATH="$root/src" python3 -m codar completion "$sh" > "$out"
+    CODAR_HOME="$home" PYTHONPATH="$root/src" "$py" -m codar completion "$sh" > "$out"
     rm -rf "$home"
     chmod 0644 "$out"
 done
