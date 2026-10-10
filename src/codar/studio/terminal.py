@@ -10,6 +10,8 @@ terminal completo (menus com setas, vim, aliases), F12 abre o seu shell de verda
 from __future__ import annotations
 
 import codecs
+import asyncio
+from collections import deque
 import json
 import os
 import re
@@ -32,7 +34,7 @@ from textual.widgets import Input, RichLog
 from codar.studio import estado
 from codar.studio.widgets import Botao, C
 
-TERM_IDLE = "$ comando (Enter executa · ↑ histórico · → completa · Ctrl+T outro terminal · F12 seu shell)"
+TERM_IDLE = "$ comando (Tab completa · ↑ histórico · Ctrl+Shift+C copia · Ctrl+T outro · F12 shell)"
 TERM_RUNNING = "entrada do programa (Enter envia · Ctrl+C interrompe · Ctrl+T abre outro terminal)"
 _URL = re.compile(r"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|[\w.-]+):(\d{2,5})\b[^\s'\"]*")
 _CD = re.compile(r"^cd(?:\s+(.*))?$")
@@ -41,6 +43,29 @@ SAIDA_GUARDADA = 400  # linhas por terminal (para explicar erros)
 HISTORICO = 300
 # sem paginador: `git log` e `man` não ficam parados esperando uma tecla que o painel não manda
 SEM_PAGINADOR = {"PAGER": "cat", "GIT_PAGER": "cat", "MANPAGER": "cat", "SYSTEMD_PAGER": "", "BAT_PAGER": "cat"}
+
+
+class TerminalLog(RichLog):
+    """Mantém o texto para copiar, independente da largura, scroll e cores do painel."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.transcript: deque[str] = deque(maxlen=3000)
+
+    def write(self, content, *args, **kwargs):
+        plain = content.plain if isinstance(content, Text) else str(content)
+        self.transcript.extend(plain.split("\n"))
+        # Limita também linhas muito grandes; o painel de cópia guarda até 1 MB.
+        while self.transcript and sum(map(len, self.transcript)) > 1_000_000:
+            self.transcript.popleft()
+        return super().write(content, *args, **kwargs)
+
+    def clear(self):
+        self.transcript.clear()
+        return super().clear()
+
+    def text(self) -> str:
+        return "\n".join(self.transcript)
 
 
 def ambiente_do_shell(timeout: float = 8.0) -> dict[str, str]:
@@ -144,7 +169,9 @@ class TerminalInput(Input):
     BINDINGS = [Binding("ctrl+c", "interromper", "Interromper", show=False, priority=True),
                 Binding("up", "historico(-1)", "Anterior", show=False),
                 Binding("down", "historico(1)", "Próximo", show=False),
-                Binding("tab", "completar", "Completar", show=False)]
+                Binding("tab", "completar(1)", "Completar", show=False, priority=True),
+                Binding("shift+tab", "completar(-1)", "Completar anterior", show=False, priority=True),
+                Binding("ctrl+d", "fim_entrada", "EOF / fechar terminal", show=False, priority=True)]
 
     @property
     def painel(self) -> TerminalPainel:
@@ -161,17 +188,49 @@ class TerminalInput(Input):
         if painel.sessao.rodando() or not painel.historico:
             return
         pos = len(painel.historico) if painel.pos_historico is None else painel.pos_historico
+        if painel.pos_historico is None:
+            painel.rascunho = self.value
         pos = max(0, min(len(painel.historico), pos + passo))
         painel.pos_historico = pos
-        self.value = painel.historico[pos] if pos < len(painel.historico) else ""
+        self.value = painel.historico[pos] if pos < len(painel.historico) else painel.rascunho
         self.cursor_position = len(self.value)
 
-    def action_completar(self) -> None:
-        if self._suggestion and self._suggestion != self.value:
-            self.value = self._suggestion
-            self.cursor_position = len(self.value)
-        else:
-            self.screen.focus_next()
+    async def action_completar(self, step: int = 1) -> None:
+        if self.painel.sessao.rodando():
+            self.insert_text_at_cursor("\t")
+            return
+        from codar.studio.completion import complete_command
+
+        state = (self.value, self.cursor_position, self.painel.sessao.numero, self.painel.sessao.cwd)
+        if state != getattr(self, "_completion_state", None):
+            from codar.toolchains import environment
+
+            cwd = self.painel.sessao.cwd
+            env = environment(self.painel.ambiente, project=cwd)
+            choices = await asyncio.to_thread(complete_command, self.value, self.cursor_position, cwd, env,
+                                              self.painel.historico, comandos_do_projeto(cwd, env.get("PATH", "")))
+            if state != (self.value, self.cursor_position, self.painel.sessao.numero, self.painel.sessao.cwd):
+                return  # não completa texto que mudou durante a busca
+            self._completion_choices = choices
+            self._completion_index = -1 if step > 0 else 0
+        if not self._completion_choices:
+            self.app.notify("Nenhuma conclusão. Tab mantém o foco; Esc volta ao editor.")
+            return
+        self._completion_index = (self._completion_index + step) % len(self._completion_choices)
+        self.value, self.cursor_position = self._completion_choices[self._completion_index]
+        self._completion_state = (self.value, self.cursor_position, self.painel.sessao.numero, self.painel.sessao.cwd)
+        if len(self._completion_choices) > 1:
+            self.app.notify(f"{self._completion_index + 1}/{len(self._completion_choices)} · Tab próximo · Shift+Tab anterior", timeout=2)
+
+    async def action_fim_entrada(self) -> None:
+        session = self.painel.sessao
+        if session.rodando():
+            if session.fd is not None:
+                os.write(session.fd, b"\x04")
+            elif session.proc.stdin:
+                session.proc.stdin.close()
+        elif not self.value:
+            await self.painel.fechar_sessao(session)
 
 
 class SugestoesTerminal(Suggester):
@@ -184,9 +243,15 @@ class SugestoesTerminal(Suggester):
     async def get_suggestion(self, valor: str) -> str | None:
         if not valor.strip() or self.painel.sessao.rodando():
             return None
-        candidatos = [*reversed(self.painel.historico),
-                      *comandos_do_projeto(self.painel.sessao.cwd, self.painel.ambiente.get("PATH", ""))]
-        return next((c for c in candidatos if c.startswith(valor) and c != valor), None)
+        from codar.studio.completion import complete_command
+
+        from codar.toolchains import environment
+
+        cwd = self.painel.sessao.cwd
+        env = environment(self.painel.ambiente, project=cwd)
+        choices = await asyncio.to_thread(complete_command, valor, len(valor), cwd, env, self.painel.historico,
+                                          comandos_do_projeto(cwd, env.get("PATH", "")))
+        return next((text for text, _ in choices if text.startswith(valor) and text != valor), None)
 
 
 class TerminalPainel(Vertical):
@@ -200,9 +265,15 @@ class TerminalPainel(Vertical):
         self.ambiente: dict[str, str] = dict(os.environ)
         self.historico: list[str] = list(estado.ler().get("historico_terminal", []))[-HISTORICO:]
         self.pos_historico: int | None = None
+        self.rascunho = ""
 
     def compose(self):
         yield Horizontal(id="sessoes")
+        with Horizontal(id="term-actions"):
+            yield Botao("selecionar/copiar", acao="terminal_output", id="term-select")
+            yield Botao("copiar saída", acao="copy_terminal", id="term-copy")
+            yield Botao("limpar", acao="clear_terminal", id="term-clear")
+            yield Botao("interromper", acao="interrupt_terminal", id="term-interrupt")
         yield Vertical(id="term-logs")
         yield TerminalInput(placeholder=TERM_IDLE, id="term-input", suggester=SugestoesTerminal(self))
 
@@ -219,7 +290,7 @@ class TerminalPainel(Vertical):
     # ------------------------------------------------------------------ terminais
     async def nova_sessao(self, focar: bool = True) -> Sessao:
         numero = max((s.numero for s in self.sessoes), default=0) + 1
-        log = RichLog(id="term-log" if numero == 1 else f"term-log-{numero}", markup=False, wrap=False, max_lines=3000,
+        log = TerminalLog(id="term-log" if numero == 1 else f"term-log-{numero}", markup=False, wrap=False, max_lines=3000,
                       classes="term-log")
         await self.query_one("#term-logs").mount(log)
         sessao = Sessao(numero, log, cwd=self.sessao.cwd if self.sessao else self.raiz)
@@ -274,6 +345,21 @@ class TerminalPainel(Vertical):
 
     def escrever(self, texto: Text | str, sessao: Sessao | None = None) -> None:
         (sessao or self.sessao).log.write(texto if isinstance(texto, Text) else Text(texto, style=C["text"]))
+
+    def copiar_saida(self):
+        from codar.studio.clipboard import copy_text
+
+        text = self.sessao.log.text()
+        if not text:
+            self.app.notify("O terminal ainda não tem saída.")
+            return
+        copy_text(self.app, text)
+        self.app.notify("Saída enviada ao clipboard. Selecionar/copiar permite escolher um trecho.")
+
+    def selecionar_saida(self):
+        from codar.studio.screens import TerminalOutputScreen
+
+        self.app.push_screen(TerminalOutputScreen(self.sessao.log.text(), f"terminal {self.sessao.numero}"))
 
     def _rel(self, pasta: Path) -> str:
         try:
@@ -408,7 +494,7 @@ class TerminalPainel(Vertical):
         t0 = time.monotonic()
         from codar.toolchains import environment
 
-        env = {**environment(self.ambiente), **SEM_PAGINADOR, "PYTHONUNBUFFERED": "1", "TERM": "xterm-256color",
+        env = {**environment(self.ambiente, project=sessao.cwd), **SEM_PAGINADOR, "PYTHONUNBUFFERED": "1", "TERM": "xterm-256color",
                "CODAR_STUDIO": "1"}
         mestre = None
         try:

@@ -76,6 +76,10 @@ disabled = []                 # ids de regras desativadas, ex.: ["PERF010"]
 preview = true                # revisar edições no Studio antes de aplicar
 native_validation = true      # validar com SDKs instalados; nunca executa o código gerado
 
+[studio]
+autosave = false              # salva arquivos nomeados após uma pausa; botão AUTO no Studio
+autosave_delay_s = 1.5         # intervalo após a última alteração (0.3 a 60 segundos)
+
 # Regras próprias (regex, custo zero):
 # [[audit.rules]]
 # id = "ORG001"

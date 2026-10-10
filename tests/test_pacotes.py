@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+import shlex
 from pathlib import Path
 
 import pytest
@@ -61,7 +62,10 @@ def test_python_usa_o_nome_do_pip_e_cria_o_venv_do_projeto(tmp_path):
     assert len(lista) == 1
     dica = lista[0]
     assert "pacote_que_nao_existe_xyz" in dica.titulo and "util" not in dica.titulo and "os" not in dica.titulo.split()
-    assert dica.comando.startswith("python3 -m venv .venv && .venv/bin/python -m pip install")
+    before, after, select = dica.comando.split(" && ")
+    assert shlex.split(before) == [sys.executable, "-m", "venv", ".venv"]
+    assert after.startswith(".venv/bin/python -m pip install")
+    assert 'toolchains use python' in select and str(tmp_path / '.venv/bin/python') in select
     if "cv2" in dica.titulo:  # sem OpenCV instalado aqui: o pacote certo para servidores
         assert "opencv-python-headless" in dica.comando
 
@@ -104,6 +108,10 @@ def test_studio_mostra_a_dica_e_instala_pelo_terminal(tmp_path, monkeypatch):
             lista.focus()
             lista.index = 0
             await pilot.press("enter")
+            from codar.studio.screens import AdviceScreen
+            assert isinstance(app.screen, AdviceScreen)
+            assert app.terminal.sessao.proc is None  # somente selecionar a dica não executa o comando
+            await pilot.click("#opt-instalar")
             sessao = app.terminal.sessao
             for _ in range(50):
                 await pilot.pause(0.1)
@@ -113,3 +121,47 @@ def test_studio_mostra_a_dica_e_instala_pelo_terminal(tmp_path, monkeypatch):
             assert len(chamadas) > 1  # conferiu de novo depois de instalar
 
     asyncio.run(cenario())
+
+
+def test_tkinter_ausente_vira_instalacao_nativa_e_nao_pip(tmp_path, monkeypatch):
+    monkeypatch.setattr(pacotes.sys, "platform", "linux")
+    monkeypatch.setattr(pacotes.platform, "freedesktop_os_release", lambda: {"ID": "opensuse-tumbleweed", "ID_LIKE": "suse"})
+    info = dict(ok=False, version=[3, 13], base="/usr", executable="/usr/bin/python3.13")
+    monkeypatch.setattr(pacotes, "ambiente_tk", lambda python: info)
+    monkeypatch.setattr(pacotes, "modulos_ausentes", lambda python, modules: modules)
+    hints = pacotes.dicas_python(tmp_path, tmp_path / "interface.py", "import tkinter as tk\nimport requests\n")
+    assert len(hints) == 2
+    assert hints[0].comando == "sudo zypper install python313-tk"
+    assert hints[0].como_sugestao()["options"][0]["label"] == "Instalar Tcl/Tk"
+    assert "pip install requests" in hints[1].comando
+    assert "pip install tkinter" not in hints[1].comando
+
+
+@pytest.mark.parametrize("distro,expected", [
+    ("ubuntu", "sudo apt-get install python3.13-tk"),
+    ("fedora", "sudo dnf install python3.13-tkinter"),
+    ("arch", "sudo pacman -S tk"),
+    ("alpine", "sudo apk add py3-tkinter"),
+])
+def test_tk_seleciona_a_distribuicao_do_python(tmp_path, monkeypatch, distro, expected):
+    monkeypatch.setattr(pacotes.sys, "platform", "linux")
+    monkeypatch.setattr(pacotes.platform, "freedesktop_os_release", lambda: {"ID": distro})
+    info = dict(ok=False, version=[3, 13], base="/usr", executable="/usr/bin/python3.13")
+    assert pacotes.dica_tk(tmp_path, sys.executable, info).comando == expected
+
+
+def test_tk_instalado_nao_pede_instalacao_e_python_personalizado_da_instrucoes(tmp_path, monkeypatch):
+    monkeypatch.setattr(pacotes, "ambiente_tk", lambda python: {"ok": True})
+    assert pacotes.dicas_python(tmp_path, tmp_path / "a.py", "from tkinter import ttk\n") == []
+    monkeypatch.setattr(pacotes.sys, "platform", "linux")
+    info = dict(ok=False, version=[3, 13], base="/opt/pyenv", executable="/opt/pyenv/bin/python3.13")
+    dica = pacotes.dica_tk(tmp_path, sys.executable, info)
+    assert "sudo" not in dica.comando and "pip install" not in dica.comando
+    assert dica.rotulo == "Ver instruções oficiais"
+    assert "recompile" in " ".join(dica.instrucoes)
+
+
+def test_tk_verifica_o_interpretador_do_projeto_sem_abrir_janela():
+    result = pacotes.ambiente_tk(sys.executable)
+    assert type(result["ok"]) is bool
+    assert result["version"] == list(sys.version_info[:2])

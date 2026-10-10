@@ -22,10 +22,14 @@ class Conceito:
     pseudo: str = ""  # exemplo em pseudocódigo (compilado para a linguagem do arquivo)
     exemplos: dict[str, str] = field(default_factory=dict)  # exemplos escritos à mão, por grupo de linguagem
     relacionados: tuple[str, ...] = ()
+    fontes: tuple[str, ...] = ()
+    erros_comuns: str = ""
+    verifique: str = ""
 
 
 TRILHAS = {"fundamentos": "FUNDAMENTOS", "poo": "ORIENTAÇÃO A OBJETOS", "web": "JAVASCRIPT E WEB",
-           "dados": "CIÊNCIA DE DADOS E VISÃO"}
+           "dados": "CIÊNCIA DE DADOS E VISÃO", "praticas": "PRÁTICAS E FERRAMENTAS",
+           "linguagens": "GUIA DA LINGUAGEM"}
 
 CONCEITOS: list[Conceito] = [
     # ------------------------------------------------------------------------------------------- fundamentos
@@ -446,6 +450,9 @@ CONCEITOS += [
         relacionados=("numpy_array",)),
 ]
 
+from codar.estudo.ampliado import ampliar
+
+CONCEITOS.extend(ampliar(Conceito))
 POR_ID: dict[str, Conceito] = {c.id: c for c in CONCEITOS}
 TRILHA_POO = ["classe", "construtor", "atributo", "metodo", "objeto", "str", "encapsulamento", "heranca", "super",
               "polimorfismo", "composicao"]

@@ -1,5 +1,28 @@
 # Desempenho e escolha de modelos
 
+## Memória sem IA (0.3.1)
+
+Medição em 10/10/2026, Linux x86_64, Python 3.12.14 e Textual 8.2.8. Cada cenário foi executado três vezes, em processos novos e configurações temporárias. Nenhum modelo foi carregado ou baixado. RSS e pico VmHWM vieram de `/proc/self/status`; os valores estão em **MiB** (1 MiB = 1.048.576 bytes).
+
+| Cenário | RSS inicial: medianas | RSS após o trabalho: mediana | Faixa após o trabalho | Maior pico |
+|---|---|---|---|---|
+| Motor no processo local | 25,0 MiB | **25,8 MiB** | 25,80–25,81 MiB | 25,8 MiB |
+| Studio headless com motor no mesmo processo | 58,7 MiB | **60,3 MiB** | 60,24–60,31 MiB | 60,3 MiB |
+
+O motor traduziu 20 atribuições pelo compilador e gerou uma calculadora pelo banco de padrões. O Studio abriu três abas Python de 200 linhas em uma tela de 150 × 42 células, executou o mesmo trabalho e aplicou uma intenção no editor.
+
+O Studio usou o driver headless de teste do Textual. Não estão incluídos emulador de terminal, daemon separado, modelo de IA, servidores de linguagem, builds ou programas filhos ativos. Projetos maiores e plugins adicionais podem mudar o consumo. Não houve comparação com outras IDEs. Os números históricos com IA, abaixo, pertencem a outra medição e outro ambiente.
+
+[Resultados completos, por execução](benchmarks/memory-0.3.1.json) · [Script da medição](benchmarks/measure_memory.py)
+
+Para repetir no Linux, na raiz de um checkout com Studio instalado:
+
+```bash
+python docs/benchmarks/measure_memory.py --runs 3 --out memory-local.json
+```
+
+O script usa somente projetos temporários, sem inicializar um daemon ou instalar dependências.
+
 ## Avaliação de edições (0.3.0)
 
 `python -m codar.evals.editbench --out editing-results.json` usa o modelo local configurado para seis tarefas Python de correção/complemento. Verifica resposta completa, sintaxe, novas definições duplicadas e comportamento por testes executáveis: lista vazia, consumo de iterador, ordem de deduplicação, último bloco de um gerador, argumento mutável e arredondamento financeiro com Decimal. O candidato é executado em subprocesso em uma fixture temporária, com timeout e limite de memória quando o sistema o permite; isso não é um sandbox de segurança.

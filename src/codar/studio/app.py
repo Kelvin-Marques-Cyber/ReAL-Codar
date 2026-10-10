@@ -36,10 +36,11 @@ from codar.advisor import pacotes
 from codar.studio import comandos, estado
 from codar.studio.backend import StudioBackend
 from codar.studio.edits import EditTarget, wants_edit
+from codar.studio.references import AmbiguousReference, referenced_files, uses_existing_code
 from codar.studio.explorer import SKIP, Explorer
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
-from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen
+from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen, TerminalOutputScreen
 from codar.studio.review import ChoiceScreen, ReviewScreen
 from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, aplicar_paleta,
                                   gauge, paleta, tema_ansi, tema_editor)
@@ -149,9 +150,14 @@ class Studio(App):
         # ir para cada área sem o mouse; Esc volta ao editor
         Binding("ctrl+e", "focus_explorer", "Explorer", priority=True),
         Binding("ctrl+t", "focus_terminal", "Terminal", priority=True),
+        Binding("ctrl+shift+c", "copy_terminal", "Copiar saída", show=False, priority=True),
+        Binding("ctrl+shift+a", "terminal_output", "Selecionar saída", show=False, priority=True),
+        Binding("ctrl+shift+w", "close_terminal", "Fechar terminal", show=False, priority=True),
         Binding("ctrl+l", "focus_intent", "Intenção", priority=True),
         Binding("escape", "focus_editor", "Editor", show=False),
         Binding("ctrl+o", "quick_open", "Abrir", priority=True),
+        Binding("ctrl+f", "find", "Buscar", priority=True),
+        Binding("ctrl+shift+f", "find_project", "Buscar projeto", show=False, priority=True),
         Binding("ctrl+pagedown", "next_tab", "Próxima aba", show=False, priority=True),
         Binding("ctrl+pageup", "prev_tab", "Aba anterior", show=False, priority=True),
         Binding("f5", "run_file", "Executar", priority=True),
@@ -167,6 +173,7 @@ class Studio(App):
         Binding("f4", "celular", "Celular", priority=True),
         Binding("f7", "estudo", "Estudo", priority=True),
         Binding("shift+f7", "estudo_aplicar", "Aplicar sugestão do estudo", show=False, priority=True),
+        Binding('ctrl+shift+f7', 'estudo_catalogo', 'Catálogo de estudo', show=False, priority=True),
         Binding("ctrl+q", "quit", "Sair", priority=True),
         Binding("f1", "help", "Ajuda", priority=True),
     ]
@@ -180,6 +187,10 @@ class Studio(App):
         from codar import config
 
         self.preview_edits = bool(config.load().get("editing", {}).get("preview", True))
+        studio_cfg = config.load().get('studio', {})
+        self.autosave = bool(studio_cfg.get('autosave', False))
+        self.autosave_delay = max(.3, min(60, float(studio_cfg.get('autosave_delay_s', 1.5))))
+        self._autosave_timers = {}
         self.audit_on = True
         self.hints = False
         self.last: dict | None = None
@@ -212,6 +223,10 @@ class Studio(App):
                         for pid, _rotulo, acao in PILULAS:
                             yield Botao(acao=acao, id=f"pill-{pid}")
                     yield Static(id="lang-pill")
+                with Horizontal(id='tools-bar'):
+                    yield Botao('⌕ BUSCAR', acao='find_project', id='search-button')
+                    yield Botao('SDKs', acao='runtimes', id='runtimes-button')
+                    yield Botao('AUTO OFF', acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
                 with TabbedContent(id="panel", initial="tab-problems"):
@@ -225,6 +240,10 @@ class Studio(App):
                     with TabPane("CONSULTOR", id="tab-advisor"):
                         yield ListView(id="advice-list")
                     with TabPane("ESTUDO", id="tab-estudo"):
+                        with Horizontal(id='study-tools'):
+                            yield Botao('Catálogo', acao='estudo_catalogo')
+                            yield Botao('Marcar praticado', acao='estudo_praticado')
+                            yield Botao('Fontes', acao='estudo_fontes')
                         with VerticalScroll(id="estudo"):
                             yield Static(self.estudo_vazio(), id="estudo-corpo")
                             yield Botao(acao="estudo_aplicar", id="estudo-acao")
@@ -264,6 +283,7 @@ class Studio(App):
         table = self.query_one("#problems", DataTable)
         table.add_columns("SEV", "ID", "LINHA", "MENSAGEM")
         self.query_one("#hud-meta", Static).update(self.hud_meta())
+        self.query_one('#autosave-button', Botao).update('AUTO ON' if self.autosave else 'AUTO OFF')
         self.render_pills()
         self.render_last()
         self.feed("BOOT · CODAR STUDIO v" + __version__, "red")
@@ -320,11 +340,15 @@ class Studio(App):
 
     # ------------------------------------------------------------------ HUD
     def feed(self, text: str, color: str = "green") -> None:
+        if not self.query('#feed'):
+            return
         mark = f"[{C['red']}]▸[/]"
         self.query_one("#feed", RichLog).write(f"{mark} [{C.get(color, color)}]{_esc(text)}[/]")
 
     def render_pills(self) -> None:
         """Pílulas (clicáveis): menta = ligado, vermelho = desligado. A barra do explorer também é redesenhada aqui."""
+        if not self.query('#pill-s0'):
+            return
         ligado = {"s0": 0 in self.stages, "s1": 1 in self.stages, "s2": 2 in self.stages, "audit": self.audit_on,
                   "hints": self.hints, "estudo": self.estudo}
         for pid, rotulo, _acao in PILULAS:
@@ -393,7 +417,7 @@ class Studio(App):
         if isinstance(focused, ListView) and focused.id == "advice-list":
             return "ENTER ABRE A SUGESTÃO · ESC EDITOR"
         if isinstance(focused, CodeEditor) and self._dicas_atuais():
-            return f"{self._dicas_atuais()[0].curta} · F8 INSTALA"
+            return f"{self._dicas_atuais()[0].curta} · F8 DEPENDÊNCIAS"
         if isinstance(focused, CodeEditor):
             row, col = focused.cursor_location
             line = focused.document.get_line(row)
@@ -427,6 +451,8 @@ class Studio(App):
         self.call_from_thread(self._telemetry, s)
 
     def _telemetry_offline(self, err: str) -> None:
+        if not self.is_running or not self.query('#telemetry'):
+            return
         if self.online or not self.mem:
             self.feed(f"UPLINK PERDIDO · {err[:60]}", "red")
         self.online = False
@@ -434,6 +460,8 @@ class Studio(App):
         self.query_one("#telemetry", Static).update(f"[b {C['error']}]DAEMON OFFLINE[/]\n[{C['dim']}]rode: codar start[/]")
 
     def _telemetry(self, s: dict) -> None:
+        if not self.is_running or not self.query('#telemetry'):
+            return
         first = not self.online
         self.online = True
         mem, model, pats = s.get("memory", {}), s.get("model") or {}, s.get("patterns", {})
@@ -455,6 +483,8 @@ class Studio(App):
 
     # ------------------------------------------------------------------ editores
     def current_editor(self) -> CodeEditor | None:
+        if not self.query('#editors'):
+            return None
         tabs = self.query_one("#editors", TabbedContent)
         if not tabs.active:
             return None
@@ -493,6 +523,8 @@ class Studio(App):
         ts = ts or (TS_LANG.get(lang.id) if lang else None)
         ed = CodeEditor.code_editor(text, language=ts, theme="monokai", soft_wrap=False, id=f"code-{self.tab_seq}")
         ed.path, ed.saved_text = path, text
+        ed.disk_baseline = Path(path).read_bytes() if path and Path(path).is_file() else None
+        ed.autosave_paused = False
         ed.lang_id = lang.id if lang else None
         nome = f"codar-{self.theme}"
         ed.register_theme(tema_editor(nome))
@@ -523,6 +555,36 @@ class Studio(App):
         if isinstance(ed, CodeEditor):
             self._update_tab_label(ed)
             self.agendar_estudo()
+            self._schedule_autosave(ed)
+
+    def _schedule_autosave(self, ed):
+        if timer := self._autosave_timers.pop(ed.id, None):
+            timer.stop()
+        if self.autosave and ed.path and ed.dirty and not getattr(ed, 'autosave_paused', False):
+            self._autosave_timers[ed.id] = self.set_timer(self.autosave_delay, lambda: self._autosave_editor(ed))
+
+    def _autosave_editor(self, ed):
+        self._autosave_timers.pop(ed.id, None)
+        if self.autosave and ed.is_mounted and ed.path and ed.dirty and not getattr(ed, 'autosave_paused', False):
+            # Um arquivo novo só é criado pelo salvamento explícito: não recria arquivos apagados.
+            if getattr(ed, 'disk_baseline', None) is None:
+                return
+            self._write(ed, automatic=True)
+
+    def action_toggle_autosave(self):
+        from codar import config
+
+        desired = not self.autosave
+        try:
+            config.set_value('studio.autosave', 'true' if desired else 'false')
+        except (OSError, ValueError) as exc:
+            self.notify(str(exc), severity='error')
+            return
+        self.autosave = desired
+        self.query_one('#autosave-button', Botao).update('AUTO ON' if desired else 'AUTO OFF')
+        for ed in self.query(CodeEditor):
+            self._schedule_autosave(ed)
+        self.notify(f"Salvamento automático {'ativado' if desired else 'desativado'}; arquivos sem nome usam Ctrl+S.")
 
     # ------------------------------------------------------------------ modo estudo
     @staticmethod
@@ -552,6 +614,47 @@ class Studio(App):
             panel.active = "tab-terminal"
         self.render_pills()
 
+    def action_estudo_catalogo(self):
+        from codar import estudo
+        from codar.estudo.progresso import ler
+
+        lang = self.current_editor().lang_id if self.current_editor() else self.current_lang()
+        done = ler(self.root, lang)
+        choices = [(c.id, f"{'✓ ' if c.id in done else ''}{c.titulo} · {estudo.TRILHAS[c.trilha]}")
+                   for c in estudo.catalogo(lang)]
+
+        def show(identity):
+            if identity:
+                self._estudo_forcado = identity
+                self.estudo = True
+                panel = self.query_one('#panel', TabbedContent)
+                panel.display, panel.active = True, 'tab-estudo'
+                self.atualizar_estudo()
+                self.render_pills()
+        self.push_screen(ChoiceScreen('ESTUDO · ' + str(lang).upper(), choices, searchable=True), show)
+
+    def action_estudo_praticado(self):
+        from codar.estudo.progresso import marcar
+
+        ed, concept = self.current_editor(), self._estudo_conceito
+        if not ed or not concept:
+            self.notify('Abra um arquivo e escolha um conceito no Catálogo.')
+            return
+        try:
+            marcar(self.root, ed.lang_id, concept.id)
+            self.notify('Prática registrada para este projeto e linguagem; o registro é manual.')
+        except (OSError, ValueError, TypeError) as exc:
+            self.notify(str(exc), severity='error')
+
+    def action_estudo_fontes(self):
+        from codar import estudo
+        import webbrowser
+
+        ed, concept = self.current_editor(), self._estudo_conceito
+        if concept and ed:
+            choices = [(url, url) for url in estudo.fontes(concept, ed.lang_id)]
+            self.push_screen(ChoiceScreen('DOCUMENTAÇÃO OFICIAL', choices), lambda url: webbrowser.open(url) if url else None)
+
     def agendar_estudo(self) -> None:
         if not self.estudo:
             return
@@ -580,6 +683,8 @@ class Studio(App):
             self._estudo_forcado = None
         else:
             conceito = achados[0] if achados else self._estudo_conceito
+        if conceito and not estudo.exemplo(conceito, lang)[0]:
+            conceito = estudo.POR_ID.get('guia_' + str(lang))
         self._estudo_conceito = conceito
         partes: list = []
         estado = estudo.trilha_poo(ed.text, lang, uso_externo=self._usado_fora(ed))
@@ -608,7 +713,7 @@ class Studio(App):
                 partes.append(Text(""))
             partes.append(Text.assemble(("◆ ", f"bold {C['orange']}"), (conceito.titulo.upper(), f"bold {C['mint']}"),
                                         (f"   {estudo.TRILHAS[conceito.trilha]}", C["dim"])))
-            partes.append(Text(conceito.texto, style=C["text"]))
+            partes.append(Text(estudo.explicacao(conceito, lang), style=C["text"]))
             pessoal = estudo.pelo_comentario(linha, lang) if linha.strip().startswith(("#", "//")) else None
             codigo, lang_ex = pessoal or estudo.exemplo(conceito, lang)
             rotulo = "exemplo com os nomes do seu comentário (para estudar e digitar):" if pessoal else \
@@ -616,6 +721,15 @@ class Studio(App):
             partes.append(Text(rotulo, style=C["dim"]))
             partes.append(Syntax(codigo, lang_ex, theme="ansi_dark", background_color=C["bg"], word_wrap=True))
             partes.append(Text.assemble(("✎ pratique: ", f"bold {C['red']}"), (conceito.pratique, C["text"])))
+            if conceito.erros_comuns:
+                partes.append(Text('Atenção: ' + conceito.erros_comuns, style=C['orange']))
+            if conceito.verifique:
+                partes.append(Text('Confira: ' + conceito.verifique, style=C['text']))
+            partes.append(Text('Fontes oficiais: ' + ' · '.join(estudo.fontes(conceito, lang)), style=C['dim']))
+            related = [estudo.POR_ID[key].titulo for key in conceito.relacionados
+                       if key in estudo.POR_ID and estudo.exemplo(estudo.POR_ID[key], lang)[0]]
+            if related:
+                partes.append(Text('Continue no Catálogo: ' + ' · '.join(related), style=C['dim']))
             if len(achados) > 1:
                 partes.append(Text("também nesta linha: " + " · ".join(c.titulo for c in achados[1:4]), style=C["dim"]))
         botao.display = self.sugestao_estudo is not None
@@ -718,6 +832,7 @@ class Studio(App):
             res = self.backend.translate(intent, lang, file=path, before=before,
                                          after=target.after if target else "",
                                          selected=target.selected if target and mode == "edit" else "", mode=mode,
+                                         project_root=str(self.root),
                                          indent=indent if mode in ("line", "block", "edit") else "",
                                          indent_unit=unit, stages=tuple(sorted(self.stages)), hints=self.hints,
                                          on_delta=on_delta)
@@ -1006,6 +1121,55 @@ class Studio(App):
                 self.push_screen(ChoiceScreen(name, options), lambda action: self._plugin_command(action, name) if action else None)
         self.push_screen(ChoiceScreen("PLUGINS", choices), selected)
 
+    def action_runtimes(self):
+        if len(self.screen_stack) == 1:
+            self.runtime_catalog_worker()
+
+    @work(thread=True, exclusive=True, group='runtimes')
+    def runtime_catalog_worker(self):
+        from codar import runtimes
+
+        try:
+            entries = runtimes.versions('python')
+            chosen = runtimes.selected('python', self.root)
+        except (OSError, ValueError) as exc:
+            self.call_from_thread(self.notify, str(exc), severity='error')
+            return
+
+        def show():
+            options = [('__install__', 'Instalar outra versão Python…'),
+                       ('__venv__', 'Criar e selecionar um novo ambiente virtual…')]
+            options += [(entry['key'], f"{'✓ ' if chosen and chosen['executable'] == entry['executable'] else ''}"
+                         f"Python {entry['version']} · {entry['executable']}") for entry in entries]
+
+            def select(key):
+                if key == '__install__':
+                    self.push_screen(PromptScreen('Versão Python para instalar (ex.: 3.13)', '3.13'),
+                                     lambda value: self._runtime_command('install', value) if value else None)
+                elif key == '__venv__':
+                    self.push_screen(ChoiceScreen('PYTHON BASE DO NOVO VENV',
+                                                  [(entry['key'], entry['version']) for entry in entries]),
+                                     lambda value: self.push_screen(PromptScreen('Pasta nova do ambiente', '.venv'),
+                                         lambda folder: self._runtime_command('venv', value, folder) if folder else None)
+                                     if value else None)
+                elif key:
+                    try:
+                        entry = runtimes.choose('python', key, project=self.root)
+                        self.notify(f"Python {entry['version']} selecionado. F5 e novos comandos usarão esta versão.")
+                        if ed := self.current_editor():
+                            self.verificar_pacotes(ed)
+                    except (OSError, ValueError) as exc:
+                        self.notify(str(exc), severity='error')
+            self.push_screen(ChoiceScreen('VERSÕES PYTHON · ESTE PROJETO', options), select)
+        if self.is_running:
+            self.call_from_thread(show)
+
+    def _runtime_command(self, action, version, folder=None):
+        argv = [sys.executable, '-m', 'codar', 'toolchains', action, 'python', '--version', version]
+        if action == 'venv':
+            argv += ['--root', str(self.root), '--venv', folder]
+        self.run_command(shlex.join(argv) if os.name != 'nt' else subprocess.list2cmdline(argv))
+
     def _plugin_command(self, action, value):
         self.plugin_command_worker([sys.executable, "-m", "codar", "plugins", action, value])
 
@@ -1056,14 +1220,57 @@ class Studio(App):
 
     @on(Input.Submitted, "#intent")
     async def _intent(self, event: Input.Submitted) -> None:
-        text = event.value
-        event.input.value = ""
+        await self.submit_intent(event.value)
+
+    async def submit_intent(self, text: str, resolved: list[str] | None = None) -> None:
+        if not text.strip():
+            return
         pedido = comandos.interpretar(text)
         if pedido is not None:  # "crie o arquivo main.py", "crie a pasta src", "abra conta.py"
             await self.executar_pedido(pedido)
+            self.query_one("#intent", Input).value = ""
             return
         ed = self.current_editor()
-        edit = ed is not None and (ed.selection.start != ed.selection.end or (ed.text.strip() and wants_edit(text)))
+        try:
+            names = resolved if resolved is not None else await asyncio.to_thread(referenced_files, self.root, text)
+        except AmbiguousReference as exc:
+            # Copia os valores: variáveis de except deixam de existir ao sair do bloco.
+            name, choices = exc.name, exc.choices
+            async def choose_file(path):
+                if path:
+                    await self.submit_intent(text.replace(name, path))
+            self.push_screen(ChoiceScreen(f"QUAL ARQUIVO? · {name}", [(c, c) for c in choices]), choose_file)
+            return
+        except (OSError, ValueError) as exc:
+            self.notify(str(exc), severity="warning", timeout=8)
+            return
+        context_request = uses_existing_code(text)
+        if not names and context_request and (ed is None or not ed.path):
+            from codar.project import Project
+
+            choices = await asyncio.to_thread(Project.load(self.root).files)
+            if len(choices) == 1:
+                names = choices
+            elif choices:
+                async def choose_context(name):
+                    if name:
+                        await self.submit_intent(text, [name])
+                self.push_screen(ChoiceScreen("ARQUIVO PARA O PEDIDO", [(c, c) for c in choices[:200]]), choose_context)
+                return
+            else:
+                self.notify("não achei código nesta pasta; abra o projeto correto ou use Ctrl+O", severity="warning")
+                return
+        if len(names) > 1:
+            self.query_one("#intent", Input).value = ""
+            self.project_edit_worker(names, text)
+            return
+        if names:
+            await self.open_file(self.root / names[0])
+            ed = self.current_editor()
+            self.feed(f"CONTEXTO · {names[0]} · prévia de substituição", "cyan")
+        edit = ed is not None and (ed.selection.start != ed.selection.end or
+                                  (ed.text.strip() and (wants_edit(text) or names or context_request)))
+        self.query_one("#intent", Input).value = ""
         self.request(text, "edit" if edit else "insert", ed, None)
 
     async def executar_pedido(self, pedido: comandos.PedidoArquivo) -> None:
@@ -1096,17 +1303,28 @@ class Studio(App):
         self.request(line.strip(), "line", event.editor, event.row,
                      indent=self._recuo_senao(event.editor, event.row, line))
 
-    def action_translate_line(self) -> None:
+    async def action_translate_line(self) -> None:
+        if len(self.screen_stack) > 1:
+            return
+        if isinstance(self.focused, Input) and self.focused.id == "intent":
+            await self.submit_intent(self.focused.value)
+            return
+        if isinstance(self.focused, TerminalInput):
+            await self.focused.action_submit()
+            return
         ed = self.current_editor()
         if ed is None:
             self.notify("abra um arquivo (ou use a barra de intenção)", severity="warning")
             return
-        if ed.selection.start != ed.selection.end and ed.selection.start[0] != ed.selection.end[0]:
+        if ed.selection.start != ed.selection.end:
             self.traduzir_bloco(ed)
             return
         row = ed.cursor_location[0]
         line = ed.document.get_line(row)
         if not line.strip():
+            return
+        if wants_edit(line.lstrip().removeprefix("#").removeprefix("//").strip()):
+            self.request(line.strip(), "edit", ed, None, indent="")
             return
         self.request(line.strip(), "line", ed, row, indent=self._recuo_senao(ed, row, line))
 
@@ -1115,8 +1333,13 @@ class Studio(App):
         tempo e a RAM previsíveis: cada linha que o compilador não resolve pode ir para a IA."""
         import textwrap
 
-        r0, r1 = ed.linhas_selecionadas()
-        linhas = [ed.document.get_line(r) for r in range(r0, r1 + 1)]
+        start, end = sorted((ed.selection.start, ed.selection.end))
+        r0 = start[0]
+        original = ed.document.get_text_range(start, end)
+        prefix = ed.document.get_line(r0)[:start[1]]
+        # A indentação que ficou fora da seleção serve de contexto para as outras linhas.
+        normalized = prefix + original if prefix and not prefix.strip() else original
+        linhas = normalized.split("\n")
         cheias = [t for t in linhas if t.strip()]
         maximo = self.max_linhas_bloco()
         if not cheias:
@@ -1125,10 +1348,9 @@ class Studio(App):
             self.notify(f"{len(cheias)} linhas selecionadas; o máximo por bloco é {maximo}. Traduza em partes "
                         f"(ou ajuste router.max_block_lines no config.toml).", severity="warning", title="bloco grande")
             return
-        original = "\n".join(linhas)
         margem = min(len(t) - len(t.lstrip()) for t in cheias)
         recuo = cheias[0][:margem]
-        self.request(textwrap.dedent(original), "block", ed, r0, original=original, indent=recuo)
+        self.request(textwrap.dedent(normalized), "block", ed, r0, original=original, indent=recuo)
 
     @staticmethod
     def _recuo_senao(ed: CodeEditor, row: int, linha: str) -> str | None:
@@ -1164,6 +1386,11 @@ class Studio(App):
         self.push_screen(HelpScreen())
 
     def action_focus_intent(self) -> None:
+        if len(self.screen_stack) > 1:
+            return
+        if isinstance(self.focused, TerminalInput):
+            self.action_clear_terminal()
+            return
         self.query_one("#intent", Input).focus()
 
     def action_focus_explorer(self) -> None:
@@ -1187,6 +1414,42 @@ class Studio(App):
         """Esc: de qualquer painel, volta para o editor (ou para a intenção, se não há arquivo aberto)."""
         ed = self.current_editor()
         (ed if ed is not None else self.query_one("#intent", Input)).focus()
+
+    def action_find(self) -> None:
+        self._open_search(False)
+
+    def action_find_project(self) -> None:
+        self._open_search(True)
+
+    def _open_search(self, project: bool) -> None:
+        from codar.studio.search import SearchScreen
+
+        if len(self.screen_stack) > 1:
+            return
+        editor = self.current_editor()
+        name = ''
+        if editor:
+            try:
+                name = Path(editor.path).resolve().relative_to(self.root).as_posix() if editor.path else 'sem-titulo.py'
+            except ValueError:
+                self.notify('O arquivo aberto está fora do projeto; abra sua pasta para buscar.', severity='warning')
+                return
+        async def chosen(hit):
+            if not hit:
+                return
+            if not editor or hit['path'] != name:
+                await self.open_file(self.root / hit['path'])
+            active = self.current_editor()
+            if active:
+                row = min(hit['line'] - 1, active.document.line_count - 1)
+                col = min(hit['col'], len(active.document.get_line(row)))
+                from textual.widgets.text_area import Selection
+
+                active.selection = Selection((row, col), (row, min(col + hit['length'], len(active.document.get_line(row)))))
+                active.scroll_cursor_visible()
+                active.focus()
+        self.push_screen(SearchScreen(self.root, self.backend, file=name, buffer=editor.text if editor else None,
+                                      project=project, query=editor.selected_text[:200] if editor else ''), chosen)
 
     def action_quick_open(self) -> None:
         from textual.command import CommandPalette
@@ -1280,21 +1543,27 @@ class Studio(App):
         self._write(ed)
         self.query_one("#explorer", Explorer).reload()
 
-    def _write(self, ed: CodeEditor) -> None:
+    def _write(self, ed: CodeEditor, automatic=False) -> None:
         path = Path(ed.path)
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(ed.text, encoding="utf-8")
-        except OSError as exc:
+            from codar.studio.saving import write_buffer
+
+            baseline = getattr(ed, 'disk_baseline', None) if automatic else None
+            ed.disk_baseline = write_buffer(path, ed.text, baseline)
+        except (OSError, ValueError) as exc:
+            if automatic:
+                ed.autosave_paused = True
             self.notify(f"erro ao salvar: {exc}", severity="error")
             return
+        ed.autosave_paused = False
         ed.saved_text = ed.text
         self._update_tab_label(ed)
-        self.feed(f"SAVE · {path.name}", "green")
+        self.feed(f"{'AUTO' if automatic else 'SAVE'} · {path.name}", "green")
         if self.rede_srv is not None and hasattr(self.rede_srv, "avisar_mudanca"):
             self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
-        self.verificar_pacotes(ed)
-        if self.audit_on:
+        if not automatic:
+            self.verificar_pacotes(ed)
+        if self.audit_on and not automatic:
             self.action_audit_file()
 
     def action_new_file(self) -> None:
@@ -1305,6 +1574,11 @@ class Studio(App):
             await self.open_file((self.root / name).resolve())
 
     async def action_close_tab(self) -> None:
+        if len(self.screen_stack) > 1:
+            return
+        if isinstance(self.focused, TerminalInput):
+            self.focused.action_delete_left_word()
+            return
         tabs = self.query_one("#editors", TabbedContent)
         if tabs.active:
             ed = self.current_editor()
@@ -1376,8 +1650,8 @@ class Studio(App):
         cmd = [part.replace("{file}", ed.path).replace("{python}", python) for part in runner]
         from codar import toolchains
 
-        cmd[0] = shutil.which(cmd[0], path=toolchains.environment(self.terminal.ambiente).get("PATH")) or cmd[0]
-        if not shutil.which(cmd[0], path=toolchains.environment(self.terminal.ambiente).get("PATH")):
+        cmd[0] = shutil.which(cmd[0], path=toolchains.environment(self.terminal.ambiente, project=self.root).get("PATH")) or cmd[0]
+        if not shutil.which(cmd[0], path=toolchains.environment(self.terminal.ambiente, project=self.root).get("PATH")):
             tool = "flutter" if runner[0] == "flutter" else lang.id
             self.notify(f"{runner[0]} não encontrado. Rode `codar toolchains install {tool}` no terminal (Ctrl+T)",
                         severity="warning", timeout=8)
@@ -1425,6 +1699,28 @@ class Studio(App):
     def action_stop_process(self) -> None:
         self.terminal.parar()
 
+    def action_interrupt_terminal(self) -> None:
+        self.terminal.interromper()
+
+    def action_copy_terminal(self) -> None:
+        if isinstance(self.screen, TerminalOutputScreen):
+            self.screen.action_copy_selection()
+        elif len(self.screen_stack) == 1:
+            self.terminal.copiar_saida()
+
+    def action_terminal_output(self) -> None:
+        if len(self.screen_stack) == 1:
+            self.terminal.selecionar_saida()
+
+    def action_clear_terminal(self) -> None:
+        self.terminal.sessao.log.clear()
+
+    async def action_close_terminal(self) -> None:
+        if self.terminal.sessao.rodando():
+            self.notify("interrompa o processo com Ctrl+C antes de fechar o terminal", severity="warning")
+            return
+        await self.terminal.fechar_sessao(self.terminal.sessao)
+
     def action_terminal(self, numero: int) -> None:
         self.query_one("#panel", TabbedContent).active = "tab-terminal"
         self.terminal.ativar_numero(numero)
@@ -1463,6 +1759,8 @@ class Studio(App):
         exp = explicar(sessao.saida, sessao.cwd)
         if exp is not None:
             self.mostrar_explicacao(sessao, exp)
+            if exp.tipo in ("ModuleNotFoundError", "ImportError"):
+                self.verificar_pacotes(self.current_editor())
 
     def mostrar_explicacao(self, sessao, exp) -> None:
         import textwrap
@@ -1546,7 +1844,7 @@ class Studio(App):
     # ------------------------------------------------------------------ consultor de projeto
     # ------------------------------------------------------------------ dicas de pacotes
     def verificar_pacotes(self, ed: CodeEditor | None) -> None:
-        if ed is not None and ed.path and ed.lang_id in ("python", "javascript", "typescript"):
+        if ed is not None and ed.path and ed.lang_id in ("python", "javascript", "typescript", "dart"):
             self.pacotes_worker(ed.path, ed.text, ed.lang_id)
 
     @work(thread=True, exclusive=True, group="pacotes")
@@ -1564,9 +1862,9 @@ class Studio(App):
         self.dicas_pacotes[caminho] = lista
         novas = [d for d in lista if d.id not in antigas]
         for d in novas:
-            self.feed(f"PACOTE · {d.titulo} · F8 instala", "orange")
+            self.feed(f"PACOTE · {d.titulo} · F8 → {d.rotulo}", "orange")
         if novas:
-            self.notify(f"{novas[0].titulo}. F8 mostra o comando ({novas[0].comando[:60]}) e Enter instala.",
+            self.notify(f"{novas[0].titulo}. F8 mostra o plano; selecione a dica e use {novas[0].rotulo}.",
                         title="dica de pacote", severity="warning", timeout=8)
         if getattr(self, "advice", None) is not None:
             self._show_advice({"suggestions": [s for s in self.advice if s.get("source") != "pacotes"]})
@@ -1617,11 +1915,14 @@ class Studio(App):
         if idx is None or not getattr(self, "advice", None) or idx >= len(self.advice):
             return
         s = self.advice[idx]
-        if s.get("source") == "pacotes":  # instala no terminal, à vista (e confere de novo quando terminar)
-            self.instalando = s
-            self.run_command(s["comando"], cwd=Path(s["cwd"]) if s.get("cwd") else self.root)
+        if s.get("source") == "pacotes":
+            self.push_screen(AdviceScreen(s), lambda oid, s=s: self._install_package(s) if oid else None)
             return
         self.push_screen(AdviceScreen(s), lambda oid, s=s: self._accept_advice(s, oid))
+
+    def _install_package(self, suggestion):
+        self.instalando = suggestion
+        self.run_command(suggestion["comando"], cwd=Path(suggestion["cwd"]) if suggestion.get("cwd") else self.root)
 
     def _accept_advice(self, s: dict, oid: str | None) -> None:
         if not oid:
@@ -1713,6 +2014,11 @@ class Studio(App):
 
     def palette(self) -> list[tuple[str, str, object]]:
         return [
+            ('Codar: Alternar salvamento automático', 'AUTO ON/OFF — salva após uma pausa na digitação', self.action_toggle_autosave),
+            ('Codar: Escolher versão Python do projeto', 'múltiplas instalações e ambientes separados', self.action_runtimes),
+            ('Codar: Catálogo de estudo', 'Ctrl+Shift+F7 — tópicos e exemplos na linguagem do arquivo', self.action_estudo_catalogo),
+            ("Codar: Buscar no arquivo", "Ctrl+F — texto, código e IA local opcional", self.action_find),
+            ("Codar: Buscar no projeto", "Ctrl+Shift+F — nomes e conteúdo", self.action_find_project),
             ("Codar: Traduzir linha atual", "Ctrl+G — a linha vira código no lugar", self.action_translate_line),
             ("Codar: Auditar arquivo", "F6 — segredos, segurança, desempenho, memória", self.action_audit_file),
             ("Codar: Executar arquivo", "F5 — roda no terminal integrado", self.action_run_file),
@@ -1731,6 +2037,9 @@ class Studio(App):
             ("Codar: Novo arquivo…", "Ctrl+N", self.action_new_file),
             ("Codar: Parar processo do terminal", "encerra o processo do terminal ativo", self.action_stop_process),
             ("Codar: Novo terminal", "Ctrl+T dentro do terminal — o outro continua rodando", self.action_novo_terminal),
+            ("Codar: Copiar saída do terminal", "Ctrl+Shift+C — todo o texto, sem cortar linhas", self.action_copy_terminal),
+            ("Codar: Selecionar saída do terminal", "Ctrl+Shift+A — selecionar e copiar um trecho", self.action_terminal_output),
+            ("Codar: Limpar terminal", "Ctrl+L no terminal", self.action_clear_terminal),
             ("Codar: Abrir o meu shell", "F12 — o seu terminal de verdade; exit volta ao Studio", self.action_shell),
             ("Codar: Ver no celular", "F4 — prévia na rede com QR code (ou repassa o servidor do terminal)",
              self.action_celular),

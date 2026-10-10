@@ -80,6 +80,9 @@ Botao:hover {
     padding: 0 1;
 }
 
+#tools-bar { height: 1; padding: 0 1; }
+#study-tools { height: 1; }
+
 #pills {
     width: 1fr;
     height: 1;
@@ -174,7 +177,7 @@ Input > .input--placeholder {
     color: $codar-dim;
 }
 
-#term-log, #output {
+.term-log, #output {
     height: 1fr;
     padding: 0 1;
     background: $codar-bg;
@@ -183,6 +186,10 @@ Input > .input--placeholder {
 #term-input {
     dock: bottom;
 }
+
+#term-actions { height: 1; }
+#term-actions Botao { width: auto; margin-right: 2; color: $codar-mint; }
+Botao:focus { background: $codar-grid; text-style: bold reverse; }
 
 DirectoryTree {
     background: $codar-bg;

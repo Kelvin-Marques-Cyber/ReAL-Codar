@@ -260,6 +260,13 @@ def _regra_python(tipo: str, msg: str, arquivo, linha, trecho, raiz) -> Explicac
     if tipo in ("ModuleNotFoundError", "ImportError") and (m := re.search(r"No module named '([\w.]+)'", msg)):
         modulo = m.group(1)
         raiz_mod = modulo.split(".")[0]
+        if raiz_mod in ("tkinter", "_tkinter"):
+            return e("o suporte Tcl/Tk deste Python não está instalado",
+                     "Tkinter é um componente opcional do Python e precisa da biblioteca nativa Tcl/Tk.",
+                     "Abra o consultor (F8) no Studio para instalar o componente da sua distribuição. "
+                     "No Windows, modifique a instalação do Python e marque Tcl/Tk and IDLE. "
+                     "Em Python compilado ou pyenv, instale Tcl/Tk e recompile esse Python. "
+                     "Não use pip install tkinter: ele não instala o componente do Python.", "import")
         pacote = PACOTES_PIP.get(modulo) or PACOTES_PIP.get(raiz_mod) or raiz_mod
         extra = " (a versão headless, sem janelas, serve para servidores)" if raiz_mod == "cv2" else ""
         return e(f"o módulo {modulo} não está instalado", f"O import procurou {modulo} e não achou neste Python.",

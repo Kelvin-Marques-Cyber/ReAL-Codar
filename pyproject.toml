@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "codar"
 dynamic = ["version"]
-description = "Framework offline de tradução de intenção para código, com auditoria estática e teto de 3GB de RAM"
+description = "Framework offline de tradução de intenção para código, com auditoria estática e orçamento de memória configurável"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

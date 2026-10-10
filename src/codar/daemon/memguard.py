@@ -20,10 +20,20 @@ PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 
 
 def rss_bytes(pid: int | None = None) -> int:
+    proc_id = 'self' if not pid or pid == os.getpid() else str(pid)
     pid = pid or os.getpid()
     if sys.platform.startswith("linux"):
+        # VmRSS é a mesma métrica usada na medição reproduzível. Alguns ambientes
+        # virtualizados expõem statm incompleto, subestimando o consumo do processo.
         try:
-            with open(f"/proc/{pid}/statm", encoding="ascii") as fh:
+            with open(f'/proc/{proc_id}/status', encoding='ascii') as fh:
+                for line in fh:
+                    if line.startswith('VmRSS:'):
+                        return int(line.split()[1]) * 1024
+        except (OSError, ValueError, IndexError):
+            pass
+        try:
+            with open(f"/proc/{proc_id}/statm", encoding="ascii") as fh:
                 return int(fh.read().split()[1]) * PAGE
         except (OSError, ValueError, IndexError):
             return 0

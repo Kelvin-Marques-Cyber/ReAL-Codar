@@ -1,7 +1,6 @@
 # Codar para VS Code
 
-Pseudocódigo e intenções em português ou inglês viram código, 100% offline. O daemon `codar` resolve em três estágios:
-compilador determinístico (≈1 ms), banco de padrões verificados (≈3 ms) e um modelo local (≤3 GB de RAM).
+Pseudocódigo e intenções em português ou inglês viram código com um motor local. O daemon `codar` tenta o compilador determinístico, o banco de padrões e, quando necessário, um modelo de IA opcional. Tradução e auditoria funcionam offline depois da instalação; downloads usam a rede. O orçamento padrão do daemon é 3072 MiB, configurável, e não inclui a memória do VS Code nem dos programas do projeto.
 
 ## Instalar e começar
 

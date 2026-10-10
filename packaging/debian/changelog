@@ -1,3 +1,11 @@
+codar (0.3.1-1) unstable; urgency=medium
+
+  * Corrige Ctrl+Enter na barra de intenção e contexto de arquivos citados.
+  * Adiciona completar caminhos/comandos e selecionar/copiar a saída do terminal.
+  * Instalação assistida de dependências com botão e suporte a Tcl/Tk.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Sat, 10 Oct 2026 10:00:00 -0300
+
 codar (0.3.0-1) unstable; urgency=medium
 
   * Adiciona propostas de projeto, comparação, histórico e recuperação de edições.

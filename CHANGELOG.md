@@ -4,6 +4,26 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.3.1] - 2026-10-10
+
+### Studio e praticidade
+- Salvamento automático opcional, com pausa configurável e preferência persistente. Gravação atômica preserva permissões e pausa a aba se o arquivo mudou fora do Studio; arquivos novos/sem nome exigem salvamento explícito.
+- Busca Ctrl+F/Ctrl+Shift+F no buffer aberto ou no projeto, incluindo nomes e conteúdo. IA local opcional transforma descrições em palavras-chave visíveis; os resultados sempre vêm de arquivos reais. Há prévia, navegação F3 e limites de leitura/resultados.
+- O contexto após o cursor passa a participar dos identificadores conhecidos e dos prompts; a redução de contexto opcional respeita o orçamento do modelo.
+- Estudo com exemplos nativos e reconhecimento nos 24 tipos de arquivo registrados, catálogo filtrável, exercícios, erros comuns, documentação oficial e progresso manual por projeto/linguagem. CLI `study`/`estudar` disponível sem IA. A análise automática de trilha POO continua específica de Python e JavaScript/TypeScript.
+- Versões Python simultâneas via uv, escolha por projeto ou padrão global, herança para subpastas e criação de venv sem sobrescrever ambientes existentes. O botão SDKs, o F5, o consultor e os terminais usam a escolha; o Python que executa o CODAR permanece separado.
+- Ctrl+Enter/Ctrl+G usa o campo em foco: envia a barra de intenção, traduz a linha/bloco do editor ou envia o comando do terminal. Atalhos não editam o documento por trás de uma janela modal.
+- A tradução captura a seleção exata, inclusive numa única linha e com fim na coluna zero da próxima linha; prefixos, sufixos e linhas vizinhas são preservados. Mover o cursor não muda o alvo da resposta.
+- Arquivos mencionados em pedidos são encontrados dentro do projeto, inclusive sem Git ou codar.toml. Arquivos homônimos abrem uma escolha, e alvos excluídos/fora da pasta são recusados. Pedidos sobre código existente usam prévia de substituição, sem concatenar a resposta ao original.
+- Tab/Shift+Tab no terminal completa e percorre caminhos, comandos do PATH, histórico e scripts do projeto; nomes com espaços são protegidos e a pasta da sessão é respeitada. Tab sem resultado mantém o foco.
+- Barra do terminal com ações de selecionar/copiar, copiar tudo, limpar e interromper. Ctrl+Shift+C copia toda a saída; Ctrl+Shift+A abre texto selecionável, sem perder linhas largas. Clipboard local quando disponível e OSC 52 para terminais/SSH.
+- Histórico restaura o comando em edição ao voltar para baixo. Ctrl+L limpa o terminal, Ctrl+W apaga a palavra anterior, Ctrl+D envia EOF/fecha uma sessão ociosa; Ctrl+Shift+W fecha sessão ociosa. Botões de texto aceitam foco e ativação pelo teclado.
+- Consultor mostra um cartão com o comando e um botão de instalação antes de executar. A instalação pip usa o Python e o venv do projeto, incluindo caminhos Windows. Dicas Dart/Flutter são verificadas ao abrir/salvar o arquivo.
+- Tkinter/_tkinter é verificado no Python do projeto sem abrir janelas. Tcl/Tk usa o gerenciador apropriado da distribuição, Homebrew ou Conda; Python personalizado/Windows recebe instruções oficiais de instalação, nunca pip install tkinter. A explicação de erros foi corrigida.
+- README, manual com capturas e referências técnicas atualizados; quatro vídeos de funcionamento com saídas reais, publicados como anexos do GitHub.
+- Medição reproduzível de RSS sem IA no Linux: motor local e Studio headless, com resultados por execução e condições registradas.
+- Telemetria Linux usa VmRSS antes de statm para evitar subestimação em ambientes virtualizados; o pico de memória do motor local persiste entre consultas.
+
 ## [0.3.0] - 2026-10-09
 
 ### Projetos e CLI

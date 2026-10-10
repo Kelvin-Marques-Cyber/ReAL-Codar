@@ -116,7 +116,7 @@ class Project:
                     path.name.endswith((".g.dart", ".freezed.dart", ".min.js", ".lock")) or
                     any(fnmatch.fnmatch(relative, rule) or fnmatch.fnmatch(path.name, rule) for rule in self.exclude))
 
-    def files(self) -> list[str]:
+    def files(self, *, code_only: bool = True) -> list[str]:
         """O Git faz a seleção quando disponível, respeitando suas regras de ignore."""
         names = None
         if shutil.which("git"):
@@ -144,7 +144,7 @@ class Project:
                     break
         out = []
         for name in sorted(set(names)):
-            if not name or not self.allowed(name) or not langs.from_path(name):
+            if not name or not self.allowed(name) or (code_only and not langs.from_path(name)):
                 continue
             try:
                 if safe_path(self.root, name).is_file():

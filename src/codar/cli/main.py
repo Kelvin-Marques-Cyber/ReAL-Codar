@@ -559,7 +559,7 @@ def cmd_version(args) -> int:
 # =============================================================================== parser
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="codar", description="Tradução offline de intenção para código (≤3GB RAM).")
+    ap = argparse.ArgumentParser(prog="codar", description="Tradução offline de intenção para código, com IA local opcional.")
     ap.add_argument("-V", "--version", action="store_true", help="mostra a versão")
     sub = ap.add_subparsers(dest="cmd", metavar="comando")
 
@@ -699,13 +699,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("names", nargs="*", metavar="studio|llm|all", help="padrão: todos")
     p.set_defaults(fn=cmd_extras)
 
-    p = sub.add_parser("toolchains", aliases=["sdk"], help="SDKs de programação: list | install | env")
-    p.add_argument("action", nargs="?", choices=["list", "install", "env"], default="list")
+    p = sub.add_parser("toolchains", aliases=["sdk"], help="SDKs: list | install | versions | use | venv | env")
+    p.add_argument("action", nargs="?", choices=["list", "install", "versions", "use", "venv", "env"], default="list")
     p.add_argument("names", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="mostra a instalação sem executar ou baixar")
     p.add_argument("--json", action="store_true")
     p.add_argument("--shell", choices=["bash", "zsh", "fish", "powershell"], default="bash")
+    p.add_argument("--version", dest="sdk_versions", action="append", help="versão Python; repita para instalar várias")
+    p.add_argument("--root", default=".", help="projeto que usa a versão escolhida")
+    p.add_argument("--global", dest="global_runtime", action="store_true", help="padrão para projetos sem escolha própria")
+    p.add_argument("--path", help="executável já instalado, inclusive o Python de um venv")
+    p.add_argument("--venv", default=".venv", help="pasta do novo ambiente; nunca sobrescreve um existente")
     p.set_defaults(fn=lambda a: __import__("codar.cli.toolchaincmd", fromlist=["x"]).cmd_toolchains(a))
+
+    p = sub.add_parser('study', aliases=['estudar'], help='estudo offline: list | show ID, na linguagem escolhida')
+    p.add_argument('action', nargs='?', choices=['list', 'show'], default='list')
+    p.add_argument('name', nargs='?')
+    p.add_argument('-l', '--lang', default='python')
+    p.add_argument('--json', action='store_true')
+    p.set_defaults(fn=lambda a: __import__('codar.cli.studycmd', fromlist=['x']).cmd_study(a))
 
     p = sub.add_parser("skills", help="skills locais da IA: list | show ID")
     p.add_argument("action", nargs="?", choices=["list", "show"], default="list")

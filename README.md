@@ -1,9 +1,9 @@
 # CODAR
 
 **Você escreve a intenção em pseudocódigo. O CODAR escreve o código.**
-Um ambiente de programação para o terminal, com tradução offline, IA local opcional e orçamento de 3 GB de RAM para o daemon.
+Um ambiente de programação com foco na CLI, tradução offline, IA local opcional e orçamento de memória configurável (3072 MiB por padrão para o daemon).
 
-![CODAR Studio: o editor no terminal, com a linha "se total maior que 100 imprimir 'frete grátis'" já traduzida para Python](docs/img/studio.png)
+![CODAR Studio 0.3.1 com editor, painel de estudo e controles de busca, SDKs e autosave](docs/img/manual/01-studio.png)
 
 ```text
 x é igual a 10                            →  x = 10
@@ -18,35 +18,123 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.3.0.** A branch `main` recebe as mudanças mais recentes. As distribuições versionadas ficam em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS e extensão do VS Code. Para instalar ou atualizar a partir do código atual, use o fluxo com `pipx` abaixo.
+**Versão do código: 0.3.1.** [Downloads e notas da Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. A branch `main` recebe as mudanças mais recentes; os comandos abaixo distinguem a instalação de uma versão publicada da instalação de `main`.
+
+## Novidades da 0.3.1
+
+- **Busca:** Ctrl+F no arquivo e Ctrl+Shift+F no projeto, por nome e conteúdo. A opção **Usar IA local** transforma descrições em palavras-chave visíveis; os resultados vêm dos arquivos existentes.
+- **Estudo em todas as linguagens reconhecidas:** exemplos nativos, catálogo com filtro, exercícios, erros comuns, fontes oficiais e registro manual de prática por projeto. Inclui Dart/Flutter, PowerShell, R, Julia, SQL, HTML, CSS, YAML e Dockerfile.
+- **Várias versões Python:** instale versões lado a lado, escolha uma para cada projeto e crie ambientes separados. **SDKs** no Studio abre o seletor; F5, dependências e novos comandos do terminal respeitam a escolha.
+- **Salvamento automático opcional:** botão **AUTO ON/OFF**, preferência persistente e intervalo configurável. Arquivos sem nome usam Ctrl+S; alterações externas pausam o autosave daquela aba.
+- **Mais contexto e controle:** o código antes e depois do cursor participa da tradução. Ctrl+Enter respeita o campo em foco e a seleção exata; arquivos citados no pedido são localizados no projeto.
+- **Terminal mais prático:** Tab/Shift+Tab, histórico, seleção/cópia de saída, limpeza/EOF e instalação de dependências pelo consultor. Tcl/Tk recebe a orientação ou o instalador apropriado ao Python em uso.
+
+## Veja funcionando
+
+Quatro demonstrações curtas, com comandos e saídas reais da versão 0.3.1. As pausas foram editadas para facilitar a leitura; não há áudio nem modelo de IA carregado nestes vídeos.
+
+**1. Uma intenção em Python, Dart e PowerShell; um widget do banco de padrões Flutter.**
+
+https://github.com/user-attachments/assets/9d9afb4e-2b19-4559-a722-89cac1a982cb
+
+**2. Revisar uma proposta, aplicar sem duplicar código e restaurar o original.** A proposta foi preparada localmente para demonstrar aplicação/histórico; o vídeo não mede geração por IA.
+
+https://github.com/user-attachments/assets/5fdec0f3-c2dc-4df4-9975-e5b21e194a95
+
+**3. Validar/instalar um plugin local, listar suas skills e consultar o plano do Flutter.** O `--dry-run` do SDK não faz download.
+
+https://github.com/user-attachments/assets/ce88291d-208f-490a-9001-5b0efa3553b0
+
+**4. Studio: seleção com Ctrl+Enter, Tab no terminal, execução e cópia da saída.**
+
+https://github.com/user-attachments/assets/d8159b43-fa9b-43ed-9075-0281f3549136
+
+O [manual completo com capturas](docs/MANUAL.md) reúne instalação, atualização, CLI, Studio, linguagens, SDKs, plugins, estudo, configuração, recuperação e desenvolvimento.
 
 ## Por que existe
 
-Gerar o programa inteiro com IA tem três custos: você para de aprender, não percebe quando a IA errou (ninguém revisa 3 mil linhas) e fica dependente de internet e assinatura.
+Quando a geração de código substitui também o raciocínio e a revisão, você pode aprender menos, deixar erros passarem e depender da ferramenta para continuar.
 
-No CODAR a lógica continua sendo sua. Você escreve linha por linha o que quer, em português ou inglês, e ele traduz para a linguagem escolhida. Se a lógica estiver errada, o código sai com o mesmo erro, e você entende onde errou. O que some é a barreira da sintaxe.
+O CODAR foi criado para manter você envolvido na programação. Você escreve a intenção em pseudocódigo, linha por linha, em português ou inglês, e acompanha a tradução para a linguagem escolhida. O compilador e os padrões ajudam com a sintaxe; a IA local amplia os pedidos possíveis. O código gerado continua precisando de revisão e testes.
+
+A CLI é o fluxo principal. O Studio oferece um editor no terminal, inclusive via SSH; as integrações com VS Code, Neovim, Vim e PowerShell permitem usar o mesmo motor no seu ambiente de trabalho.
 
 ## Como funciona
 
-Cada linha passa por três camadas, da mais barata para a mais cara:
+Na tradução de intenções, o motor tenta resolver o pedido por regras, depois por padrões e, quando necessário, pela IA local:
 
 | Camada | O que faz | Tempo típico* |
 |---|---|---|
 | **0 · Compilador** | Regras determinísticas para atribuições, condições, laços, impressão, contas e expressões em português ("o tamanho de pedidos", "a média entre x e y"), além de abreviações HTML e CSS no estilo Emmet. Sem IA. | < 1 ms |
 | **1 · Banco de padrões** | 131 padrões incluídos: calculadora, Dijkstra, CPF/CNPJ (incluindo o CNPJ alfanumérico), Pix copia e cola, widgets Flutter, funções PowerShell, programas de linha de comando, gravação atômica de arquivos, CI, Dockerfile e mais. Usado quando você pede uma funcionalidade ("criar uma calculadora"). | < 5 ms |
-| **2 · IA local** | Qwen2.5-Coder 1.5B via llama.cpp, em **modo literal**: traduz só o que a linha diz, sem inventar funções, imports ou dados de exemplo. Usa o código acima do cursor como contexto. | ~2 s |
+| **2 · IA local** | Qwen2.5-Coder 1.5B via llama.cpp, opcional. Para pseudocódigo, o prompt pede tradução literal e usa o contexto disponível. Correções, complementos e refatorações usam um modo de edição com o código existente como referência. | ~2 s |
 
-\* Medido num notebook Intel i7-7500U (2 núcleos, 2016), sem GPU. A primeira frase de cada linguagem que não foi pré-aquecida leva cerca de 10 s.
+\* Medições de geração registradas em [docs/BENCHMARKS.md](docs/BENCHMARKS.md), num notebook Intel i7-7500U (2 núcleos, 2016), sem GPU. A primeira frase de cada linguagem que não foi pré-aquecida leva cerca de 10 s. Esses números não são um novo benchmark de qualidade das edições da versão 0.3.0.
 
-Além da tradução:
+O compilador e o banco de padrões funcionam sem instalar um modelo. Com modelos e dependências já disponíveis na máquina, a tradução e a auditoria funcionam offline. Instalação, atualização e downloads de modelos, SDKs e dependências usam a rede; veja também a seção **Privacidade**.
 
-- **Auditoria estática a cada geração**: 117 regras nos plugins, além das verificações de AST Python e segredos. Detecta casos como injeção de SQL e comandos de shell que apagam o próprio arquivo, com sugestões de correção.
-- **Consultor de projeto**: "O projeto usa npm. pnpm e Bun instalam as mesmas dependências bem mais rápido…". Você escolhe a opção e ele executa a migração.
+## Leve para começar, completo para crescer
+
+**Você pode programar sem carregar um modelo de IA.** Regras, padrões, auditoria e histórico funcionam localmente; o Studio acrescenta arquivos, abas e terminal. Na medição sem IA da 0.3.1:
+
+| Cenário | RAM depois das traduções (mediana de 3 execuções) | Faixa observada |
+|---|---|---|
+| Motor local: 20 traduções por regras e uma calculadora por padrão | **25,8 MiB** | 25,80–25,81 MiB |
+| Studio + motor: três abas de 200 linhas, as mesmas traduções e uma intenção aplicada no editor | **60,3 MiB** | 60,24–60,31 MiB |
+
+RSS medido no Linux x86_64, Python 3.12.14 e Textual 8.2.8, em processos novos. O Studio foi executado com o driver headless do Textual, em 150 × 42 células. Esses valores incluem o motor no mesmo processo; não incluem modelo, daemon separado, emulador de terminal, servidores de linguagem ou programas executados pelo usuário. [Resultados e método reproduzível](docs/BENCHMARKS.md#memória-sem-ia-031).
+
+**Com IA, o consumo muda:** o benchmark anterior do daemon com Qwen2.5-Coder 1.5B registrou cerca de 1,27–1,41 GB. Isso não é uma medição nova da 0.3.1. O orçamento padrão de **3072 MiB** é configurável e se aplica ao serviço/motor monitorado; não representa a RAM de todo o ambiente de desenvolvimento. O monitor limpa caches e descarrega o modelo sob pressão; limites do sistema operacional são usados quando disponíveis.
+
+Outras vantagens no trabalho diário:
+
+- **Terminal e SSH:** trabalhe na máquina local ou num servidor sem precisar de um desktop gráfico.
+- **Sem GPU obrigatória:** regras e padrões funcionam sem IA; o backend local também oferece execução do modelo pela CPU.
+- **Sem assinatura de IA para traduzir:** o motor roda na sua máquina; depois dos downloads necessários, a tradução funciona offline.
+- **Instale o que usa:** o núcleo não exige bibliotecas externas no Python 3.11+; Studio, gramáticas e IA são extras opcionais. No Python 3.10, o núcleo usa `tomli`.
+- **Menos espera nas intenções comuns:** regras e padrões respondem sem inferência, com as latências registradas acima.
+- **Acompanhe e desfaça:** veja propostas, escolha alterações, consulte o histórico e restaure versões. A lógica e a revisão continuam nas suas mãos.
+- **Adapte ao projeto:** skills, plugins e comandos configuráveis permitem ampliar o ambiente e reutilizar convenções.
+
+## O que já está disponível na versão 0.3.0
+
 - **19 linguagens** de programação: Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Swift, Dart, C#, C, C++, PHP, Ruby, Lua, R, Julia, Bash e PowerShell, mais HTML e CSS.
-- **Edição revisável pela CLI**: propostas para até oito arquivos, comparação das mudanças, seleção de trechos e histórico durável dos originais. Configuração e contexto por projeto em `codar.toml`.
-- **Plugins com recuperação**: instalar de pasta ou Git HTTPS, validar compatibilidade, atualizar, desativar, remover e restaurar a versão anterior.
+- **Correção e complemento do código existente**: uma edição substitui o trecho aprovado. A geração reserva espaço para uma resposta completa e os arquivos grandes são divididos por declarações inteiras; respostas incompletas são recusadas. A validação também rejeita novas definições Python duplicadas.
+- **Revisão de até oito arquivos**: veja a comparação entre originais e propostas, escolha os trechos a aplicar e consulte o histórico. Há restauração e recuperação de operações interrompidas; alterações externas são conferidas antes de escrever.
+- **Contexto por projeto**: `codar.toml` reúne convenções, skills, requisitos de SDKs e comandos. `codar check` verifica sintaxe; testes, análise e formatação são executados quando você solicita.
+- **Dart/Flutter e PowerShell**: padrões, skills e validadores específicos. O Studio reconhece projetos Flutter, executa apps e testes e oferece comandos de dependências na pasta correta, inclusive em projetos aninhados.
+- **SDKs e dependências**: `codar toolchains` detecta e instala ambientes por comando explícito; `--dry-run` mostra o plano. Dart e PowerShell usam downloads oficiais com SHA-256; Flutter usa o repositório oficial. As instalações gerenciadas ficam nos dados do seu usuário.
+- **Plugins com recuperação**: instalar de pasta ou Git HTTPS, conferir origem, revisão, compatibilidade e dependências, atualizar, desativar, remover e restaurar versões guardadas. Uma atualização inválida preserva a instalação anterior.
+- **Studio e editores**: explorador, abas, terminal integrado, execução, modo de estudo e explicação de erros. Studio e VS Code oferecem prévias de edições e histórico; Neovim, Vim e PowerShell também têm integrações.
+- **Prévia no celular**: `codar servir` e F4 no Studio mostram projetos pela rede local com QR Code, incluindo proxy para um servidor de desenvolvimento.
+- **Auditoria estática**: 117 regras nos plugins, além das verificações de AST Python e segredos, para apontar casos como credenciais no código e SQL concatenado, com sugestões de correção.
+- **Consultor de projeto**: sugestões para o ambiente e dependências, incluindo migrações de npm para pnpm ou Bun. Você escolhe a ação a executar.
+- **Atualização e distribuição**: versões dos componentes sincronizadas, diagnóstico de instalações duplicadas ou daemon antigo e arquivos publicados para Linux, Windows e macOS. Windows/macOS requerem Python 3.10+ e pipx; a extensão VS Code é instalada separadamente.
+
+O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da Release v0.3.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
+
+### Correções e praticidade na 0.3.1
+
+- **Ctrl+Enter respeita o foco**: na barra de intenção envia o pedido; no editor traduz a seleção exata ou, sem seleção, a linha do cursor; no terminal envia o comando. Ctrl+G é a alternativa para terminais que não distinguem Ctrl+Enter. A seleção termina antes da linha seguinte quando o fim está na coluna zero. Mover o cursor depois de enviar não muda o alvo capturado; se o texto mudar, a resposta fica na saída para revisão.
+- **Seu arquivo entra no pedido**: por exemplo, `crie uma interface gráfica com base no arquivo.py`. O Studio encontra e abre o arquivo da pasta do projeto, usa seu código como contexto e mostra uma prévia de substituição. Se houver nomes repetidos, você escolhe o caminho. Cite até oito arquivos para edição de projeto.
+- **Terminal com Tab/Shift+Tab**: completa caminhos, comandos disponíveis, histórico e scripts do projeto, incluindo nomes com espaços e a pasta atual após `cd`. Ações de copiar, selecionar, limpar e interromper ficam visíveis na barra.
+- **Copiar sem perder texto**: Ctrl+Shift+C copia a saída do terminal ativo; Ctrl+Shift+A abre uma janela para selecionar com mouse/teclado e copiar um trecho ou tudo. Há suporte ao clipboard local quando disponível e OSC 52; em terminais que bloqueiam esse recurso, use a seleção nativa do terminal (geralmente Shift + arrastar).
+- **Instalação com botão**: F8 → selecione a dependência → confira o comando → clique em **Instalar**. Bibliotecas Python vão para o venv do projeto. Tkinter é um componente do Python: Tcl/Tk usa o gerenciador da distribuição; Homebrew e Conda têm caminhos próprios. Windows ou Python compilado/pyenv recebe o procedimento oficial para modificar/recompilar o mesmo Python, sem sugerir um pacote pip incorreto.
+
+O terminal integrado executa comandos e entrada de programas. Para aliases, conclusão específica de cada shell ou apps interativos de tela inteira, **F12** abre seu shell na pasta da sessão; `exit` volta ao Studio.
 
 ## Instalação
+
+### Começar pela versão publicada (pipx)
+
+Requer **Python 3.10+ e pipx**. Baixe `codar-0.3.1-py3-none-any.whl` na [Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1) e execute na pasta do download:
+
+```sh
+pipx install --force ./codar-0.3.1-py3-none-any.whl
+pipx ensurepath --prepend
+```
+
+Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.3.1`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
 
 ### Código atual da branch `main` (pipx)
 
@@ -119,7 +207,7 @@ Baixe o pacote da sua distro em [Releases](https://github.com/Kelvin-Marques-Cyb
 curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 ```
 
-O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.0` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
+O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.1` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
 
 | Distro | Comando |
 |---|---|
@@ -137,8 +225,8 @@ Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônom
 
 | Sistema | Arquivo | Comando dentro da pasta extraída |
 |---|---|---|
-| Windows | `codar-0.3.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
-| macOS | `codar-0.3.0-macos-python.tar.gz` | `sh install.sh` |
+| Windows | `codar-0.3.1-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.3.1-macos-python.tar.gz` | `sh install.sh` |
 
 O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
 
@@ -182,9 +270,49 @@ codar studio .                                   # IDE no terminal
 
 O Studio funciona em qualquer terminal, inclusive via SSH; no console puro do Linux (`TERM=linux`) os gráficos viram ASCII. `F1` mostra todos os atalhos.
 
-![Ajuda do Studio (F1) com os atalhos agrupados](docs/img/ajuda.png)
+![Ajuda do Studio (F1) com os atalhos agrupados](docs/img/manual/02-atalhos.png)
 
 O Studio também tem explorer de arquivos, abas, terminal integrado, execução com **F5**, auditoria com **F6**, modo de estudo com **F7** e consultor com **F8**. `Ctrl+E`, `Ctrl+T` e `Esc` alternam o foco entre explorer, terminal e editor. `codar explicar -- python app.py` executa um programa e explica erros reconhecidos; também aceita a saída pelo stdin.
+
+### Buscar no arquivo e no projeto
+
+**Ctrl+F** busca no arquivo aberto, incluindo o que ainda não foi salvo. **Ctrl+Shift+F** e o botão **BUSCAR** pesquisam nomes e conteúdo no projeto, incluindo documentação e configurações de texto. A busca do projeto usa os arquivos em disco. Os resultados mostram caminho, linha e prévia; **Abrir** ou Enter na lista levam ao trecho; **F3/Shift+F3** percorrem a lista.
+
+A busca literal funciona sem modelo e sem daemon. Para descrições como “onde o usuário faz login”, marque **Usar IA local**: o modelo sugere termos como `login` e `autenticacao`, e a busca procura esses termos nos arquivos. Os termos ficam visíveis para revisão; essa opção precisa da IA configurada e não garante compreensão semântica do projeto inteiro.
+
+```bash
+codar project search login --root .
+codar project search "onde o usuário entra" --root . --ai
+codar project search salvar --file app.py --json
+```
+
+A busca respeita exclusões e não segue links para fora da pasta. Há limites de 200 resultados, 2.000 arquivos e 32 MiB de leitura por pesquisa, além do limite por arquivo; o painel informa quando há corte ou arquivos ignorados.
+
+### Ativar salvamento automático
+
+Clique em **AUTO OFF** para ativar ou **AUTO ON** para desativar. A preferência persiste entre sessões; o padrão é desligado. O Studio salva arquivos nomeados e já existentes após uma pausa, mantendo permissões e fazendo a troca do arquivo de forma atômica. Se outro programa alterar ou apagar o arquivo, aquela aba pausa o autosave e mantém o buffer para revisão.
+
+```bash
+codar config set studio.autosave true
+codar config set studio.autosave_delay_s 1.5
+```
+
+O intervalo é aplicado ao iniciar o Studio e fica entre 0,3 e 60 segundos. Arquivos sem nome e novos caminhos precisam de **Ctrl+S** primeiro. **Ctrl+Z** desfaz no buffer; com autosave ligado, a versão desfeita será salva após a pausa. Propostas de IA continuam passando pela prévia antes de entrar no editor.
+
+### Estudar na linguagem que você usa
+
+Ative **F7** e mova o cursor: o painel explica o conceito, mostra um exemplo na linguagem do arquivo e propõe um exercício. **Catálogo** ou **Ctrl+Shift+F7** lista somente tópicos com exemplos para aquela linguagem, com filtro por nome/trilha. **Fontes** abre as referências oficiais; **Marcar praticado** registra sua prática por projeto/linguagem, sem avaliação automática de domínio.
+
+São 24 tipos de arquivo reconhecidos: as 19 linguagens do compilador, HTML, CSS, YAML e Dockerfile. O catálogo inclui testes, tipos, geradores, logs e ambientes Python; null safety, Future e widgets/estado Flutter em Dart; pipeline e erros PowerShell; posse Rust; erros Go; agregações SQL; acessibilidade HTML; Flexbox; vetores R e broadcast Julia. Material e links oficiais revisados em **10/10/2026**.
+
+```bash
+codar study list --lang dart
+codar study show flutter_estado --lang dart
+codar estudar list --lang powershell
+codar study show guia_sql --lang sql
+```
+
+As linguagens têm catálogos de profundidades diferentes. A **trilha automática de POO** que analisa o arquivo e sugere `main` continua disponível para Python e JavaScript/TypeScript; as demais têm guias e exercícios nativos. O Estudo não insere exemplos no seu código automaticamente. Shift+F7 cria uma sugestão somente quando ela existe e não sobrescreve um arquivo já criado.
 
 ### Editar um projeto pela CLI
 
@@ -288,6 +416,24 @@ No Studio, **F5** em `lib/` de um projeto Flutter executa `lib/main.dart`; em `t
 
 Para criar um projeto, abra o terminal do Studio (**Ctrl+T**) e use `flutter create meu_app` ou `dart create meu_app`; depois abra essa pasta com `codar studio meu_app`. Em Flutter, selecione o dispositivo quando o comando pedir; `r` e Enter no terminal enviam hot reload. `flutter doctor` identifica os requisitos de Android, web ou desktop que ainda faltam.
 
+### Várias versões Python e ambientes por projeto
+
+Você pode manter várias versões instaladas e vários ambientes virtuais. Cada projeto/sessão usa um interpretador por execução; terminais já rodando continuam com seu processo atual. O Python que executa o CODAR não é trocado.
+
+```bash
+codar toolchains install python --version 3.12 --version 3.13 --dry-run
+codar toolchains install python --version 3.12 --version 3.13
+codar toolchains versions python
+codar toolchains use python 3.13 --root ./meu-projeto
+codar toolchains venv python --version 3.13 --root ./meu-projeto --venv .venv313
+codar toolchains use python --path ./meu-projeto/.venv313/bin/python --root ./meu-projeto
+codar toolchains use python 3.12 --global
+```
+
+No Windows, o executável do venv fica em `.venv313\Scripts\python.exe`. O botão **SDKs** do Studio lista versões e permite instalar outra ou criar um ambiente; o ambiente novo não substitui uma pasta existente. Subpastas herdam a escolha do projeto, e um projeto com escolha explícita tem precedência sobre o padrão global. F5, consultor de pacotes, `project run`, verificações e novos comandos no terminal usam o ambiente escolhido.
+
+Downloads de versões Python usam [uv](https://docs.astral.sh/uv/guides/install-python/) e as distribuições `python-build-standalone` da Astral. Se uv estiver ausente, o comando oferece a instalação via pipx e informa a origem. As instalações ficam nos dados do CODAR. Outros SDKs usam o fluxo abaixo; `use --path` também pode selecionar um executável Dart, Flutter ou PowerShell instalado separadamente. `--version` na instalação é, nesta versão, exclusivo de Python.
+
 ### Instalar ferramentas de programação
 
 O CODAR funciona sem SDKs para **gerar** código. Para **executar**, instale as ferramentas necessárias:
@@ -334,12 +480,21 @@ Os mesmos gestos em todos os lugares:
 |---|---|---|
 | frase + **espaço** + **Enter** | traduz a linha em vez de quebrar a linha (só quando a linha parece uma frase, nunca em código) | Studio, Neovim, Vim, VS Code |
 | **Ctrl+Enter** | traduz a linha, ou o bloco selecionado | Studio, Neovim, Vim, VS Code, PowerShell |
+| **Ctrl+Enter** na intenção | envia o pedido usando o arquivo citado ou a seleção/arquivo aberto | Studio |
 | **Ctrl+G** | o mesmo, em terminais que não distinguem Ctrl+Enter | Studio, Neovim, Vim, PowerShell, bash, zsh, fish |
 | **Tab** | aceita a sugestão do autocompletar; em `.html`, `.css` e `.jsx` expande abreviações (`ul>li*3`, `a:blank`, `df+jcc`) | Studio |
 | **→** | aceita a sugestão (no editor e na barra de intenção) | Studio |
 | **Tab** no shell | completa comandos, opções, linguagens, modelos e padrões do `codar` | bash, zsh, fish |
+| **Tab / Shift+Tab** no terminal integrado | completa/percorre comandos e caminhos, histórico e scripts | Studio |
+| **Ctrl+Shift+C / Ctrl+Shift+A** | copia saída inteira / abre saída selecionável | Studio |
+| **Ctrl+L / Ctrl+W** no terminal integrado | limpa saída / apaga palavra anterior do comando | Studio |
+| **Ctrl+D / Ctrl+Shift+W** | envia EOF ou fecha sessão vazia / fecha sessão ociosa | Studio |
+| **F12** | abre seu shell; `exit` volta ao Studio | Studio |
 | **F4** | prévia do projeto no celular, com QR Code | Studio |
 | **F5** / **F7** | executa o arquivo / abre o modo de estudo | Studio |
+| **Ctrl+F** / **Ctrl+Shift+F** | busca no buffer / nomes e conteúdo do projeto; IA opcional | Studio |
+| **Ctrl+Shift+F7** | abre o catálogo de estudo da linguagem do arquivo | Studio |
+| **AUTO ON/OFF** / **SDKs** | configura autosave / escolhe a versão Python do projeto | Studio |
 
 O autocompletar do Studio sugere palavras do próprio arquivo, palavras-chave da linguagem e o vocabulário do pseudocódigo ("imprimir", "enquanto", "senão"…). A barra de intenção sugere o que você já pediu e frases de exemplo.
 
@@ -374,9 +529,9 @@ Recarregue a janela do VS Code. Se houver instalações duplicadas, configure `c
 
 Para começar: abra uma pasta com **Arquivo → Abrir Pasta**, abra um `.py`, `.dart` ou `.ps1` e digite `x é igual a 10`. Pressione **Ctrl+Alt+Enter** para traduzir a linha. Para corrigir código, **selecione o trecho**, abra **Ctrl+Shift+P**, escolha **Codar: Gerar código a partir de uma intenção…**, descreva a correção e revise a comparação antes de aplicar. Reescrita requer a IA local instalada na CLI. Instalar a CLI não instala automaticamente a extensão; um guia completo está em [clients/vscode/README.md](clients/vscode/README.md).
 
-## Memória: teto de 3 GB
+## Memória: orçamento padrão de 3 GB
 
-O daemon mede a própria memória (RSS) a cada 2 segundos e age antes de estourar:
+O daemon usa um orçamento configurável para a própria memória (RSS), consultada a cada 2 segundos. Com o padrão de 3 GB, ele reage ao uso medido:
 
 - **80% do orçamento**: limpa caches e o estado da IA, mantendo o modelo carregado.
 - **92%**: descarrega o modelo. O compilador e o banco continuam respondendo.
@@ -388,7 +543,7 @@ O daemon mede a própria memória (RSS) a cada 2 segundos e age antes de estoura
 | **`qwen2.5-coder-1.5b`** (padrão) | 1066 MB | ~1,3 GB | 88% | Apache-2.0 |
 | `qwen2.5-coder-3b` | 2007 MB | ~2,2 GB | 88% | qwen-research (uso não comercial) |
 
-\* pass@1 em 24 tarefas em português, com o código executado contra testes. Detalhes, outros modelos e por que um modelo de 8B não compensa dentro de 3 GB em [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+\* Medições anteriores de geração: pass@1 em 24 tarefas em português, com o código executado contra testes. O consumo depende do modelo, contexto e ambiente; esses percentuais não avaliam a edição de projetos da versão 0.3.0. Detalhes e outros modelos em [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ```bash
 codar model list            # modelos, tamanho, RAM estimada e licença
@@ -396,7 +551,7 @@ codar model use qwen2.5-coder-0.5b
 codar bench --soak 200      # teste de carga: latência por camada, pico de RAM e vazamento
 ```
 
-O orçamento fica em `[memory] budget_mb` no arquivo de configuração (`codar config path`). No Linux com systemd, o daemon também pede ao sistema um limite rígido de memória quando isso está disponível; o `codar doctor` mostra como ativar.
+O orçamento fica em `[memory] budget_mb` no arquivo de configuração (`codar config path`). No Linux com systemd, o daemon também pede ao sistema um limite rígido de memória quando isso está disponível; o `codar doctor` mostra como ativar. O orçamento do daemon não limita os programas e SDKs executados nos terminais do projeto.
 
 ## Configuração
 
@@ -460,4 +615,4 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) e o [histórico de mudanças](CHANGELOG.
 
 ---
 
-**In English:** CODAR turns line-by-line pseudocode (Portuguese or English) into code in 19 languages, plus Emmet-style HTML and CSS abbreviations. A rule-based compiler, a bank of tested patterns and a small local LLM in "literal" mode run 100% offline within a 3 GB RAM budget. It ships a terminal IDE (works over SSH on Ubuntu Server), Neovim, Vim, PowerShell and VS Code clients, shell completion, a static auditor and a project advisor. Packages for Debian/Ubuntu, Fedora, openSUSE, Arch and Alpine. Apache-2.0 licensed.
+**In English:** CODAR translates line-by-line pseudocode into 19 languages, with HTML/CSS abbreviations and optional local AI. Version 0.3.1 adds native study guides for all 24 supported languages and file formats, file/project search, optional autosave, project-specific Python versions and virtual environments, improved editing context, terminal completion/copy, and guided dependency installation. It includes reviewed edits, history, plugins, Dart/Flutter and PowerShell workflows, a terminal Studio and editor clients. In a reproducible Linux benchmark without AI, the engine used about 26 MiB and the headless Studio about 60 MiB; model and external process memory are separate. Local translation and study work offline after installation; downloads require network access. [Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1) includes Linux packages, Python/pipx installers for Windows/macOS, wheel/source archives and VSIX. Alpha project, Apache-2.0 licensed.

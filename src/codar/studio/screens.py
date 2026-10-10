@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Label, Static, TextArea
 
 from codar.studio.widgets import C
 from codar.vocab import EXAMPLES
@@ -40,6 +41,72 @@ class AdviceScreen(ModalScreen[str | None]):
         self.dismiss(None if oid == "__none__" else oid)
 
     def action_dismiss_none(self) -> None:
+        self.dismiss(None)
+
+
+class CopyableOutput(TextArea):
+    BINDINGS = [Binding("ctrl+a", "select_all", "Selecionar tudo", show=False, priority=True),
+                Binding("ctrl+c", "copy_native", "Copiar", show=False, priority=True)]
+
+    def action_copy_native(self):
+        from codar.studio.clipboard import copy_text
+
+        if self.selected_text:
+            copy_text(self.app, self.selected_text)
+
+
+class TerminalOutputScreen(ModalScreen[None]):
+    """Cópia por seleção, teclado ou botão, mantendo a saída original sem cortes de largura."""
+
+    DEFAULT_CSS = """
+    TerminalOutputScreen { align: center middle; background: $codar-bg 75%; }
+    #terminal-output-card { width: 120; max-width: 95%; height: 90%; border: round $codar-orange; padding: 1 2; }
+    #terminal-output-text { height: 1fr; margin: 1 0; }
+    #terminal-output-buttons { height: 3; }
+    #terminal-output-buttons Button { margin-right: 2; }
+    """
+    BINDINGS = [("escape", "close", "Fechar"), ("ctrl+shift+c", "copy_selection", "Copiar")]
+
+    def __init__(self, text: str, title: str):
+        super().__init__()
+        self.text, self.title_text = text, title
+
+    def compose(self):
+        with Vertical(id="terminal-output-card"):
+            yield Label(f"SAÍDA · {self.title_text}")
+            yield Static("Selecione com o mouse ou Shift + setas. Ctrl+A seleciona tudo; Ctrl+C copia. Esc volta.")
+            yield CopyableOutput(self.text, read_only=True, soft_wrap=False, id="terminal-output-text")
+            with Horizontal(id="terminal-output-buttons"):
+                yield Button("Copiar seleção", id="terminal-copy-selection")
+                yield Button("Copiar tudo", id="terminal-copy-all", variant="success")
+                yield Button("Fechar", id="terminal-output-close")
+
+    def on_mount(self):
+        self.query_one(TextArea).focus()
+
+    def action_copy_selection(self):
+        from codar.studio.clipboard import copy_text
+
+        ed = self.query_one(TextArea)
+        text = ed.selected_text
+        if not text:
+            self.notify("Selecione um trecho ou use Copiar tudo.")
+            return
+        copy_text(self.app, text)
+        self.notify("Seleção copiada.")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        if event.button.id == "terminal-copy-selection":
+            self.action_copy_selection()
+        elif event.button.id == "terminal-copy-all":
+            from codar.studio.clipboard import copy_text
+
+            copy_text(self.app, self.text)
+            self.notify("Saída copiada.")
+        else:
+            self.dismiss(None)
+
+    def action_close(self):
         self.dismiss(None)
 
 
@@ -124,6 +191,7 @@ SHORTCUTS: list[tuple[str, list[tuple[str, str]]]] = [
     ("NAVEGAR", [("Ctrl+E", "vai para o explorer (arquivos)"), ("Ctrl+T", "vai para o terminal"),
                  ("Ctrl+L", "vai para a barra de intenção"), ("Esc", "volta para o editor, de qualquer lugar"),
                  ("Ctrl+O", "abre um arquivo pelo nome"), ("Ctrl+P", "paleta: comandos e arquivos"),
+                 ("Ctrl+F / Ctrl+Shift+F", "busca no arquivo / projeto; IA local opcional sugere palavras-chave"),
                  ("Ctrl+PgDn  /  Ctrl+PgUp", "próxima aba / aba anterior")]),
     ("TRADUZIR", [("espaço + Enter", "no fim de uma frase, traduz em vez de quebrar a linha"),
                   ("Ctrl+G  ou  Ctrl+Enter", "traduz a linha; com várias linhas selecionadas, traduz o bloco"),
@@ -143,11 +211,23 @@ SHORTCUTS: list[tuple[str, list[tuple[str, str]]]] = [
                   ("Del", "apaga (vai para .codar/lixeira)"), ("m  ou  botão direito", "menu com todas as ações"),
                   ("arrastar arquivo", "solte no terminal com o explorer em foco: copia para o projeto")]),
     ("ESTUDAR", [("F7", "modo estudo: explica o conceito da linha (ou do comentário) com exemplo e exercício"),
+                 ("Ctrl+Shift+F7", "catálogo com tópicos da linguagem, fontes oficiais e prática registrada"),
                  ("F7 depois de um erro", "abre o conceito do erro que acabou de acontecer"),
                  ("trilha POO", "mostra o que da orientação a objetos você já usa e o próximo passo"),
                  ("Shift+F7", "cria o arquivo que o estudo sugeriu (ex.: main.py comentado)")]),
     ("ARQUIVOS", [("Ctrl+S", "salva"), ("Ctrl+N", "novo arquivo"), ("Ctrl+W", "fecha a aba"),
+                  ("Botão AUTO ON/OFF", "salvamento automático opcional após a digitação; evita sobrescrever alterações externas"),
+                  ("Botão SDKs", "instala versões Python, escolhe a do projeto e cria ambientes separados"),
                   ("Ctrl+B", "mostra/esconde o explorer"), ("F9", "mostra/esconde o painel")]),
+    ("TERMINAL", [("Tab / Shift+Tab", "completa/percorre caminhos, comandos, histórico e scripts"),
+                  ("↑ / ↓", "histórico; ↓ no final restaura seu rascunho"),
+                  ("Ctrl+Enter", "envia o comando ou a entrada do programa"),
+                  ("Ctrl+Shift+C", "copia toda a saída do terminal ativo"),
+                  ("Ctrl+Shift+A", "abre saída selecionável: mouse, Shift+setas, Ctrl+A e Ctrl+C"),
+                  ("Ctrl+L / Ctrl+W", "limpa a saída / apaga a palavra anterior no comando"),
+                  ("Ctrl+C / Ctrl+D", "interrompe / envia EOF; Ctrl+D ocioso fecha a sessão vazia"),
+                  ("Ctrl+Shift+W", "fecha o terminal ocioso (interrompa antes se ocupado)"),
+                  ("F12", "abre seu shell completo na pasta atual; exit volta ao Studio")]),
     ("PROJETO", [("F5", "executa o arquivo (.html: abre a prévia)"),
                  ("F4", "ver no celular: prévia na rede com QR code (ou repassa o servidor do terminal)"),
                  ("F6", "audita o arquivo"), ("F8", "consultor de projeto"),

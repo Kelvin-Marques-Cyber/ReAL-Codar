@@ -615,12 +615,18 @@ class Botao(Static):
     """Texto clicável que executa uma ação do app (pílulas S0/S1, barra do explorer). Diferente de um link [@click],
     mantém as cores do próprio texto, que acompanham o tema."""
 
+    can_focus = True
+    BINDINGS = [Binding("enter,space", "activate", "Ativar", show=False)]
+
     def __init__(self, texto: str = "", acao: str = "", **kwargs) -> None:
         super().__init__(texto, **kwargs)
         self.acao = acao
 
     async def on_click(self, event: events.Click) -> None:
         event.stop()
+        await self.app.run_action(self.acao)
+
+    async def action_activate(self) -> None:
         await self.app.run_action(self.acao)
 
 

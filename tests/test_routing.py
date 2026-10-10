@@ -35,6 +35,29 @@ def test_frase_sobre_o_contexto_vai_para_ia_literal(translate, router):
     assert "Reference pattern" not in prompt  # sem RAG: nada de copiar padrões no modo literal
 
 
+def test_compilador_reconhece_nome_no_codigo_abaixo(translate):
+    result = translate("imprimir resultado", after="resultado = calcular(10)\n", stages=(0,))
+    assert result.stage == "0" and result.body == "print(resultado)"
+
+
+def test_literal_recebe_codigo_abaixo_e_reduz_contexto_opcional(translate, router, monkeypatch):
+    below = 'def salvar(dados):\n    return dados\n' + '# contexto longo\n' * 300
+    prompts = []
+    original = router.stage2.generate
+
+    def generate(builder, **kwargs):
+        prompts.extend(builder(level) for level in range(3))
+        return original(builder, **kwargs)
+
+    monkeypatch.setattr(router.stage2, "generate", generate)
+    router.stage2.answer = "salvar(itens)\n"
+    result = translate("salvar todos os itens", after=below)
+    assert result.body == "salvar(itens)"
+    assert all("def salvar(dados)" in prompt for prompt in prompts)
+    assert "before and after the cursor" in prompts[0]
+    assert len(prompts[0]) > len(prompts[1]) > len(prompts[2])
+
+
 def test_padrao_parcial_nao_sequestra_pseudocodigo(translate):
     # "some os dois números" já casou por engano com util.digits ("somar dígitos")
     res = translate("some os dois números e imprima", before="x = 10\ny = 20\n")

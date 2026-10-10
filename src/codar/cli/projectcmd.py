@@ -12,6 +12,8 @@ from codar import toolchains
 from codar.project import CONFIG_NAME, Project
 from codar.validation import check_project, default_command, run_command
 from codar.workspace import EditStore
+from codar.client import RpcError
+from codar.engine.stage2 import ModelUnavailable
 
 TEMPLATE = '''# Comandos são listas de argumentos, sem shell.
 [project]
@@ -34,12 +36,13 @@ repair_attempts = 1
 
 
 def register(sub):
-    p = sub.add_parser("project", help="projeto: init | info | context | doctor | run")
-    p.add_argument("action", choices=["init", "info", "context", "doctor", "run"])
+    p = sub.add_parser("project", help="projeto: init | info | context | search | doctor | run")
+    p.add_argument("action", choices=["init", "info", "context", "search", "doctor", "run"])
     p.add_argument("terms", nargs="*")
     p.add_argument("--root", default=".")
     p.add_argument("--file")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--ai", action="store_true", help="na busca, sugere palavras-chave usando a IA local")
     p.set_defaults(fn=cmd_project)
     p = sub.add_parser("edit", help="propõe uma edição em vários arquivos e mostra o diff")
     p.add_argument("intent", nargs="+")
@@ -86,10 +89,11 @@ def project_versions(project: Project) -> list[dict]:
 
     results = []
     for name, expected in project.toolchains.items():
-        executable = toolchains.executable(name)
+        executable = toolchains.executable(name, project=project.root)
         result = {"language": name, "expected": expected, "executable": executable, "status": "missing", "actual": ""}
         if executable:
-            checked = run_command([executable, "--version"], project.root, 15)
+            flag = {'go': 'version', 'lua': '-v', 'java': '-version'}.get(name, '--version')
+            checked = run_command([executable, flag], project.root, 15)
             match = re.search(r"\b\d+\.\d+(?:\.\d+)?\b", checked["message"])
             actual = match[0] if match else ""
             compatible = version_matches(actual, expected) if actual and re.search(r"[<>=!]", expected) else \
@@ -102,6 +106,20 @@ def project_versions(project: Project) -> list[dict]:
 def cmd_project(args) -> int:
     try:
         project = Project.load(args.root)
+        if args.action == "search":
+            import asyncio
+            from codar.search import search_project
+
+            params = dict(root=str(project.root), query=" ".join(args.terms), file=args.file or '', ai=args.ai)
+            if args.ai:
+                from codar.client import Client
+
+                with Client.connect() as client:
+                    value = client.call("project.search", params)
+            else:
+                value = asyncio.run(search_project(None, params))
+            display(value, args.json)
+            return 0
         if args.action == "init":
             file = project.root / CONFIG_NAME
             with file.open("x", encoding="utf-8") as handle:
@@ -116,12 +134,12 @@ def cmd_project(args) -> int:
             command = default_command(project, "run", args.file)
             if not command:
                 raise ValueError("configure commands.run em codar.toml ou informe --file")
-            return subprocess.call(command, cwd=project.root, env=toolchains.environment())
+            return subprocess.call(command, cwd=project.root, env=toolchains.environment(project=project.root))
         else:
             value = {**project.as_dict(), "files": project.files()}
         display(value, args.json)
         return int(args.action == "doctor" and any(t["status"] != "ok" for t in value["toolchains"]))
-    except (OSError, ValueError, toolchains.InstallError) as exc:
+    except (OSError, ValueError, toolchains.InstallError, RpcError, ModelUnavailable) as exc:
         print(f"codar: {exc}", file=sys.stderr)
         return 1
 

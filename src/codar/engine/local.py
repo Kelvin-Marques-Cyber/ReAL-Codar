@@ -34,12 +34,12 @@ class LocalClient:
         self.store.close()
 
     def translate(self, intent: str, lang: str | None = None, *, file: str | None = None, before: str = "",
-                  after: str = "", selected: str = "",
+                  after: str = "", selected: str = "", project_root: str | None = None,
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
                   on_delta: Callable[[str], None] | None = None) -> dict:
         req = Request(intent=intent, lang=lang, lang_explicit=bool(lang), file=file, before=before, indent=indent,
-                      after=after, selected=selected,
+                      after=after, selected=selected, project_root=project_root,
                       indent_unit=indent_unit, stages=tuple(stages), audit=audit, hints=hints, mode=mode)
         try:
             return asyncio.run(self.router.translate(req, on_token=on_delta)).as_dict()
@@ -110,7 +110,9 @@ class LocalClient:
     def stats(self) -> dict:
         from codar.daemon.memguard import MemGuard
 
-        guard = MemGuard(self.cfg["memory"])
+        guard = getattr(self, '_memguard', None)
+        if guard is None:
+            guard = self._memguard = MemGuard(self.cfg['memory'])
         guard.sample([self.stage2.backend.child_pid] if self.stage2 else [])
         return {"version": "local", "pid": None, "memory": guard.as_dict(), "patterns": self.store.stats(),
                 "stages": self.router.metrics.snapshot(), "rules": len(self.router.auditor.rules),

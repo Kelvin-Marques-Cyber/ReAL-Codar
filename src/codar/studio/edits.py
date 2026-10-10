@@ -36,9 +36,11 @@ class EditTarget:
             if start == end:
                 start, end = (0, 0), (len(lines) - 1, len(lines[-1]))
         elif mode in ("line", "block"):
-            row = cursor[0] if row is None else row
-            last = row + (original.count("\n") if original is not None else 0)
-            start, end = (row, 0), (last, len(lines[last]))
+            start, end = sorted(selection)
+            if start == end:
+                row = cursor[0] if row is None else row
+                last = row + (original.count("\n") if original is not None else 0)
+                start, end = (row, 0), (last, len(lines[last]))
         else:
             row = cursor[0]
             col = len(lines[row]) if lines[row].strip() else 0
@@ -68,7 +70,7 @@ class EditTarget:
                 start_row += 1
             elif last == len(self.text):
                 body += "\n"
-        elif self.mode == "edit":
+        elif self.mode in ("edit", "line", "block"):
             if self.start[1] and indent and body.startswith(indent):
                 body = body[len(indent):]  # indentação da primeira linha já existe fora da seleção
             if self.selected.endswith("\n") and not body.endswith("\n"):

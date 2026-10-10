@@ -14,7 +14,7 @@ O daemon grava `endpoint.json` no diretório de execução ao subir e o apaga ao
 | qualquer um | `$CODAR_HOME/run/`, se `CODAR_HOME` estiver definido |
 
 ```json
-{"transport": "unix", "address": "/run/user/1000/codar/codar.sock", "token": "", "uri": "unix:/run/user/1000/codar/codar.sock", "pid": 5837, "version": "0.3.0"}
+{"transport": "unix", "address": "/run/user/1000/codar/codar.sock", "token": "", "uri": "unix:/run/user/1000/codar/codar.sock", "pid": 5837, "version": "0.3.1"}
 ```
 
 `transport` é `unix`, `pipe` (Windows, `\\.\pipe\codar-<usuário>`) ou `tcp` (`127.0.0.1:porta`). A variável `CODAR_ENDPOINT` (`unix:/caminho`, `pipe:\\.\pipe\nome`, `tcp://127.0.0.1:7878`) tem precedência; com TCP, `CODAR_TOKEN` leva o token.
@@ -32,7 +32,7 @@ Teste rápido no terminal:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"ping"}' | nc -U -q1 "$XDG_RUNTIME_DIR/codar/codar.sock"
-# {"jsonrpc":"2.0","id":1,"result":{"pong":true,"version":"0.3.0","pid":5837}}
+# {"jsonrpc":"2.0","id":1,"result":{"pong":true,"version":"0.3.1","pid":5837}}
 ```
 
 ## `translate`
@@ -75,7 +75,8 @@ Cada item de `findings`: `id`, `severity` (`info`, `warning`, `error`, `critical
 
 | Método | Parâmetros | Resultado |
 |---|---|---|
-| `ping` | | `{"pong": true, "version": "0.3.0", "pid": 5837}` |
+| `project.search` | `root`, `query`, `file?`, `buffer?`, `names?`, `ai?` | termos, resultados reais com caminho/linha/prévia, arquivos ignorados e indicador de corte |
+| `ping` | | `{"pong": true, "version": "0.3.1", "pid": 5837}` |
 | `auth` | `token` | `{"ok": true}` |
 | `audit` | `code`, `lang`, `hints?` | `{"findings": [...], "ms": 0.4}` |
 | `stats` | | memória, modelo, estágios, cache, número de pedidos |
@@ -131,3 +132,13 @@ Estados de disco: `draft` → `applying` → `applied` → `applying` → `resto
 | `-32003` | modelo indisponível (não instalado ou acima do teto de memória) |
 | `-32004` | nenhum estágio resolveu; `data.candidates` traz os padrões mais próximos |
 | `-32800` | cancelado |
+
+## Busca de projeto
+
+`project.search` usa busca literal por padrão. `file` restringe o alvo e `buffer` permite buscar alterações não salvas (limite de 512 KiB). `names` inclui nomes de arquivos (padrão true). `ai=true` exige IA local configurada e retorna os termos sugeridos antes dos resultados. O scanner respeita exclusões e limites de leitura do projeto; `truncated=true` indica um limite de arquivos, leitura ou resultados.
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"project.search","params":{"root":"/meu/projeto","query":"login","names":true,"ai":false}}
+```
+
+Cada resultado traz `path`, `kind` (name/content), `line` (base 1), `col` (base 0, caracteres Unicode), `length`, `text`, `snippet` e `score`. O retorno também traz `query`, `terms`, `files_scanned`, `skipped` e `truncated`. Um resultado de nome aponta para a primeira linha; conteúdo aponta para um trecho encontrado. A busca não modifica arquivos nem executa o conteúdo.

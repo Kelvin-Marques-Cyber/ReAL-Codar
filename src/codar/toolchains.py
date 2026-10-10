@@ -68,17 +68,23 @@ def bin_dirs() -> list[Path]:
     return [p for p in (base / "flutter/bin", base / "dart/dart-sdk/bin", base / "powershell") if p.is_dir()]
 
 
-def environment(env: dict[str, str] | None = None) -> dict[str, str]:
+def environment(env: dict[str, str] | None = None, project: str | Path | None = None) -> dict[str, str]:
     env = dict(os.environ if env is None else env)
     extra = os.pathsep.join(str(p) for p in bin_dirs())
     if extra:
         env["PATH"] = env.get("PATH", "") + os.pathsep + extra
-    return env
+    from codar.runtimes import environment as selected_environment
+
+    return selected_environment(env, project)
 
 
-def executable(name: str, path: str | None = None) -> str | None:
+def executable(name: str, path: str | None = None, project: str | Path | None = None) -> str | None:
     key = canonical(name)
-    search = environment({"PATH": path if path is not None else os.environ.get("PATH", "")})["PATH"]
+    from codar.runtimes import selected
+
+    if chosen := selected(key, project):
+        return chosen['executable']
+    search = environment({"PATH": path if path is not None else os.environ.get("PATH", "")}, project=project)["PATH"]
     for command in TOOLS[key]:
         found = shutil.which(command, path=search)
         if found:

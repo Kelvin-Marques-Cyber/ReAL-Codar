@@ -23,7 +23,9 @@ from codar.estudo.conteudo import CONCEITOS, POR_ID, TRILHA_POO, TRILHAS, Concei
 __all__ = ["CONCEITOS", "POR_ID", "TRILHA_POO", "TRILHAS", "Conceito", "EstadoPoo", "Sugestao", "conceitos_da_linha",
            "exemplo", "pelo_comentario", "sugestao_main", "trilha_poo"]
 
-_GRUPO = {"python": "py", "javascript": "js", "typescript": "js"}
+from codar.estudo.ampliado import EXEMPLOS_R, FONTES
+
+_GRUPO = {**{lang: lang for lang in FONTES}, "python": "py", "javascript": "js", "typescript": "js"}
 # a linha "class Poupanca(Conta):" é herança antes de ser classe; "conta = Conta()" é objeto antes de variável
 _PRIORIDADE = ["treino_teste", "agrupamento", "grafico", "imagem_matriz", "numpy_array", "dataframe",
                "heranca", "super", "polimorfismo", "composicao", "encapsulamento", "str", "construtor", "metodo",
@@ -39,6 +41,10 @@ def grupo(lang: str | None) -> str:
 
 
 def _ordem(c: Conceito) -> int:
+    if c.id.startswith('guia_'):
+        return 1000
+    if c.fontes:
+        return -1
     return _PRIORIDADE.index(c.id) if c.id in _PRIORIDADE else len(_PRIORIDADE)
 
 
@@ -50,14 +56,20 @@ def conceitos_da_linha(linha: str, lang: str | None) -> list[Conceito]:
         return []
     if texto.startswith(_COMENTARIO):
         baixo = texto.lower()  # palavra (ou começo de palavra): "se " não casa dentro de "classe com"
-        achados = [c for c in CONCEITOS if any(re.search(r"(?<!\w)" + re.escape(p), baixo) for p in c.palavras)]
+        achados = [c for c in CONCEITOS if any(re.search(r"(?<!\w)" + re.escape(p), baixo) for p in c.palavras)
+                   and exemplo(c, lang)[0]]
     else:
         g = grupo(lang)
         achados = []
         for c in CONCEITOS:
-            padroes = c.linha.get(g, ()) if g != "*" else c.linha.get("*", ())
-            if any(re.search(p, linha) for p in padroes):
+            padroes = c.linha.get(lang or '', ()) + c.linha.get(g, ())
+            if g not in ('py', 'js'):
+                padroes += c.linha.get('*', ())
+            if any(re.search(p, linha, re.I if lang in ('sql', 'powershell', 'dockerfile') else 0) for p in padroes) \
+                    and exemplo(c, lang)[0]:
                 achados.append(c)
+    if not achados and lang and 'guia_' + lang in POR_ID:
+        achados = [POR_ID['guia_' + lang]]
     return sorted(achados, key=_ordem)
 
 
@@ -82,18 +94,56 @@ def exemplo(c: Conceito, lang: str | None) -> tuple[str, str]:
     """(código, linguagem do código): o escrito à mão para a linguagem; senão o pseudocódigo compilado para ela;
     senão o de Python."""
     g = grupo(lang)
+    if lang == 'r' and c.id in EXEMPLOS_R:
+        return EXEMPLOS_R[c.id], lang
+    if lang in c.exemplos:
+        return c.exemplos[lang], lang
     if g in c.exemplos:
         return c.exemplos[g], lang or "python"
     if c.pseudo and lang and (codigo := _compilar(c.pseudo, lang)):
         return codigo, lang
+    if lang and lang != 'python':
+        return '', lang
     if "py" in c.exemplos:
         return c.exemplos["py"], "python"
     if c.pseudo and (codigo := _compilar(c.pseudo, "python")):
         return codigo, "python"
-    if c.exemplos:
-        g2, codigo = next(iter(c.exemplos.items()))
-        return codigo, "javascript" if g2 == "js" else "python"
     return "", lang or "python"
+
+
+def catalogo(lang: str | None):
+    """Apenas tópicos com exemplo nativo ou compilável para a linguagem solicitada."""
+    return [c for c in CONCEITOS if exemplo(c, lang)[0]]
+
+
+def explicacao(c, lang):
+    if not lang or lang == 'python' or c.fontes or c.trilha not in ('fundamentos', 'poo'):
+        return c.texto
+    generic = {
+        'variavel': 'Uma variável dá um nome a um valor para usar e, quando permitido, alterar depois. Confira declaração, tipo e mutabilidade no exemplo.',
+        'print': 'Mostrar valores ajuda a acompanhar a execução e conferir o estado do programa. Use a operação de saída própria da linguagem.',
+        'input': 'Uma entrada vem do usuário ou de outra fonte. Trate ausência, texto inválido e conversão antes de fazer contas.',
+        'conversao': 'Converter muda a representação do valor. A conversão pode falhar; confira os formatos aceitos e valide antes de usar o resultado.',
+        'fstring': 'Interpolação e formatação montam texto com valores. Use o mecanismo da linguagem e defina formatos quando precisão e apresentação importam.',
+        'texto': 'Strings representam texto. Confira índices, codificação e se uma operação muda o valor ou devolve um novo.',
+        'if': 'Uma condição escolhe o bloco que será executado. Compare valores, trate os demais casos e confira os limites da condição.',
+        'for': 'Uma repetição percorre uma sequência ou intervalo. Observe o primeiro e o último valor, a ordem e os índices da linguagem.',
+        'while': 'O bloco repete enquanto a condição permitir. Alguma operação deve aproximar o laço do fim para evitar repetição infinita.',
+        'lista': 'Uma coleção ordenada guarda vários valores. Confira índices, tipo dos elementos e operações para adicionar e percorrer.',
+        'dicionario': 'Um mapa associa chaves a valores. Trate chaves ausentes e confira como a linguagem devolve ou sinaliza ausência.',
+        'funcao': 'Uma função recebe parâmetros, executa uma tarefa e pode devolver um resultado. Defina o contrato e teste entradas normais e limites.',
+        'import': 'Módulos organizam código reutilizável. Importar código e instalar uma dependência são passos diferentes.',
+        'excecao': 'Trate uma falha no ponto em que você consegue decidir o que fazer. Algumas linguagens usam exceções; outras devolvem valores de erro.',
+        'arquivo': 'Abrir, ler e escrever arquivos exige tratar caminhos, codificação, permissões e fechamento dos recursos.',
+        'indentacao': 'A organização visual ajuda a entender os blocos. Confira se a linguagem usa indentação, delimitadores ou palavras para marcar o bloco.',
+        'main': 'O ponto de entrada inicia a execução. Separar definição e uso permite testar e reutilizar seu código.',
+        'classe': 'Uma classe descreve estado e comportamento de objetos. Algumas linguagens usam estruturas, métodos ou composição no lugar de classes tradicionais.',
+    }
+    return generic.get(c.id, c.texto)
+
+
+def fontes(c, lang):
+    return c.fontes or ((FONTES[lang],) if lang in FONTES else ())
 
 
 # ------------------------------------------------------------------------------------------- trilha de POO

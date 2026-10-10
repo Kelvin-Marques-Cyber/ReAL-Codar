@@ -51,9 +51,10 @@ def test_comentario_nao_confunde_palavras_dentro_de_outras():
 @pytest.mark.parametrize("lang", ["python", "javascript", "typescript", "java", "go", "rust", "c", "csharp", "bash",
                                   "lua", "ruby", "php"])
 def test_todo_conceito_tem_exemplo_em_toda_linguagem(lang):
-    for c in estudo.CONCEITOS:
+    for c in estudo.catalogo(lang):
         codigo, _lang_ex = estudo.exemplo(c, lang)
         assert codigo.strip() and "TODO" not in codigo, (c.id, lang)
+        assert _lang_ex == lang, (c.id, lang, _lang_ex)
 
 
 def test_exemplo_compilado_para_a_linguagem_do_arquivo():

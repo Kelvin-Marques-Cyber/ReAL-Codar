@@ -68,6 +68,13 @@ def test_saida_sem_erro_nao_explica_nada(tmp_path):
     assert explicar("tudo certo\n[exit 0]") is None
 
 
+@pytest.mark.parametrize("module", ["tkinter", "_tkinter"])
+def test_tkinter_usa_componente_do_python_em_vez_de_pip(module):
+    exp = explicar(f"ModuleNotFoundError: No module named '{module}'\n")
+    assert "Tcl/Tk" in exp.titulo and "F8" in exp.como
+    assert "Não use pip install tkinter" in exp.como
+
+
 AMOSTRAS = [
     ("/p/app.js:3\nconsole.log(nome)\n            ^\n\nReferenceError: nome is not defined\n"
      "    at Object.<anonymous> (/p/app.js:3:13)\n    at Module._compile (node:internal/modules/cjs/loader:1554:14)\n",

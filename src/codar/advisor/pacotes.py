@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -38,14 +40,16 @@ class DicaPacote:
     comando: str
     curta: str  # para a barra de status
     cwd: Path | None = None
+    rotulo: str = "Instalar"
+    instrucoes: tuple[str, ...] = ()
 
     def como_sugestao(self) -> dict:
         """No formato das sugestões do consultor (F8), para a lista do Studio."""
         return {"id": self.id, "title": self.titulo, "reason": self.motivo, "category": "pacotes", "impact": "high",
                 "source": "pacotes", "comando": self.comando,
                 "cwd": str(self.cwd) if self.cwd else None,
-                "options": [{"id": "instalar", "label": "Instalar", "reason": self.motivo,
-                             "steps": [f"$ {self.comando}"]}]}
+                "options": [{"id": "instalar", "label": self.rotulo, "reason": self.motivo,
+                             "steps": [*self.instrucoes, f"$ {self.comando}"]}]}
 
 
 def gerenciador(raiz: Path, caminho: str | None = None) -> str:
@@ -75,13 +79,14 @@ def imports_js(codigo: str) -> list[str]:
     return pacotes
 
 
-def imports_py(codigo: str) -> list[str]:
+def imports_py(codigo: str, *, incluir_tk: bool = False) -> list[str]:
     """Módulos de fora importados (sem a biblioteca padrão)."""
     modulos = []
     for de, lista in _PY_IMPORT.findall(codigo):
         for item in ([de] if de else [x.strip().split(" ")[0] for x in lista.split(",")]):
             raiz = item.split(".")[0]
-            if raiz and raiz not in sys.stdlib_module_names and raiz != "__future__" and raiz not in modulos:
+            opcional = incluir_tk and raiz in ("tkinter", "_tkinter")
+            if raiz and (opcional or raiz not in sys.stdlib_module_names) and raiz != "__future__" and raiz not in modulos:
                 modulos.append(raiz)
     return modulos
 
@@ -170,6 +175,10 @@ def dicas_js(raiz: Path, arquivo: Path, codigo: str, caminho: str | None = None)
 
 def python_do_projeto(raiz: Path) -> str:
     """O Python que roda o projeto: o do .venv (ou venv) do projeto, se existir; senão o do Studio."""
+    from codar.runtimes import selected
+
+    if chosen := selected('python', raiz):
+        return chosen['executable']
     for pasta in (".venv", "venv", "env"):
         candidato = raiz / pasta / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         if candidato.exists():
@@ -188,24 +197,117 @@ def modulos_ausentes(python: str, modulos: list[str]) -> list[str]:
     return r.stdout.split() if r.returncode == 0 else []
 
 
-def dicas_python(raiz: Path, arquivo: Path, codigo: str) -> list[DicaPacote]:
+def _comando(argv: list[str]) -> str:
+    if os.name == "nt":
+        # cmd.exe interpreta & e | mesmo em argumentos sem espaços.
+        return " ".join('"' + arg.replace('"', '\\"') + '"' if re.search(r'[\s&|<>^()]', arg) else arg for arg in argv)
+    return shlex.join(argv)
+
+
+def ambiente_tk(python: str) -> dict:
+    """Importa somente a biblioteca, sem abrir janelas (funciona também via SSH)."""
+    teste = ("import json,sys; info=dict(version=list(sys.version_info[:2]),base=sys.base_prefix,"
+             "executable=getattr(sys,'_base_executable',sys.executable));\n"
+             "try:\n import tkinter, _tkinter; info['ok']=True\n"
+             "except ImportError as e:\n info.update(ok=False,error=str(e))\n"
+             "print(json.dumps(info))")
+    try:
+        proc = subprocess.run([python, "-I", "-c", teste], capture_output=True, text=True, timeout=10)
+        return json.loads(proc.stdout) if proc.returncode == 0 else {}
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return {}
+
+
+def dica_tk(raiz: Path, python: str, info: dict, caminho: str | None = None) -> DicaPacote:
+    """Tcl/Tk pertence à distribuição do Python: nunca recomenda pip install tkinter."""
+    major, minor = info.get("version", list(sys.version_info[:2]))
+    base = Path(info.get("base", sys.base_prefix))
+    exe = str(info.get("executable", python))
+    motivo = (f"Tkinter/Tcl-Tk está ausente no Python {major}.{minor} do projeto ({python}). "
+              "É um componente opcional do Python, instalado fora do pip. ")
+    argv = None
+    label = "Instalar Tcl/Tk"
+    instructions = ["Depois, execute o arquivo novamente; o ambiente do projeto será verificado."]
+    if (base / "conda-meta").is_dir() and shutil.which("conda", path=caminho):
+        argv = ["conda", "install", "--prefix", str(base), "tk"]
+    elif sys.platform == "darwin" and ("Cellar" in exe or "homebrew" in exe) and shutil.which("brew", path=caminho):
+        argv = ["brew", "install", f"python-tk@{major}.{minor}"]
+    elif sys.platform.startswith("linux") and exe.startswith(("/usr/bin/", "/usr/lib/")):
+        try:
+            release = platform.freedesktop_os_release()
+        except OSError:
+            release = {}
+        family = (release.get("ID", "") + " " + release.get("ID_LIKE", "")).split()
+        if any("suse" in f for f in family):
+            argv = ["sudo", "zypper", "install", f"python{major}{minor}-tk"]
+        elif any(f in ("debian", "ubuntu") for f in family):
+            argv = ["sudo", "apt-get", "install", f"python{major}.{minor}-tk"]
+        elif any(f in ("fedora", "rhel", "centos") for f in family):
+            package = "python3-tkinter" if Path(exe).name == "python3" else f"python{major}.{minor}-tkinter"
+            argv = ["sudo", "dnf", "install", package]
+        elif "arch" in family:
+            argv = ["sudo", "pacman", "-S", "tk"]
+        elif "alpine" in family:
+            argv = ["sudo", "apk", "add", "py3-tkinter"]
+    if argv:
+        motivo += "O botão instala o componente para esta distribuição; o gerenciador pode pedir sua senha."
+        comando = _comando(argv)
+    else:
+        # Python de uv/pyenv/compilado não recebe _tkinter ao instalar um pacote de outro Python.
+        motivo += "Este Python precisa ser modificado ou reinstalado com suporte a Tcl/Tk."
+        label = "Ver instruções oficiais"
+        url = "https://docs.python.org/3/library/tkinter.html"
+        if sys.platform == "win32":
+            url = "https://docs.python.org/3/using/windows.html#modifying-an-install"
+            instructions.insert(0, "No instalador deste Python, escolha Modify e marque Tcl/Tk and IDLE.")
+        else:
+            instructions.insert(0, "Use a distribuição deste Python com Tcl/Tk; em pyenv, instale as bibliotecas de desenvolvimento e recompile a mesma versão.")
+        comando = _comando([python, "-m", "webbrowser", url])
+    return DicaPacote("pacotes:py:tkinter", "Tkinter/Tcl-Tk não está disponível", motivo, comando,
+                      "TKINTER FALTA", raiz, label, tuple(instructions))
+
+
+def dicas_python(raiz: Path, arquivo: Path, codigo: str, caminho: str | None = None) -> list[DicaPacote]:
     locais = {p.stem for p in arquivo.parent.glob("*.py")} | {p.stem for p in raiz.glob("*.py")} | \
              {p.name for p in raiz.iterdir() if p.is_dir()} | {p.name for p in arquivo.parent.iterdir() if p.is_dir()}
-    modulos = [m for m in imports_py(codigo) if m not in locais]
+    modulos = [m for m in imports_py(codigo, incluir_tk=True) if m not in locais]
     python = python_do_projeto(raiz)
+    out = []
+    if any(m in ("tkinter", "_tkinter") for m in modulos):
+        info = ambiente_tk(python)
+        if info.get("ok") is False:
+            out.append(dica_tk(raiz, python, info, caminho))
+    modulos = [m for m in modulos if m not in ("tkinter", "_tkinter")]
     faltam = modulos_ausentes(python, modulos)
     if not faltam:
-        return []
+        return out
     pacotes = [PACOTES_PIP.get(m, m) for m in faltam]
-    tem_venv = python != sys.executable
-    pip = f"{Path(python).relative_to(raiz) if tem_venv else '.venv/bin/python'} -m pip install {' '.join(pacotes)}"
-    comando = pip if tem_venv else f"python3 -m venv .venv && {pip}"
+    from codar.runtimes import selected
+
+    tem_venv = (Path(python).parent.parent / 'pyvenv.cfg').is_file() and (
+        selected('python', raiz) is not None or Path(python).is_relative_to(raiz))
+    pasta = '.venv-codar' if (raiz / '.venv').exists() and not tem_venv else '.venv'
+    if not tem_venv and (raiz / pasta).exists():
+        pasta = next('.venv-codar-' + str(i) for i in range(1, 10000) if not (raiz / ('.venv-codar-' + str(i))).exists())
+    if tem_venv:
+        try:
+            venv_python = Path(python).relative_to(raiz).as_posix()
+        except ValueError:
+            venv_python = python
+    else:
+        venv_python = pasta + ("/Scripts/python.exe" if os.name == "nt" else "/bin/python")
+    pip = _comando([venv_python, "-m", "pip", "install", *pacotes])
+    comando = pip if tem_venv else _comando([python, "-m", "venv", pasta]) + " && " + pip
+    if not tem_venv:
+        comando += " && " + _comando([sys.executable, '-m', 'codar', 'toolchains', 'use', 'python',
+                                     '--path', str(raiz / venv_python), '--root', str(raiz)])
     onde = "no ambiente .venv do projeto" if tem_venv else \
         "num ambiente .venv do projeto (criado agora; o F5 passa a usar ele)"
     nomes = ", ".join(f"{m} ({p})" if p != m else m for m, p in zip(faltam, pacotes))
-    return [DicaPacote(f"pacotes:py:{'+'.join(faltam)}", f"{', '.join(faltam)} não está instalado",
+    out.append(DicaPacote(f"pacotes:py:{'+'.join(faltam)}", f"{', '.join(faltam)} não está instalado",
                        f"O arquivo importa {nomes}. A instalação vai {onde}.", comando,
-                       f"{faltam[0].upper()} FALTA")]
+                       f"{faltam[0].upper()} FALTA", raiz))
+    return out
 
 
 def dicas(raiz: Path, arquivo: Path, codigo: str, lang: str | None, caminho: str | None = None) -> list[DicaPacote]:
@@ -215,7 +317,7 @@ def dicas(raiz: Path, arquivo: Path, codigo: str, lang: str | None, caminho: str
     if lang in ("javascript", "typescript"):
         return dicas_js(raiz, arquivo, codigo, caminho)
     if lang == "python":
-        return dicas_python(raiz, arquivo, codigo)
+        return dicas_python(raiz, arquivo, codigo, caminho)
     if lang == "dart":
         return dicas_dart(raiz, arquivo, codigo)
     return []

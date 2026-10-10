@@ -24,7 +24,7 @@ def run_command(command: list[str], root: Path, timeout: int = 60) -> dict:
     with tempfile.TemporaryFile() as output:
         try:
             proc = subprocess.Popen(command, cwd=root, stdin=subprocess.DEVNULL, stdout=output, stderr=output,
-                                    env=toolchains.environment(), start_new_session=os.name != "nt")
+                                    env=toolchains.environment(project=root), start_new_session=os.name != "nt")
         except OSError as exc:
             return {"command": command, "status": "skipped", "message": str(exc), "exit_code": None}
         try:

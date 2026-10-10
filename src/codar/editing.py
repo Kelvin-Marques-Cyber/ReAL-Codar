@@ -16,7 +16,7 @@ from codar.studio.edits import hoist_imports
 from codar.validation import check_project, validate_text
 from codar.workspace import Change, EditStore, diff, hunks
 
-METHODS = {"project.info", "project.context", "project.check", "project.edit", "edits.record", "edits.list",
+METHODS = {"project.info", "project.context", "project.search", "project.check", "project.edit", "edits.record", "edits.list",
            "edits.get", "edits.apply", "edits.restore", "edits.recover", "edits.validate", "edits.preview",
            "edits.prepare", "edits.commit"}
 
@@ -224,6 +224,10 @@ async def workspace_call(router, method: str, p: dict, cancel=None) -> dict | li
     root = p.get("root")
     if not isinstance(root, str) or not root:
         raise ValueError("informe root (pasta do projeto)")
+    if method == "project.search":
+        from codar.search import search_project
+
+        return await search_project(router, p)
     if method == "project.edit":
         return await propose_project(router, root, p.get("files", []), str(p.get("intent", "")), cancel)
     if method in ("project.info", "project.context", "project.check"):

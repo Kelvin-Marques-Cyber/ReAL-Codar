@@ -156,7 +156,9 @@ LITERAL_SYSTEM = ("You translate pseudo-code (Portuguese or English) into {lang}
                   "the line says. Never add functions, classes, examples, tests, prints, input reading, imports or "
                   "comments that were not asked for. Reuse identifiers exactly as written; when the line does not name a "
                   "variable, derive the name from its own words (\"a lista\" -> lista), never from the examples. Assume every "
-                  "variable mentioned already exists: never initialize it with sample values.")
+                  "variable mentioned already exists: never initialize it with sample values. Use the code before "
+                  "and after the cursor to resolve identifiers, types and existing APIs. Surrounding code is context "
+                  "only: preserve it and do not repeat its definitions in your output.")
 
 
 def build_literal_prompt(fmt: str, lang_name: str, fence: str, intent: str, examples: list[tuple[str, str]],

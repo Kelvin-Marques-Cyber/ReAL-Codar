@@ -72,13 +72,18 @@ class ChoiceScreen(ModalScreen[str | None]):
     """
     BINDINGS = [("escape", "cancel", "Cancelar")]
 
-    def __init__(self, title: str, choices: list[tuple[str, str]]):
+    def __init__(self, title: str, choices: list[tuple[str, str]], searchable=False):
         super().__init__()
         self.title_text, self.choices = title, choices
+        self.searchable = searchable
 
     def compose(self) -> ComposeResult:
         with Vertical(id="choice-card"):
             yield Label(Text(self.title_text))
+            if self.searchable:
+                from textual.widgets import Input
+
+                yield Input(placeholder='Filtrar tópicos por nome ou trilha…', id='choice-filter')
             yield OptionList(*[Option(Text(label), id=identity) for identity, label in self.choices], id="choices")
 
     def on_mount(self):
@@ -86,6 +91,13 @@ class ChoiceScreen(ModalScreen[str | None]):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected):
         self.dismiss(event.option.id)
+
+    def on_input_changed(self, event):
+        if event.input.id == 'choice-filter':
+            options = self.query_one('#choices', OptionList)
+            options.clear_options()
+            options.add_options([Option(Text(label), id=identity) for identity, label in self.choices
+                                 if event.value.casefold() in label.casefold()])
 
     def action_cancel(self):
         self.dismiss(None)

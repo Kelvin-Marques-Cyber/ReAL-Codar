@@ -241,7 +241,8 @@ class Router:
             res.timings = {**hit.timings, "total_ms": round((time.perf_counter() - t0) * 1000, 3)}
             self.metrics.record(res, intent)
             return res
-        known = set(_IDENT.findall(req.before[-3000:]))
+        # Nomes no código abaixo também são referência, por exemplo funções definidas mais adiante.
+        known = set(_IDENT.findall(req.before[-3000:] + "\n" + req.after[:3000]))
         if req.mode == "edit":
             res = await self._edit(intent, lang, req, timings, on_token, cancel)
         elif req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip()):
@@ -457,7 +458,8 @@ class Router:
             if ref and level == 1:
                 ref = (ref[0], ref[1], "\n".join(ref[2].split("\n")[:30]))
             return build_prompt(fmt, lang.name, lang.fence, intent, guidance=guidance if level < 3 else guidance[:2],
-                                reference=ref, context=context if level == 0 else "", after=req.after[:3000],
+                                reference=ref, context=context if level == 0 else "",
+                                after=req.after[:(3000, 1200, 400)[min(level, 2)]],
                                 project=req.project_context if level < 2 else "")
 
         t = time.perf_counter()
@@ -488,7 +490,8 @@ class Router:
 
         def builder(level: int) -> str:
             return build_literal_prompt(fmt, lang.name, lang.fence, intent, examples[: 3 - level] if level else examples,
-                                        context if level == 0 else "", after=req.after[:3000])
+                                        context if level == 0 else "",
+                                        after=req.after[:(3000, 1200, 400)[min(level, 2)]])
 
         n_lines = intent.count("\n") + 1
         t = time.perf_counter()

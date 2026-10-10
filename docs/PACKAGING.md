@@ -2,7 +2,7 @@
 
 O build do CODAR prepara os pacotes Linux de uma única árvore de instalação e distribuições Python para Windows/macOS a partir da mesma wheel. Eles ficam disponíveis para download depois de uma Release publicada; a branch `main` pode ser instalada diretamente com pipx conforme o [README](../README.md#instalação).
 
-| Formato | Gerenciador | Distros testadas |
+| Formato | Gerenciador | Destinos de instalação |
 |---|---|---|
 | `.deb` | apt | Debian 12, Ubuntu 22.04 e 24.04 |
 | `.rpm` | zypper, dnf | openSUSE Tumbleweed, Leap 15.6 e 16.0, Fedora |
@@ -76,8 +76,8 @@ Em máquinas com SELinux, os contêineres de teste rodam com `--security-opt lab
 
 1. Atualize `__version__` em `src/codar/__init__.py`. O `pyproject.toml` obtém a versão desse atributo; não adicione outra versão Python.
 2. Sincronize `clients/vscode/package.json`, os dois campos de versão do projeto em `clients/vscode/package-lock.json`, `clients/powershell/Codar/Codar.psd1`, `packaging/rpm/codar.spec` e `packaging/codar.1`. Adicione uma entrada em `packaging/debian/changelog`, preservando o histórico.
-3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.3.0` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
-4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.3.0 && git push origin v0.3.0`. Não reaproveite uma tag publicada. Se a publicação precisar ser manual porque os runners não iniciam, gere os arquivos a partir do commit exato, execute as verificações locais disponíveis e declare nas notas os testes que não foram realizados.
+3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.3.1` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
+4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.3.1 && git push origin v0.3.1`. Não reaproveite uma tag publicada. Se a publicação precisar ser manual porque os runners não iniciam, gere os arquivos a partir do commit exato, execute as verificações locais disponíveis e declare nas notas os testes que não foram realizados.
 5. O fluxo [`release.yml`](../.github/workflows/release.yml) confere tag, manifestos e changelog, roda os testes Python, gera os formatos e testa a instalação nas nove imagens antes de publicar os arquivos.
 6. Confira os artefatos na página de Releases. O [instalador](../packaging/install.sh) padrão passa a baixar essa versão. Criar um commit, atualizar o README ou mudar a numeração, sozinho, não publica pacotes.
 
