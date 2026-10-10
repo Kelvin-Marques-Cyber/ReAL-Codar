@@ -1,15 +1,18 @@
 """Pedidos de dependências têm escopo de importação, não de implementação.
 
-O catálogo é local e pequeno; fora dele, a IA só pode sugerir declarações
-de importação. Código executável nunca faz parte dessa resposta.
+Nomes explícitos são resolvidos offline, inclusive bibliotecas não catalogadas.
+Quando falta o nome, a IA só pode sugerir declarações de importação.
 """
 
 from __future__ import annotations
 
 import ast
+import keyword
 import re
 
-from codar.textutil import fold
+from codar.library_names import (C_HEADERS, CPP_HEADERS, CSHARP_NAMESPACES, DART_ENTRIES, GO_PACKAGES,
+                                 JAVA_PACKAGES, JS_DEFAULTS, PYTHON_IMPORTS, python_distribution, python_module)
+from codar.textutil import fold, fold_keep_len
 
 
 _PREFIX = re.compile(
@@ -17,7 +20,7 @@ _PREFIX = re.compile(
     r"(?:(?:so|somente|apenas|just|only)\s+)?"
     r"(?:importar|importe|importa|import|importacao|incluir|inclua|include|require|requerer|"
     r"(?:usar|use|adicionar|adicione|add)\s+(?:(?:uma?|a|o|the|an?)\s+)?"
-    r"(?:biblioteca|lib|modulo|pacote|library|module|package))\b"
+    r"(?:bibliotecas?|libs?|modulos?|pacotes?|libraries|library|modules?|packages?))\b"
 )
 _LIBRARY = re.compile(r"\b(?:biblioteca|lib|modulo|pacote|library|module|package|header|cabecalho)\b")
 _ALSO = re.compile(
@@ -79,8 +82,130 @@ YOUTUBE_IMPORTS = {
 }
 
 
+_NAME = r"[A-Za-z_@./][\w./:@+\\-]*"
+_NOISE = re.compile(r"^(?:(?:de|da|do|das|dos|a|o|as|os|um|uma|the|an|of|from|"
+                    r"bibliotecas?|libs?|modulos?|pacotes?|libraries|library|modules?|packages?|"
+                    r"header|cabecalho|chamada|chamado|called|named)\b\s*)+", re.I)
+_NOT_NAMES = set("para pra que to for function functions funcao funcoes classe classes class metodo method "
+                 "arquivo file minha minhas meu meus propria proprio leia ler read dados data playlists videos ".split())
+
+
+def _named_requests(intent: str) -> list[tuple[str, str, str]]:
+    """(módulo, símbolo opcional, alias opcional); aceita apenas nomes explícitos."""
+    text = fold_keep_len(intent.strip())
+    prefix = _PREFIX.match(text)
+    if not prefix:
+        return []
+    rest = intent.strip()[prefix.end():].strip()
+    # A finalidade fica fora da lista de nomes; não vira argumento ou comando.
+    purpose = re.search(r"\s+(?:para|pra|to|for|que)\s+", fold_keep_len(rest))
+    if purpose:
+        rest = rest[:purpose.start()]
+    symbol = re.fullmatch(rf"(?:(?:a|o|the)\s+)?(?:funcao|function|classe|class|simbolo|symbol)\s+"
+                          rf"(?P<symbol>[A-Za-z_]\w*)\s+(?:de|da|do|from)\s+(?P<module>{_NAME})"
+                          rf"(?:\s+(?:como|as)\s+(?P<alias>[A-Za-z_]\w*))?", fold_keep_len(rest))
+    if symbol:
+        return [(rest[symbol.start('module'):symbol.end('module')],
+                 rest[symbol.start('symbol'):symbol.end('symbol')],
+                 rest[symbol.start('alias'):symbol.end('alias')] if symbol['alias'] else '')]
+    noise = _NOISE.match(fold_keep_len(rest))
+    rest = rest[noise.end():] if noise else rest
+    output = []
+    for part in re.split(r"\s*,\s*|\s+(?:e|and)\s+", rest, flags=re.I):
+        part = part.strip().strip('`')
+        match = re.fullmatch(rf"(?P<name>{_NAME}|['\"]{_NAME}['\"])(?:\s+(?:como|as)\s+"
+                             rf"(?P<alias>[A-Za-z_]\w*))?", part, re.I)
+        if not match:
+            return []
+        name = match['name'].strip("'\"")
+        if fold(name) in _NOT_NAMES or name.endswith('.py'):
+            return []
+        output.append((name, '', match['alias'] or ''))
+    return output if 0 < len(output) <= 6 else []
+
+
+def _named_import(name: str, symbol: str, alias: str, lang: str) -> tuple[str, str] | None:
+    """Sintaxe do ecossistema sem adivinhar exports, headers ou arquivos de entrada."""
+    if lang == 'python':
+        module = python_module(name)
+        if not symbol:
+            module, default = PYTHON_IMPORTS.get(module, (module, ''))
+            alias = alias or default
+        if not all(part.isidentifier() and not keyword.iskeyword(part) for part in module.split('.')) or (
+                alias and (not alias.isidentifier() or keyword.iskeyword(alias))):
+            return None
+        if symbol:
+            code = f'from {module} import {symbol}' + (f' as {alias}' if alias else '')
+        else:
+            code = f'import {module}' + (f' as {alias}' if alias else '')
+        return code, python_distribution(name)
+    if lang in ('javascript', 'typescript'):
+        if not re.fullmatch(r'(?:@[\w.-]+/)?[\w.-]+(?:/[\w./-]+)?|\.{1,2}/[\w./-]+', name) or '..' in name.split('/')[2:]:
+            return None
+        default = JS_DEFAULTS.get(name.lower())
+        name = name.lower() if default else name
+        binding = alias or default or re.sub(r'\W+', '_', name.split('/')[-1])
+        if not re.fullmatch(r'[A-Za-z_$][\w$]*', binding) or binding in ('default', 'class', 'import', 'new', 'var', 'let', 'const', 'function'):
+            return None
+        if symbol:
+            return f"import {{ {symbol}" + (f' as {alias}' if alias else '') + f" }} from '{name}';", name
+        return (f"import {binding} from '{name}';" if default else f"import * as {binding} from '{name}';"), name
+    if lang == 'dart':
+        entry = DART_ENTRIES.get(name.lower(), name if re.fullmatch(r'[a-z][\w/]*/[\w/]+\.dart', name) else '')
+        if not entry:
+            return None
+        return f"import 'package:{entry}'" + (f' as {alias}' if alias else '') + (f' show {symbol}' if symbol else '') + ';', entry.split('/')[0]
+    if lang == 'go' and not symbol and not any(char in name for char in "'\"\\"):
+        name = GO_PACKAGES.get(name.lower(), name)
+        return 'import ' + (alias + ' ' if alias else '') + f'"{name}"', name
+    if lang == 'rust' and re.fullmatch(r'[\w-]+(?:::[\w:]+)?', name):
+        name = name.replace('-', '_')
+        return 'use ' + name + ('::' + symbol if symbol else '') + (f' as {alias}' if alias else '') + ';', name
+    if lang in ('java', 'kotlin') and re.fullmatch(r'[\w.]+', name):
+        name = JAVA_PACKAGES.get(name.lower(), name)
+        wildcard = not symbol and not name.split('.')[-1][0].isupper()
+        if alias and (lang == 'java' or wildcard):
+            return None
+        return 'import ' + name + ('.' + symbol if symbol else '.*' if wildcard else '') + (
+            ' as ' + alias if alias else '') + (';' if lang == 'java' else ''), name
+    if lang == 'csharp' and re.fullmatch(r'[\w.]+', name) and not symbol:
+        name = CSHARP_NAMESPACES.get(name.lower(), name)
+        return 'using ' + (alias + ' = ' if alias else '') + name + ';', name
+    if lang in ('c', 'cpp'):
+        name = (CPP_HEADERS if lang == 'cpp' else C_HEADERS).get(name.lower(), name)
+    if lang in ('c', 'cpp') and not symbol and not alias and re.fullmatch(r'[\w./-]+', name) and (
+            name.endswith(('.h', '.hpp', '.hxx')) or lang == 'cpp' and name in (
+                'vector', 'string', 'iostream', 'memory', 'map', 'set', 'algorithm', 'thread', 'filesystem', 'optional', 'tuple')):
+        return f'#include <{name}>', name
+    if lang == 'php' and re.fullmatch(r'[\w\\]+', name):
+        return 'use ' + name + ('\\' + symbol if symbol else '') + (f' as {alias}' if alias else '') + ';', name
+    if lang == 'ruby' and not symbol and not alias and re.fullmatch(r'[\w./-]+', name):
+        return f'require "{name}"', name
+    if lang == 'lua' and not symbol and re.fullmatch(r'[\w./-]+', name):
+        binding = alias or re.sub(r'\W+', '_', name.split('/')[-1])
+        return f'local {binding} = require("{name}")', name
+    if lang == 'powershell' and not symbol and not alias and re.fullmatch(r'[\w./\\-]+', name):
+        return f'Import-Module -Name "{name}"', name
+    if lang == 'swift' and not alias and not symbol and re.fullmatch(r'[\w.]+', name):
+        return 'import ' + name, name
+    if lang == 'r' and not symbol and not alias and re.fullmatch(r'[\w.]+', name):
+        return f'library("{name}")', name
+    if lang == 'julia' and not alias and re.fullmatch(r'[\w.]+', name):
+        return 'using ' + name + (': ' + symbol if symbol else ''), name
+    if lang == 'bash' and not symbol and not alias and re.fullmatch(r'[\w./-]+', name) and name.endswith('.sh'):
+        return f'source "{name}"', name
+    return None
+
+
 def catalog_import(intent: str, lang: str) -> tuple[str, str, str] | None:
-    """YouTube é uma finalidade; yt_dlp/pytube/etc. escritos explicitamente são nomes de módulos."""
+    named = _named_requests(intent)
+    # O nome informado tem prioridade sobre palavras da finalidade, como
+    # "importar requests para consultar o YouTube".
+    if named and not any(fold(name) in ('youtube', 'you-tube') for name, _, _ in named):
+        found = [_named_import(*request, lang) for request in named]
+        if all(found) and all(import_prefix(item[0], lang) for item in found):
+            return '\n'.join(item[0] for item in found), ', '.join(item[1] for item in found), 'nomes informados pelo usuário'
+        return None
     if re.search(r"\byou\s*tube\b", fold(intent)):
         return YOUTUBE_IMPORTS.get(lang)
     return None

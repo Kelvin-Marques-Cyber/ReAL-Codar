@@ -73,12 +73,18 @@ test("daemon: ping, translate, audit, stats, erro e cancelamento", { skip: !ep &
     const r2 = await c.translate({ intent: "função soma com a e b que retorna a + b", lang: "typescript",
       context: { indent: "  ", indent_unit: "  " }, options: { stages: [0] } });
     assert.match(r2.body, /^ {2}function soma\(a: number, b: number\): number \{/);
-    for (const [lang, code] of [
-      ["python", "from yt_dlp import YoutubeDL"],
-      ["dart", "import 'package:youtube_explode_dart/youtube_explode_dart.dart';"],
-      ["typescript", "import { Innertube } from 'youtubei.js';"],
+    for (const [lang, intent, code] of [
+      ["python", "importar biblioteca pandas", "import pandas as pd"],
+      ["python", "importar biblioteca scikit-learn", "import sklearn"],
+      ["python", "importar classe FastAPI de fastapi", "from fastapi import FastAPI"],
+      ["typescript", "importar biblioteca axios", "import axios from 'axios';"],
+      ["dart", "importar biblioteca dio", "import 'package:dio/dio.dart';"],
+      ["powershell", "importar biblioteca Pester", 'Import-Module -Name "Pester"'],
+      ["python", "import de biblioteca de youtube", "from yt_dlp import YoutubeDL"],
+      ["dart", "import de biblioteca de youtube", "import 'package:youtube_explode_dart/youtube_explode_dart.dart';"],
+      ["typescript", "import de biblioteca de youtube", "import { Innertube } from 'youtubei.js';"],
     ]) {
-      const imported = await c.translate({ intent: "import de biblioteca de youtube", lang,
+      const imported = await c.translate({ intent, lang,
         options: { stages: [0] } });
       assert.equal(imported.body, "");
       assert.equal(imported.code, code);

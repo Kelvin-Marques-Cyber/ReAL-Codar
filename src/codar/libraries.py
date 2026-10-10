@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import asdict, dataclass, field
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -19,11 +20,14 @@ from urllib.parse import unquote, urlparse
 
 from codar import paths
 from codar._compat import tomllib
+from codar.library_names import python_module
 from codar.project import EXCLUDED_DIRS, Project, SECRET_NAMES, find_root
-from codar.textutil import fold
+from codar.textutil import STOPWORDS, fold
 
 MAX_BYTES = 512_000
-MAX_FILES = 12
+MAX_FILES = 24
+MAX_SYMBOLS = 600
+CACHE_SCHEMA = 3
 EXTENSIONS = {'.py', '.pyi', '.js', '.ts', '.mjs', '.cjs', '.dart', '.rs', '.go', '.java', '.kt',
               '.cs', '.h', '.hpp', '.php', '.rb', '.lua', '.sh', '.ps1', '.psm1', '.swift', '.r',
               '.jl', '.md', '.rst', '.txt', '.xml', '.json', '.yaml', '.toml', '.css', '.html'}
@@ -52,7 +56,11 @@ def _read(file: Path) -> str:
         return ''
 
 
-def _symbols(text: str, lang: str) -> list[str]:
+def _signature(text: str) -> str:
+    return text if len(text) <= 1200 else text[:1160] + ' … [assinatura abreviada; consulte a fonte]'
+
+
+def _symbols(text: str, lang: str, query: str = '') -> list[str]:
     """Assinaturas e docstrings; nunca avalia anotações, decorators ou código."""
     if lang == 'python':
         try:
@@ -69,7 +77,7 @@ def _symbols(text: str, lang: str) -> list[str]:
                     signature += '(' + ast.unparse(node.args) + ')'
                     if node.returns:
                         signature += ' -> ' + ast.unparse(node.returns)
-                output.append(signature[:300])
+                output.append(_signature(signature))
                 doc = ast.get_docstring(node)
                 if doc:
                     output.append('  ' + doc.splitlines()[0][:240])
@@ -77,12 +85,12 @@ def _symbols(text: str, lang: str) -> list[str]:
                     for member in node.body:
                         if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
                                 not member.name.startswith('_') or member.name == '__init__'):
-                            output.append((node.name + '.' + member.name + '(' + ast.unparse(member.args) + ')')[:300])
+                            output.append(_signature(node.name + '.' + member.name + '(' + ast.unparse(member.args) + ')'))
             elif isinstance(node, ast.ImportFrom):
                 output.append(ast.unparse(node)[:300])
-            if len(output) >= 70:
-                break
-        return output[:70]
+        if query:
+            output.sort(key=lambda line: -_symbol_relevance(line, query))
+        return output[:MAX_SYMBOLS]
     # Tipos e declarações legíveis de outros ecossistemas; documentação mantém
     # a sintaxe original quando a linguagem não tem um analisador específico.
     declaration = re.compile(
@@ -91,8 +99,65 @@ def _symbols(text: str, lang: str) -> list[str]:
         r'extension |protocol |[\w<>?\[\],]+\s+[\w-]+\s*\()')
     method = re.compile(r'^\s*(?:(?:static|readonly|async|get|set)\s+)*[A-Za-z_$][\w$]*'
                         r'(?:<[^>]+>)?\s*\([^)]*\)\s*[:{]')
-    return [line.strip()[:300] for line in text.splitlines() if declaration.match(line) or (
-        lang in ('javascript', 'typescript') and method.match(line))][:70]
+    output = [line.strip()[:300] for line in text.splitlines() if declaration.match(line) or (
+        lang in ('javascript', 'typescript') and method.match(line))]
+    if query:
+        output.sort(key=lambda line: -_symbol_relevance(line, query))
+    return output[:MAX_SYMBOLS]
+
+
+@lru_cache(maxsize=32)
+def _query_words(query: str) -> frozenset[str]:
+    ignored = STOPWORDS | {'import', 'from', 'def', 'self', 'const', 'return', 'function', 'class',
+                          'funcao', 'funcoes', 'biblioteca', 'library', 'codigo', 'code', 'crie', 'usar'}
+    tokens = re.findall(r'[\w]+', fold(query))
+    return frozenset(dict.fromkeys(part for word in tokens for part in (word, *word.split('_'))
+                                  if len(part) >= 3 and part not in ignored))
+
+
+def _relevance(text: str, query: str) -> int:
+    text = fold(text)
+    exact = set(re.findall(r'\w+', text))
+    return sum(3 if word in exact else 1
+               for word in _query_words(query) if word in text)
+
+
+def _symbol_relevance(text: str, query: str) -> int:
+    score = _relevance(text, query)
+    if text.startswith(('from ', 'import ')):
+        return score
+    name = re.search(r'(?:def|class|function|func|fn)\s+([\w.]+)|^([\w.$]+)\s*\(', text)
+    if name:
+        score += 10 * _relevance(name[1] or name[2], query)
+    return score
+
+
+def _lazy_reexports(tree: ast.Module) -> list[ast.ImportFrom]:
+    """Tabelas literais de exports preguiçosos (Pydantic/Transformers), sem eval."""
+    imports = []
+    for node in tree.body:
+        value = node.value if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        if not isinstance(value, ast.Dict) or not any(isinstance(t, ast.Name) and t.id in (
+                '_dynamic_imports', '_import_structure', '_lazy_imports') for t in targets):
+            continue
+        for key, item in zip(value.keys, value.values):
+            if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                continue
+            if isinstance(item, ast.Tuple) and item.elts and isinstance(item.elts[-1], ast.Constant) and isinstance(item.elts[-1].value, str):
+                module, symbols = item.elts[-1].value, [key.value]
+            elif isinstance(item, (ast.List, ast.Set)):
+                module = '.' + key.value
+                symbols = [e.value for e in item.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+            else:
+                continue
+            if not module.startswith('.') or not re.fullmatch(r'[.\w]+', module):
+                continue
+            aliases = [ast.alias(name=s, asname=None) for s in symbols if s.isidentifier()]
+            if aliases:
+                imports.append(ast.ImportFrom(module=module.lstrip('.'),
+                                              names=aliases, level=len(module) - len(module.lstrip('.'))))
+    return imports
 
 
 def _top_names(text: str) -> set[str]:
@@ -205,12 +270,30 @@ class Reference:
     documentation: str = ''
     sources: list[str] = field(default_factory=list)
     source_root: str = ''
+    symbol_sources: dict[str, str] = field(default_factory=dict)
 
-    def context(self) -> str:
+    def context(self, query: str = '') -> str:
         # ChatML delimiters in dependency documentation must stay inert data.
+        symbols = sorted(self.symbols, key=lambda line: -_symbol_relevance(line, query)) if query else self.symbols
+        docs = self.documentation
+        if query:
+            lines = docs.splitlines()
+            matching = [i for i, line in enumerate(lines) if _relevance(line, query)]
+            if matching:
+                selected = sorted({j for i in matching[:6] for j in range(max(0, i - 1), min(len(lines), i + 3))})
+                docs = '\n'.join(lines[i] for i in selected)
+        selected = []
+        used = 0
+        for line in symbols:
+            origin = self.symbol_sources.get(line, '')
+            line = line + (f' [fonte: {origin}]' if origin else '')
+            if used + len(line) + 1 > 1950:
+                continue
+            selected.append(line)
+            used += len(line) + 1
         text = (f'{self.name} [{self.lang}; versão {self.version}; {self.origin}; '
                 f'revisão {self.fingerprint[:12]}]\n' +
-                '\n'.join(self.symbols) + '\n' + self.documentation)
+                '\n'.join(selected) + '\n' + docs[:600])
         return text.replace('<|', '< |').replace('```', "'''")[:2600]
 
 
@@ -287,6 +370,8 @@ class LibraryCatalog:
         if not name or '..' in Path(name.replace('.', '/')).parts or '\0' in name:
             return None
         if lang == 'python':
+            if not name.startswith('.'):
+                name = python_module(name)
             if name.startswith('.'):
                 if not self.current or not self.root:
                     return None
@@ -315,7 +400,8 @@ class LibraryCatalog:
                         dist_name = re.search(r'^Name:\s*(.+)$', metadata_text, re.M)
                         normalized = re.sub('[-_.]+', '-', dist_name[1].strip()).lower() if dist_name else ''
                         top_levels = _read(metadata.parent / 'top_level.txt').splitlines()
-                        if normalized == re.sub('[-_.]+', '-', name.split('.')[0]).lower() or name.split('.')[0] in top_levels:
+                        if normalized == re.sub('[-_.]+', '-', name.split('.')[0]).lower() or name.split('.')[0] in top_levels or (
+                                dist_name and python_module(dist_name[1].strip()).split('.')[0] == name.split('.')[0]):
                             match = re.search(r'^Version:\s*(.+)$', metadata_text, re.M)
                             if match:
                                 version = match[1].strip()
@@ -341,7 +427,18 @@ class LibraryCatalog:
                         metadata = json.loads(_read(folder / 'package.json') or '{}')
                     except (ValueError, TypeError):
                         metadata = {}
-                    return folder, str(metadata.get('version', 'local')), 'instalada'
+                    version = str(metadata.get('version', 'local'))
+                    # Muitas bibliotecas JS publicam os tipos em @types, como
+                    # React e Express. Vincula ambas as versões à referência.
+                    types_name = package[1:].replace('/', '__') if package.startswith('@') else package
+                    types = parent / 'node_modules' / '@types' / types_name
+                    if not metadata.get('types') and not metadata.get('typings') and not any(folder.glob('*.d.ts')) and types.is_dir():
+                        try:
+                            types_metadata = json.loads(_read(types / 'package.json') or '{}')
+                        except (ValueError, TypeError):
+                            types_metadata = {}
+                        return types, version + '; @types ' + str(types_metadata.get('version', 'local')), 'instalada'
+                    return folder, version, 'instalada'
         elif lang == 'dart' and self.root:
             try:
                 config_file = self.root / '.dart_tool' / 'package_config.json'
@@ -402,16 +499,59 @@ class LibraryCatalog:
         return None
 
     @staticmethod
-    def _files(source: Path) -> list[Path]:
+    def _files(source: Path, query: str = '') -> list[Path]:
         if source.is_file():
             files = [source]
-            # Inclui declarações reexportadas ao lado de __init__, sem visitar
-            # o ambiente inteiro ou executar o módulo pai.
             if source.name.startswith('__init__.'):
-                files += sorted(source.parent.glob('*.py'))[:MAX_FILES]
+                # Segue exports locais/absolutos dentro deste pacote (pandas,
+                # requests, FastAPI, etc.), sem importar nem visitar o venv.
+                root = source.parent.resolve()
+                queue = [(source, 0, 0)]
+                visited = {source.resolve()}
+                while queue and len(files) < MAX_FILES:
+                    queue.sort(key=lambda item: -item[2])
+                    file, depth, score = queue.pop(0)
+                    if file != source:
+                        files.append(file)
+                    if depth >= 3:
+                        continue
+                    try:
+                        tree = ast.parse(_read(file))
+                    except (SyntaxError, ValueError, RecursionError):
+                        continue
+                    nodes = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)] + _lazy_reexports(tree)
+                    nodes.sort(key=lambda n: -_relevance(ast.unparse(n), query))
+                    for node in nodes:
+                        parts = (node.module or '').split('.') if node.module else []
+                        if node.level:
+                            base = file.parent
+                            for _ in range(node.level - 1):
+                                base = base.parent
+                        elif parts and parts[0] == root.name:
+                            base, parts = root, parts[1:]
+                        else:
+                            continue
+                        modules = [base.joinpath(*parts)] if parts else [base / a.name for a in node.names if a.name != '*']
+                        for module in modules:
+                            if len(visited) >= 160:
+                                break
+                            candidate = next((p for p in (module.with_suffix('.pyi'), module.with_suffix('.py'),
+                                                          module / '__init__.pyi', module / '__init__.py') if p.is_file()), None)
+                            if not candidate or candidate.resolve() in visited or not candidate.resolve().is_relative_to(root) or candidate.is_symlink():
+                                continue
+                            visited.add(candidate.resolve())
+                            queue.append((candidate, depth + 1, max(score, _relevance(ast.unparse(node), query))))
+                            # Bibliotecas grandes mantêm a busca limitada ao
+                            # pacote, sem percorrer o ambiente inteiro.
+                            if len(visited) >= 160:
+                                break
+                        if len(visited) >= 160:
+                            break
+                neighbors = sorted([*root.glob('*.pyi'), *root.glob('*.py')], key=lambda p: (-_relevance(p.stem, query), p.name))
+                files += [p for p in neighbors if not p.is_symlink() and p.resolve() not in visited][:MAX_FILES - len(files)]
             return list(dict.fromkeys(files))[:MAX_FILES]
         files = []
-        preferred = ['README.md', 'README.rst', 'index.d.ts', 'src/lib.rs']
+        preferred = ['index.d.ts', 'src/lib.rs', 'README.md', 'README.rst']
         try:
             metadata = json.loads(_read(source / 'package.json') or '{}')
             preferred += [metadata[key] for key in ('types', 'typings', 'module', 'main') if isinstance(metadata.get(key), str)]
@@ -426,9 +566,9 @@ class LibraryCatalog:
             seen += 1
             if seen > 80:
                 break
-            directories[:] = sorted(d for d in directories if d not in EXCLUDED_DIRS and not d.startswith('.') and
-                                    len(Path(folder).relative_to(source).parts) < 3)
-            for name in sorted(names, key=lambda n: (not n.lower().startswith(('readme', 'index')), n)):
+            directories[:] = sorted((d for d in directories if d not in EXCLUDED_DIRS and not d.startswith('.') and
+                                     len(Path(folder).relative_to(source).parts) < 3), key=lambda n: (-_relevance(n, query), n))
+            for name in sorted(names, key=lambda n: (-_relevance(n, query), not n.endswith('.d.ts'), not n.lower().startswith(('readme', 'index')), n)):
                 file = Path(folder) / name
                 if file.suffix.lower() in EXTENSIONS and not file.is_symlink() and file not in files:
                     files.append(file)
@@ -436,14 +576,15 @@ class LibraryCatalog:
                         return files
         return files
 
-    def learn(self, name: str, lang: str, source: Path | None = None, version: str | None = None) -> Reference | None:
+    def learn(self, name: str, lang: str, source: Path | None = None, version: str | None = None,
+              query: str = '') -> Reference | None:
         found = (source.expanduser().resolve(), version or 'manual', 'documentação fornecida') if source else self._resolve(name, lang)
         if not found:
             return self._manual(name, lang)
         source, detected_version, origin = found
         if not source.exists():
             raise ValueError('Fonte de documentação não encontrada: ' + str(source))
-        files = self._files(source)
+        files = self._files(source, query)
         texts = [(file, _read(file)) for file in files]
         texts = [(file, text) for file, text in texts if text]
         if not texts:
@@ -451,24 +592,32 @@ class LibraryCatalog:
                 raise ValueError('A fonte não contém documentação/código legível dentro dos limites de leitura.')
             return self._manual(name, lang)
         digest = hashlib.sha256()
-        for file, text in texts:
+        for file, text in sorted(texts, key=lambda item: str(item[0])):
             digest.update(str(file).encode())
             digest.update(text.encode())
         fingerprint = digest.hexdigest()
         cache_key = hashlib.sha256(repr((name, lang, str(source), detected_version)).encode()).hexdigest()
+        focus = hashlib.sha256(repr(sorted(_query_words(query))).encode()).hexdigest() if query else ''
         cache_file = self._directory() / (cache_key + '.json')
         try:
-            cached = Reference(**json.loads(_read(cache_file)))
-            if cached.fingerprint == fingerprint:
+            value = json.loads(_read(cache_file))
+            cached = Reference(**{k: v for k, v in value.items() if k not in ('schema', 'focus')})
+            if cached.fingerprint == fingerprint and value.get('schema') == CACHE_SCHEMA and value.get('focus', '') == focus:
                 if origin == 'documentação fornecida':
                     cache_file.touch()
                 return cached
         except (OSError, ValueError, TypeError):
             pass
         symbols = []
+        symbol_sources = {}
         docs = []
         for file, text in texts:
-            symbols += _symbols(text, lang)
+            extracted = _symbols(text, lang, query)
+            base = source.parent if source.is_file() else source
+            label = str(file.relative_to(base)) if file.is_relative_to(base) else file.name
+            for symbol in extracted:
+                symbol_sources.setdefault(symbol, label)
+            symbols += extracted
             if file.suffix.lower() in ('.md', '.rst', '.txt', '.xml'):
                 docs.append(text[:1600])
             elif file.suffix in ('.py', '.pyi'):
@@ -478,11 +627,22 @@ class LibraryCatalog:
                         docs.append(doc[:500])
                 except (SyntaxError, ValueError, RecursionError):
                     pass
+        if query:
+            symbols.sort(key=lambda line: -_symbol_relevance(line, query))
+        retained = []
+        used = 0
+        for symbol in dict.fromkeys(symbols):
+            size = len(symbol.encode('utf-8')) + len(symbol_sources[symbol].encode('utf-8'))
+            if used + size > 150_000 or len(retained) >= MAX_SYMBOLS:
+                break
+            retained.append(symbol)
+            used += size
         ref = Reference(name, lang, version or detected_version, origin, fingerprint,
-                        list(dict.fromkeys(symbols))[:100], '\n'.join(docs)[:2200], [str(f) for f, _ in texts], str(source))
+                        retained, '\n'.join(docs)[:2200], [str(f) for f, _ in texts], str(source),
+                        {s: symbol_sources[s] for s in retained})
         directory = paths.ensure_private_dir(self._directory())
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=directory, delete=False) as handle:
-            json.dump(asdict(ref), handle, ensure_ascii=False)
+            json.dump({**asdict(ref), 'schema': CACHE_SCHEMA, 'focus': focus}, handle, ensure_ascii=False)
             temporary = Path(handle.name)
         temporary.replace(cache_file)
         return ref
@@ -492,7 +652,8 @@ class LibraryCatalog:
         newest = sorted(self._directory().glob('*.json'), key=lambda p: p.stat().st_mtime_ns, reverse=True)[:400]
         for file in reversed(newest):
             try:
-                output.append(Reference(**json.loads(_read(file))))
+                value = json.loads(_read(file))
+                output.append(Reference(**{k: v for k, v in value.items() if k not in ('schema', 'focus')}))
             except (OSError, ValueError, TypeError):
                 continue
         return output
@@ -501,7 +662,8 @@ class LibraryCatalog:
         removed = 0
         for file in self._directory().glob('*.json'):
             try:
-                ref = Reference(**json.loads(_read(file)))
+                value = json.loads(_read(file))
+                ref = Reference(**{k: v for k, v in value.items() if k not in ('schema', 'focus')})
                 if ref.name == name and ref.lang == lang:
                     file.unlink()
                     removed += 1
@@ -531,7 +693,7 @@ class LibraryCatalog:
                     return self.learn(name, lang, source, ref.version)
         return None
 
-    def context(self, code: str, lang: str) -> str:
+    def context(self, code: str, lang: str, query: str = '') -> str:
         references = []
         fingerprints = set()
         modules = import_modules(code, lang)
@@ -540,14 +702,16 @@ class LibraryCatalog:
         if self.current and self.root and self.current.is_relative_to(self.root) and (
                 Project.load(self.root).allowed(self.current.relative_to(self.root).as_posix())):
             modules += [name for name in import_modules(_read(self.current), lang) if name not in modules]
+        if query:
+            modules.sort(key=lambda name: -_relevance(name, query))
         for name in modules[:12]:
             try:
-                reference = self.learn(name, lang)
+                reference = self.learn(name, lang, query=query)
             except (OSError, ValueError, RecursionError):
                 continue
             if reference and reference.fingerprint not in fingerprints:
                 fingerprints.add(reference.fingerprint)
-                references.append(reference.context())
+                references.append(reference.context(query))
                 if len(references) >= 4:
                     break
         return '\n\n'.join(references)[:8000]

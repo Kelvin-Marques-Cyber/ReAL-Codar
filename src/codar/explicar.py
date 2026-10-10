@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from codar.library_names import PYTHON_DISTRIBUTIONS
+
 
 @dataclass
 class Explicacao:
@@ -34,14 +36,7 @@ class Explicacao:
 
 
 # nome no import -> pacote no pip (quando são diferentes)
-PACOTES_PIP = {"cv2": "opencv-python-headless", "sklearn": "scikit-learn", "PIL": "pillow", "yaml": "pyyaml",
-               "bs4": "beautifulsoup4", "skimage": "scikit-image", "dotenv": "python-dotenv", "jwt": "pyjwt",
-               "Crypto": "pycryptodome", "serial": "pyserial", "usb": "pyusb", "dateutil": "python-dateutil",
-               "docx": "python-docx", "pptx": "python-pptx", "fitz": "pymupdf", "magic": "python-magic",
-               "telegram": "python-telegram-bot", "discord": "discord.py", "attr": "attrs", "OpenSSL": "pyopenssl",
-               "git": "gitpython", "zmq": "pyzmq", "mpl_toolkits": "matplotlib", "google.protobuf": "protobuf",
-               "MySQLdb": "mysqlclient", "psycopg2": "psycopg2-binary", "win32api": "pywin32", "Levenshtein": "levenshtein",
-               "sentencepiece": "sentencepiece", "tflite_runtime": "tflite-runtime"}
+PACOTES_PIP = PYTHON_DISTRIBUTIONS
 
 _PY_ERRO = re.compile(r"^(?:[\w.]+\.)?(\w+(?:Error|Exception|Interrupt|Exit|Warning)|StopIteration)(?::\s*(.*))?$")
 _PY_FRAME = re.compile(r'^\s*File "([^"]+)", line (\d+)')
@@ -529,7 +524,7 @@ _OUTRAS = [  # (regex na linha, linguagem, função que monta a explicação a p
                 f"Crie antes: {n} <- valor (e confira maiúsculas).", "variavel")),
     (re.compile(r"could not find function \"(\w+)\""), "R",
      lambda n: (f"a função {n} não existe", "Ou o nome está errado, ou a função é de um pacote que não foi carregado.",
-                f"Carregue o pacote com library(...) (instale com install.packages(\"...\")) ou confira o nome.",
+                "Carregue o pacote com library(...) (instale com install.packages(\"...\")) ou confira o nome.",
                 "import")),
     (re.compile(r"UndefVarError: `?(\w+)`? not defined"), "Julia",
      lambda n: (f"{n} não existe", f"{n} foi usado sem ter sido criado; dentro de um laço no topo do arquivo, uma "

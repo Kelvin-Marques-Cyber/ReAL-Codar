@@ -6,8 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [0.3.2] - 2026-10-10
 
-- Pedidos como `import de biblioteca de youtube` usam um fluxo limitado às importações. A finalidade da biblioteca não vira uma implementação; padrões, compositor e RAG não participam desse fluxo.
-- Catálogo offline para YouTube: yt-dlp no Python, youtubei.js no JavaScript/TypeScript, youtube_explode_dart no Dart/Flutter e YoutubeExplode no C#. A instalação permanece separada, no ambiente do projeto.
+- Pedidos como `importar bibliotecas numpy e pandas` usam um fluxo limitado às importações. A finalidade da biblioteca não vira uma implementação; padrões, compositor e RAG não participam desse fluxo.
+- Resolução offline de bibliotecas nomeadas: dados/IA/web no Python, React/Express/Axios e pacotes npm particulares, Dart/Flutter e imports de outros ecossistemas. Preserva nomes, aliases, símbolos e listas. Relaciona distribuições e módulos conhecidos como scikit-learn/sklearn, Pillow/PIL e OpenCV/cv2, inclusive após instalação.
+- Consulta de APIs prioriza assinaturas relacionadas ao pedido, identifica o arquivo de origem, segue reexportações Python e tabelas literais de exports sob demanda; encontra tipos externos em @types de React, Express e outros pacotes JS. Referências ficam limitadas por arquivos, bytes e contexto, sem executar bibliotecas.
+- Pedidos por finalidade para YouTube continuam cobertos como um dos casos de regressão, com instalação separada no ambiente do projeto.
 - A IA opcional recebe um prompt próprio e somente imports completos e validados podem ser mostrados/aplicados. Funções, classes, downloads, instalação e comandos concatenados são descartados; respostas inválidas/incompletas preservam o código original.
 - Imports nativos preservam ponto e vírgula, `#include`, nomes e aliases. SQL, YAML e Dockerfile explicam que não possuem esse tipo de importação, sem inventar código.
 - Importações com seleção preservam o código existente. Studio, VS Code, Neovim e Vim tratam respostas sem corpo; imports continuam presentes quando o usuário desliga a inserção automática no topo.

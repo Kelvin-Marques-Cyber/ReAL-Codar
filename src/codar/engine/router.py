@@ -244,7 +244,8 @@ class Router:
         from codar.libraries import LibraryCatalog, project_root
 
         catalog = LibraryCatalog(project_root(req.project_root, req.file), req.file)
-        context = await asyncio.to_thread(catalog.context, req.before + '\n' + req.selected + '\n' + req.after, lang.id)
+        context = await asyncio.to_thread(catalog.context, req.before + '\n' + req.selected + '\n' + req.after,
+                                          lang.id, intent + '\n' + req.selected)
         req = dataclasses.replace(req, library_context=context)
         import_lines = [line.strip() if is_native_import(line.strip(), lang.id) else clean_intent(line)
                         for line in intent.splitlines() if line.strip()]
@@ -288,7 +289,7 @@ class Router:
         else:
             res = await self._translate_line(intent, lang, req, known, timings, on_token, cancel)
         if res.imports:
-            learned = await asyncio.to_thread(catalog.context, '\n'.join(res.imports), lang.id)
+            learned = await asyncio.to_thread(catalog.context, '\n'.join(res.imports), lang.id, intent)
             if learned:
                 res.notes.append('API/documentação local consultada; catálogo separado por origem, versão e conteúdo')
             elif only_imports:
@@ -427,7 +428,7 @@ class Router:
             notes.append('importação resolvida nos arquivos Python do projeto, sem executar o módulo')
         elif chosen:
             code, package, source = chosen
-            notes.append(f"biblioteca YouTube: {package}; instalação separada no ambiente do projeto; fonte: {source}")
+            notes.append(f"biblioteca: {package}; instalação separada no ambiente do projeto; referência: {source}")
         elif 0 in req.stages:
             # Preserva nomes e aliases fornecidos explicitamente.
             if native:

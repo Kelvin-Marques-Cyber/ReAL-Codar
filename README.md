@@ -22,10 +22,10 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 ## Novidades da 0.3.2
 
-Pedidos de bibliotecas agora geram somente importações, com validação de escopo para todas as linguagens. O caso `import de biblioteca de youtube` retorna apenas `from yt_dlp import YoutubeDL` no Python. A geração explícita de funcionalidades permanece disponível.
+Pedidos de bibliotecas agora geram somente importações, com validação de escopo para todas as linguagens. Nomes explícitos funcionam offline: NumPy, pandas, Requests, FastAPI, PyTorch, React, Express, Axios, Dio e bibliotecas particulares, entre outras. Aliases e símbolos solicitados são preservados. A geração explícita de funcionalidades permanece disponível.
 
 - **Seu próprio código:** `importar função somar de util.py` procura a função nos arquivos reais e gera `from util import somar`. Inclui subpastas, imports relativos em pacotes e layout `src`; funções homônimas exigem a origem.
-- **Contexto de bibliotecas:** assinaturas, tipos, docstrings e documentação local entram nas próximas gerações, com catálogo por projeto, versão e conteúdo. A inspeção não executa a biblioteca. Referências fornecidas com `--source` funcionam nas 24 linguagens/formatos.
+- **Contexto de bibliotecas:** assinaturas, tipos, docstrings e documentação local entram nas próximas gerações, com catálogo por projeto, versão e conteúdo consultado. A busca segue reexportações Python, tabelas de exports sob demanda e tipos `@types` de bibliotecas JS. Prioriza APIs relacionadas ao pedido e identifica seus arquivos de origem. Referências fornecidas com `--source` funcionam nas 24 linguagens/formatos.
 - **Gerenciamento pelo CLI:** `codar libraries` consulta, verifica, remove referências e instala dependências explicitamente no ambiente do projeto, com prévia `--dry-run`. [Guia completo, exemplos e cobertura dos ecossistemas](docs/LIBRARIES.md).
 
 ## Novidades da 0.3.1
@@ -245,17 +245,24 @@ Cada Release inclui `SHA256SUMS` e `RELEASE.json` com versões, tamanhos, hashes
 Pedidos de importação têm escopo próprio em todas as linguagens. A finalidade da biblioteca não é uma ordem para implementar funções, exemplos ou downloads. Por exemplo:
 
 ```bash
-codar run "import de biblioteca de youtube" --lang python --local
-# from yt_dlp import YoutubeDL
-codar run "importar biblioteca de YouTube para ler vídeos e playlists" --lang dart --local
-# import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+codar run "importar bibliotecas numpy e pandas" --lang python --local
+# import numpy as np
+# import pandas as pd
+codar run "importar biblioteca requests para consultar uma API" --lang python --local
+# import requests
+codar run "importar classe FastAPI de fastapi" --lang python --local
+# from fastapi import FastAPI
+codar run "importar biblioteca axios" --lang typescript --local
+# import axios from 'axios';
+codar run "importar biblioteca dio" --lang dart --local
+# import 'package:dio/dio.dart';
 ```
 
-O catálogo local escolhe **yt-dlp** (Python), **youtubei.js** (JavaScript/TypeScript), **youtube_explode_dart** (Dart/Flutter) ou **YoutubeExplode** (C#). Um pacote escrito explicitamente, como `pytubefix`, mantém seu nome. A instalação é separada, no ambiente do projeto; importar não executa pip, npm, pub, consultas nem downloads.
+O reconhecimento aceita nomes, aliases, símbolos e listas de bibliotecas. Pacotes particulares com um nome de módulo válido também funcionam, sem depender de um catálogo fechado. Nomes de distribuição conhecidos são relacionados ao import correto, como **scikit-learn → sklearn**, **Pillow → PIL**, **OpenCV → cv2** e **beautifulsoup4 → bs4**. A instalação é separada, no ambiente do projeto; importar não executa pip, npm, pub, consultas remotas nem downloads.
 
-Fora do catálogo, a IA local opcional sugere somente declarações de importação. O motor valida e descarta qualquer implementação extra antes de mostrar ou aplicar o resultado. Respostas inválidas ou incompletas preservam o código existente. SQL, YAML e Dockerfile explicam que não possuem esse tipo de importação. Para pedir uma implementação, escreva explicitamente, por exemplo: `crie uma função para ler uma playlist do YouTube`.
+Quando o nome ou a entrada de uma biblioteca não puder ser resolvido, a IA local opcional sugere somente declarações de importação. O motor valida e descarta qualquer implementação extra antes de mostrar ou aplicar o resultado. Respostas inválidas ou incompletas preservam o código existente. SQL, YAML e Dockerfile explicam que não possuem esse tipo de importação. Para pedir uma implementação, escreva explicitamente, por exemplo: `crie uma função para consultar uma API com requests`.
 
-Fontes do catálogo: [yt-dlp](https://github.com/yt-dlp/yt-dlp#embedding-yt-dlp), [YouTube.js](https://ytjs.dev/guide/getting-started), [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart) e [YoutubeExplode](https://github.com/Tyrrrz/YoutubeExplode).
+Nas próximas gerações, o CODAR consulta as fontes/tipos/documentação locais dos pacotes usados no arquivo e prioriza APIs relacionadas ao pedido. A inspeção inclui reexportações de Python e tipos externos de React/Express em `@types`, sem executar os pacotes. Veja exemplos de bibliotecas, instalação, cobertura e limites em [Bibliotecas e código do projeto](docs/LIBRARIES.md).
 
 ## Depois de instalar
 

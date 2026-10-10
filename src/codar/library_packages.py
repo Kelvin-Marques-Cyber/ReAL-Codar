@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 from codar.runtimes import environment, selected
+from codar.library_names import python_distribution
 
 
 def installation_plan(root: Path, name: str, lang: str, version: str | None = None) -> list[list[str]]:
@@ -34,6 +35,7 @@ def installation_plan(root: Path, name: str, lang: str, version: str | None = No
         if name.lower() in ('tkinter', '_tkinter'):
             raise ValueError('Tkinter é componente Tcl/Tk da distribuição Python; não é instalado pelo pip. '
                              'Use as instruções do consultor do CODAR para esse runtime.')
+        name = python_distribution(name)
         chosen = selected('python', root)
         executable = Path(chosen['executable']) if chosen else None
         if executable and (executable.parent.parent / 'pyvenv.cfg').is_file():

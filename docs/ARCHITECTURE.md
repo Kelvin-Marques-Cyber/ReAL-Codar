@@ -45,6 +45,8 @@ Pedidos limitados a imports usam `engine/imports.py` e um prompt próprio, antes
 
 `libraries.py` lê fontes, tipos e documentação como dados, sem importar/executar pacotes. O catálogo privado separa projeto, linguagem, origem e versão; SHA-256 do conteúdo detecta atualizações. Os prompts de geração, tradução literal e edição recebem um contexto limitado dessas referências. O hash/contexto participa da chave do cache de tradução. Imports não usam esse cache, para revalidar a origem dos módulos próprios.
 
+`library_names.py` compartilha os nomes de distribuição/importação com o consultor de erros e a instalação. O fluxo de imports resolve nomes, aliases e símbolos explicitamente fornecidos, inclusive módulos/pacotes particulares. A consulta de APIs prioriza declarações relacionadas ao pedido e registra os arquivos de origem. Segue reexportações Python e tabelas literais de exports preguiçosos dentro do pacote; bibliotecas JS sem tipos embutidos podem usar `@types` locais, com ambas as versões na referência. Arquivos e contexto têm limites; não há execução de imports, `__getattr__` ou treinamento do modelo.
+
 A consulta ocorre fora do event loop e tem limites de leitura e contexto. Referências manuais estendem a cobertura a todos os formatos; APIs sem fontes/tipos/documentação permanecem desconhecidas. `library_packages.py` gera planos de instalação explícita com argumentos separados, executados pelo gerenciador do projeto. [Contrato e exemplos](LIBRARIES.md).
 
 ## Concorrência e cancelamento

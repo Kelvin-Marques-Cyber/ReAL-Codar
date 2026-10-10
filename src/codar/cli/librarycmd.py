@@ -9,6 +9,7 @@ import subprocess
 
 from codar import langs
 from codar.libraries import LibraryCatalog, project_root
+from codar.library_names import python_module
 
 
 def cmd_libraries(args):
@@ -37,7 +38,7 @@ def cmd_libraries(args):
                       else '\n'.join(shlex.join(command) for command in commands))
                 return 0
             install(root, commands)
-            name = args.module or (args.name.replace('-', '_') if lang == 'python' else args.name)
+            name = args.module or (python_module(args.name) if lang == 'python' else args.name)
             reference = catalog.learn(name, lang)
             print('Dependência instalada no projeto. ' + ('Referências locais atualizadas.' if reference else
                   'Fontes/tipos/documentação ainda indisponíveis; use learn --source ou --module NOME_DO_IMPORT.'))
