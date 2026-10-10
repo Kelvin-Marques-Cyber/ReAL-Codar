@@ -17,7 +17,7 @@ DEFAULT_TOML = """\
 endpoint = ""                 # "" = padrão do SO (Unix socket / Named Pipe). Ex.: "tcp://127.0.0.1:7878"
 autostart = true              # clientes sobem o daemon sob demanda
 max_connections = 64
-max_request_kb = 256
+max_request_kb = 2048          # snapshots antes/depois e propostas, limitadas por arquivo
 max_inflight_per_conn = 8
 log_level = "info"
 
@@ -71,6 +71,10 @@ enabled = true
 inline_hints = false          # injeta comentários "Dica [ID]: ..." no código gerado
 min_severity = "info"         # info | warning | error | critical
 disabled = []                 # ids de regras desativadas, ex.: ["PERF010"]
+
+[editing]
+preview = true                # revisar edições no Studio antes de aplicar
+native_validation = true      # validar com SDKs instalados; nunca executa o código gerado
 
 # Regras próprias (regex, custo zero):
 # [[audit.rules]]

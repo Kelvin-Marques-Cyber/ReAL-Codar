@@ -43,7 +43,7 @@ class FakeStage2:
             fut.set_exception(exc)
         return fut
 
-    def generate(self, builder, on_token=None, cancel=None, max_tokens=None, stop=None):
+    def generate(self, builder, on_token=None, cancel=None, max_tokens=None, stop=None, required_output=None):
         prompt = builder(0)
         self.prompts.append(prompt)
         return GenResult(self.answer, 5, len(prompt) // 3, 1.0, "stop")

@@ -4,6 +4,24 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.3.0] - 2026-10-09
+
+### Projetos e CLI
+- `codar project init|info|context|doctor|run` configura convenções, skills, comandos e requisitos de versões de SDKs por projeto.
+- `codar edit` propõe alterações em até oito arquivos, usando referências do projeto e as alterações já propostas como contexto.
+- `codar edits list|show|apply|restore|recover` oferece comparação, escolha de trechos, histórico durável e recuperação de aplicações interrompidas.
+- Snapshots, diário e verificação do texto atual protegem contra respostas atrasadas; falhas ao trocar arquivos tentam restaurar os originais sem apagar alterações externas.
+- `codar check` verifica sintaxe; `--tests`, `--analyze` e `--format` executam comandos explícitos, com timeout e saída limitada.
+- Validação Python/JSON/TOML, parsers nativos de Dart e PowerShell e gramáticas opcionais. Validador ausente é informado como não verificado.
+- Geração reserva espaço para a substituição inteira; arquivos grandes usam funções completas, sem cortar instruções. Erros de sintaxe recebem tentativas limitadas de reparo.
+
+### Plugins e editores
+- Plugins de pasta ou Git HTTPS registram origem e revisão; atualização, remoção e restauração guardam cópias privadas de recuperação.
+- Compatibilidade de Codar e dependências entre plugins, rejeição de ciclos, manifesto estrito, limites de tamanho e isolamento de pacotes inválidos.
+- Studio e VS Code mostram prévias com escolha de trechos, histórico de edições, edição de vários arquivos, verificações e gestão de plugins.
+- README com fluxo principal da CLI e guia de uso da extensão; seu número de versão passa a ser conferido pelo guard de publicação.
+- Suíte de comportamento de edição Python, testes de falhas e cancelamento, integração do cliente VS Code com daemon real e CI de edição para Windows/macOS.
+
 ## [0.2.0] - 2026-10-09
 
 ### Edição de código

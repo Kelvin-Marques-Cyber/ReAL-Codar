@@ -1,5 +1,11 @@
 # Desempenho e escolha de modelos
 
+## Avaliação de edições (0.3.0)
+
+`python -m codar.evals.editbench --out editing-results.json` usa o modelo local configurado para seis tarefas Python de correção/complemento. Verifica resposta completa, sintaxe, novas definições duplicadas e comportamento por testes executáveis: lista vazia, consumo de iterador, ordem de deduplicação, último bloco de um gerador, argumento mutável e arredondamento financeiro com Decimal. O candidato é executado em subprocesso em uma fixture temporária, com timeout e limite de memória quando o sistema o permite; isso não é um sandbox de segurança.
+
+`--reference` verifica os gabaritos das fixtures e não mede um modelo. Testes de regressão exigem que cada gabarito passe e o bug original falhe. Não há um novo percentual de acerto de IA publicado para edição: as medições antigas abaixo são de geração de código e não podem ser extrapoladas para reescrita. A suíte de projeto também testa múltiplos arquivos, aplicação parcial, falhas de disco, conflitos, recuperação, cancelamento e parsers Dart/PowerShell quando seus SDKs estão disponíveis.
+
 Todas as medições abaixo foram feitas numa máquina modesta, de propósito: se funciona aqui, funciona em quase tudo.
 
 | Peça | Modelo |

@@ -2,7 +2,7 @@
 # O layout de instalação vem de packaging/stage.sh, o mesmo dos pacotes gerados pelo nfpm.
 
 Name:           codar
-Version:        0.2.0
+Version:        0.3.0
 Release:        0
 Summary:        Tradução de pseudocódigo e intenções em código, 100% offline
 License:        Apache-2.0

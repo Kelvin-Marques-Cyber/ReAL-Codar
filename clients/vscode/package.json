@@ -2,7 +2,7 @@
   "name": "codar",
   "displayName": "Codar — intenção para código (offline)",
   "description": "Pseudocódigo e intenções em PT/EN viram código: compilador determinístico, banco de padrões verificados e SLM local (≤3 GB de RAM), com auditoria estática e consultor de projeto.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "codar",
   "private": true,
   "engines": {
@@ -76,6 +76,26 @@
       {
         "command": "codar.restartDaemon",
         "title": "Reiniciar daemon",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.editHistory",
+        "title": "Histórico de edições e recuperação",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.editProject",
+        "title": "Editar vários arquivos…",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.checkProject",
+        "title": "Verificar projeto",
+        "category": "Codar"
+      },
+      {
+        "command": "codar.managePlugins",
+        "title": "Gerenciar plugins",
         "category": "Codar"
       }
     ],
@@ -193,6 +213,11 @@
             2
           ],
           "description": "Estágios permitidos: 0 compilador, 1 banco de padrões, 2 modelo local."
+        },
+        "codar.editing.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mostra comparação e permite escolher trechos antes de substituir código existente."
         }
       }
     }

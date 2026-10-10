@@ -14,6 +14,7 @@ import random
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 import urllib.parse
 from functools import partial
@@ -39,6 +40,7 @@ from codar.studio.explorer import SKIP, Explorer
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen
+from codar.studio.review import ChoiceScreen, ReviewScreen
 from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, aplicar_paleta,
                                   gauge, paleta, tema_ansi, tema_editor)
 from codar.textutil import looks_like_intent
@@ -154,6 +156,8 @@ class Studio(App):
         Binding("ctrl+pageup", "prev_tab", "Aba anterior", show=False, priority=True),
         Binding("f5", "run_file", "Executar", priority=True),
         Binding("f6", "audit_file", "Auditar", show=False, priority=True),
+        Binding("ctrl+shift+h", "edit_history", "Histórico de edições", show=False, priority=True),
+        Binding("ctrl+shift+g", "project_edit", "Editar projeto", show=False, priority=True),
         Binding("f8", "advise", "Consultor", priority=True),
         Binding("ctrl+n", "new_file", "Novo", show=False, priority=True),
         Binding("ctrl+w", "close_tab", "Fechar aba", show=False, priority=True),
@@ -173,6 +177,9 @@ class Studio(App):
         self.forced_lang = langs.try_resolve(lang).id if lang and langs.try_resolve(lang) else None
         self.backend = StudioBackend(local=local)
         self.stages = {0, 1, 2}
+        from codar import config
+
+        self.preview_edits = bool(config.load().get("editing", {}).get("preview", True))
         self.audit_on = True
         self.hints = False
         self.last: dict | None = None
@@ -765,7 +772,75 @@ class Studio(App):
             self.notify("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA", severity="warning")
             return
         text, start_row, end_row = target.apply(body, res.get("imports", []), res["lang"], indent)
+        if target.mode == "edit" and self.preview_edits:
+            self.review_worker(res, target, editor_id, text, start_row, end_row)
+            return
+        self._commit_edit(res, target, ed, text, start_row, end_row)
+
+    @work(thread=True, group="review")
+    def review_worker(self, res, target, editor_id, text, start_row, end_row):
+        from codar.editing import validate_change
+        from codar import config
+
+        matches = list(self.call_from_thread(lambda: list(self.query(f"#{editor_id}"))))
+        ed = matches[0] if matches else None
+        name = Path(ed.path).name if ed and ed.path else "buffer" + (langs.LANGS[res["lang"]].exts or (".txt",))[0]
+        if ed and ed.path and Path(ed.path).resolve().is_relative_to(self.root):
+            name = Path(ed.path).resolve().relative_to(self.root).as_posix()
+        native = bool(config.load().get("editing", {}).get("native_validation", True))
+        check = validate_change(target.text, text, name, native=native)
+        from codar.workspace import Change
+
+        def reviewed(selected):
+            if selected is None:
+                return
+            from codar.workspace import select_hunks
+
+            chosen = select_hunks(Change(name, target.text, text), set(selected)).after
+            self.accept_review_worker(res, target, editor_id, chosen, start_row, end_row, name, native)
+        self.call_from_thread(self.push_screen, ReviewScreen([Change(name, target.text, text)], [check]), reviewed)
+
+    @work(thread=True, group="review")
+    def accept_review_worker(self, res, target, editor_id, text, start_row, end_row, name, native):
+        from codar.editing import validate_change
+
+        check = validate_change(target.text, text, name, native=native)
+        if check["status"] == "error":
+            self.call_from_thread(self.notify, "alteração preservada na prévia: " + check["message"], severity="error", timeout=8)
+            return
+        def apply():
+            matches = list(self.query(f"#{editor_id}"))
+            if not matches or matches[0].text != target.text:
+                self.notify("o arquivo mudou durante a revisão; código preservado", severity="warning")
+                return
+            self._commit_edit(res, target, matches[0], text, start_row, end_row)
+        self.call_from_thread(apply)
+
+    def _commit_edit(self, res, target, ed, text, start_row, end_row):
+        from codar.editing import validate_change
+        from codar.workspace import Change, EditStore
+
+        name = Path(ed.path).name if ed.path else "buffer.py"
+        if target.mode == "edit":
+            checked = validate_change(target.text, text, name, native=False, lang=res["lang"])
+            if checked["status"] == "error":
+                self.notify("seu código foi preservado: " + checked["message"], severity="error", timeout=8)
+                return
+        journal = None
+        if ed.path and text != target.text:
+            try:
+                name = Path(ed.path).resolve().relative_to(self.root).as_posix()
+                store = EditStore(self.root)
+                journal = store.create([Change(name, target.text, text)], "edição no Studio", status="prepared")
+            except (OSError, ValueError) as exc:
+                self.notify(f"não foi possível guardar o original: {exc}", severity="error")
+                return
         ed.replace(text, (0, 0), ed.document.end)  # corpo e imports na mesma operação de desfazer
+        if journal:
+            try:
+                store.commit_buffer(journal["id"])
+            except (OSError, ValueError) as exc:
+                self.notify(f"original guardado; confirmação do histórico falhou: {exc}", severity="warning")
         end_row = min(end_row, ed.document.line_count - 1)
         ed.move_cursor((end_row, len(ed.document.get_line(end_row))))
         ed.destacar(start_row, end_row)
@@ -776,6 +851,39 @@ class Studio(App):
         for note in res.get("notes", []):
             self.notify(note, title="codar")
 
+    def action_edit_history(self):
+        from codar.workspace import EditStore
+        from datetime import datetime
+
+        ed = self.current_editor()
+        if not ed or not ed.path:
+            self.notify("abra um arquivo salvo para consultar suas versões")
+            return
+        try:
+            name = Path(ed.path).resolve().relative_to(self.root).as_posix()
+            store = EditStore(self.root)
+            entries = store.list(file=name)
+        except (OSError, ValueError) as exc:
+            self.notify(str(exc), severity="error")
+            return
+        if not entries:
+            self.notify("esse arquivo ainda não tem edições no histórico")
+            return
+        target = EditTarget.capture(ed.text, "edit", ed.cursor_location, ((0, 0), (0, 0)))
+        editor_id = ed.id
+        def restore(identity):
+            if identity is None:
+                return
+            record = store.get(identity)
+            change = next(c for c in record["changes"] if c["path"] == name)
+            text = change["before"] or ""
+            res = {"code": text, "body": text, "imports": [], "lang": (langs.from_path(ed.path) or langs.LANGS["python"]).id,
+                   "stage": "history", "source": "histórico", "findings": [], "timings": {}, "notes": []}
+            self._apply(res, target, editor_id, "")
+        self.push_screen(ChoiceScreen("HISTÓRICO · revisar restauração do original desta edição",
+                         [(r["id"], f"{datetime.fromtimestamp(r['created']):%d/%m %H:%M} · {r['status']} · {r['intent'][:70]}")
+                          for r in entries]), restore)
+
     async def _new_buffer_with(self, res: dict) -> None:
         lang = langs.LANGS.get(res["lang"])
         ext = lang.exts[0] if lang and lang.exts else ".txt"
@@ -783,6 +891,135 @@ class Studio(App):
         ed.saved_text = ""
         self._update_tab_label(ed)
         self._show_findings(res.get("findings", []), 0, absolute=True)
+
+    def action_project_edit(self):
+        def files_entered(value):
+            if not value:
+                return
+            names = [name.strip() for name in value.split(",") if name.strip()]
+            if not 1 <= len(names) <= 8:
+                self.notify("escolha de 1 a 8 arquivos", severity="warning")
+                return
+            def intent_entered(intent):
+                if intent:
+                    self.project_edit_worker(names, intent)
+            self.push_screen(PromptScreen("O que mudar nesses arquivos?"), intent_entered)
+        ed = self.current_editor()
+        initial = Path(ed.path).resolve().relative_to(self.root).as_posix() \
+            if ed and ed.path and Path(ed.path).resolve().is_relative_to(self.root) else ""
+        self.push_screen(PromptScreen("Arquivos relativos ao projeto, separados por vírgula", value=initial), files_entered)
+
+    @work(thread=True, group="project-edit", exclusive=True)
+    def project_edit_worker(self, names, intent):
+        from codar.workspace import Change
+
+        if self.call_from_thread(self._dirty_project_files, names):
+            self.call_from_thread(self.notify, "salve os arquivos escolhidos antes de editar o projeto", severity="warning")
+            return
+        try:
+            proposal = self.backend.call("project.edit", {"root": str(self.root), "files": names, "intent": intent})
+        except Exception as exc:
+            self.call_from_thread(self.notify, str(exc), severity="error", timeout=8)
+            return
+        def reviewed(selected):
+            if selected:
+                self.project_apply_worker(proposal["id"], names, selected)
+        self.call_from_thread(self.push_screen, ReviewScreen([Change(**c) for c in proposal["changes"]],
+                              proposal["validation"]), reviewed)
+
+    def _dirty_project_files(self, names):
+        return any(ed.path and Path(ed.path).resolve().is_relative_to(self.root)
+                   and Path(ed.path).resolve().relative_to(self.root).as_posix() in names and ed.dirty
+                   for ed in self.query(CodeEditor))
+
+    @work(thread=True, group="project-edit")
+    def project_apply_worker(self, identity, names, selected):
+        if self.call_from_thread(self._dirty_project_files, names):
+            self.call_from_thread(self.notify, "o editor tem alterações novas; arquivos preservados", severity="warning")
+            return
+        try:
+            result = self.backend.call("edits.apply", {"root": str(self.root), "id": identity, "hunks": selected})
+        except Exception as exc:
+            self.call_from_thread(self.notify, str(exc), severity="error", timeout=8)
+            return
+        def refresh():
+            for change in result.get("applied_changes", []):
+                file = self.root / change["path"]
+                for ed in self.query(CodeEditor):
+                    if ed.path and Path(ed.path).resolve() == file.resolve():
+                        if ed.dirty or ed.text != change["before"]:
+                            self.notify(f"{change['path']}: disco atualizado; alterações do editor preservadas", severity="warning")
+                            continue
+                        text = change["after"] or ""
+                        ed.replace(text, (0, 0), ed.document.end)
+                        ed.saved_text = text
+                        self._update_tab_label(ed)
+            self.feed("PROJETO · alterações aplicadas e originais guardados", "green")
+            self.notify("edição de projeto aplicada; codar edits permite recuperar os originais")
+        self.call_from_thread(refresh)
+
+    def action_check_project(self):
+        def chosen(action):
+            if action:
+                self.check_project_worker([] if action == "syntax" else [action])
+        self.push_screen(ChoiceScreen("VERIFICAR PROJETO · arquivos salvos",
+                         [("syntax", "Verificar sintaxe"), ("analyze", "Executar analisador"), ("test", "Executar testes")]), chosen)
+
+    @work(thread=True, group="project-check", exclusive=True)
+    def check_project_worker(self, actions):
+        try:
+            result = self.backend.call("project.check", {"root": str(self.root), "actions": actions})
+        except Exception as exc:
+            self.call_from_thread(self.notify, str(exc), severity="error")
+            return
+        def show():
+            out = self.query_one("#output", RichLog)
+            self.query_one("#panel", TabbedContent).active = "tab-output"
+            for item in result["files"]:
+                out.write(Text(f"{item['path']}: {item['status']} {item.get('message', '')}"))
+            for item in result["commands"]:
+                out.write(Text(" ".join(item["command"]) + "\n" + item["message"]))
+            self.notify(f"verificação {'sem erros detectados' if result['ok'] else 'falhou'}; "
+                        f"{result['skipped']} não verificadas", severity="information" if result["ok"] else "warning")
+        self.call_from_thread(show)
+
+    def action_plugins(self):
+        from codar.plugin_loader import discover
+        from codar import config
+
+        plugins = discover({}).plugins
+        disabled = set(config.load()["plugins"].get("disabled", []))
+        choices = [("__install__", "Instalar plugin de pasta local ou Git HTTPS…")]
+        choices += [(p.name, f"{p.name} {p.version} · {'desativado' if p.name in disabled else 'erro' if p.errors else 'ativo'}")
+                    for p in plugins]
+        def selected(name):
+            if name == "__install__":
+                self.push_screen(PromptScreen("Pasta do plugin ou URL Git HTTPS"),
+                                 lambda source: self._plugin_command("install", source) if source else None)
+            elif name:
+                plugin = next(p for p in plugins if p.name == name)
+                options = [("enable" if name in disabled else "disable", "Ativar" if name in disabled else "Desativar"),
+                           ("info", "Ver detalhes e erros")]
+                if not plugin.builtin:
+                    options += [("update", "Atualizar da origem registrada"), ("restore", "Recuperar versão anterior"),
+                                ("remove", "Remover e guardar cópia")]
+                self.push_screen(ChoiceScreen(name, options), lambda action: self._plugin_command(action, name) if action else None)
+        self.push_screen(ChoiceScreen("PLUGINS", choices), selected)
+
+    def _plugin_command(self, action, value):
+        self.plugin_command_worker([sys.executable, "-m", "codar", "plugins", action, value])
+
+    @work(thread=True, group="plugins", exclusive=True)
+    def plugin_command_worker(self, command):
+        from codar.validation import run_command
+
+        result = run_command(command, self.root, 180)
+        def show():
+            self.query_one("#output", RichLog).write(Text(result["message"]))
+            self.query_one("#panel", TabbedContent).active = "tab-output"
+            self.notify("operação de plugins concluída" if result["status"] == "ok" else result["message"][-300:],
+                        severity="information" if result["status"] == "ok" else "error")
+        self.call_from_thread(show)
 
     def _show_findings(self, findings: list[dict], offset: int, absolute: bool = False, focar: bool = True) -> None:
         table = self.query_one("#problems", DataTable)
@@ -1114,6 +1351,19 @@ class Studio(App):
             return
         if ed.dirty:
             self._write(ed)
+        from codar.project import Project
+        from codar.validation import default_command
+
+        try:
+            project = Project.load(self.root)
+            if "run" in project.commands:
+                relative = Path(ed.path).resolve().relative_to(self.root).as_posix()
+                command = default_command(project, "run", relative)
+                self.run_command(subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command), cwd=self.root)
+                return
+        except (OSError, ValueError) as exc:
+            self.notify(str(exc), severity="error")
+            return
         if Path(ed.path).suffix.lower() in (".html", ".htm"):  # "rodar" uma página é abrir a prévia
             self.action_celular()
             return
@@ -1467,6 +1717,10 @@ class Studio(App):
             ("Codar: Auditar arquivo", "F6 — segredos, segurança, desempenho, memória", self.action_audit_file),
             ("Codar: Executar arquivo", "F5 — roda no terminal integrado", self.action_run_file),
             ("Codar: Consultor de projeto", "F8 — sugestões com opções executáveis", self.action_advise),
+            ("Codar: Editar vários arquivos…", "Ctrl+Shift+G — proposta com prévia", self.action_project_edit),
+            ("Codar: Histórico de edições", "Ctrl+Shift+H — recuperar uma versão", self.action_edit_history),
+            ("Codar: Verificar projeto", "sintaxe, analisadores e testes", self.action_check_project),
+            ("Codar: Gerenciar plugins", "instalação, atualização e recuperação", self.action_plugins),
             ("Codar: Abrir no VS Code", "Ctrl+O — alterna para o editor gráfico", self.action_open_vscode),
             ("Codar: Trocar linguagem…", "força a linguagem alvo", self.action_set_lang),
             ("Codar: Salvar último resultado como padrão…", "ensina o banco de padrões", self.action_save_pattern),

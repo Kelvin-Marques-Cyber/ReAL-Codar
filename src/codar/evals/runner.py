@@ -19,9 +19,10 @@ from pathlib import Path
 from codar._compat import tomllib
 
 _SANDBOX = r'''
-import os, resource, sys
+import os, sys
 limite = int(os.environ.get("CODAR_SANDBOX_MB", "768")) << 20  # memória virtual do teste (bibliotecas pedem mais)
 try:
+    import resource  # disponível em Unix; o subprocesso também funciona no Windows
     resource.setrlimit(resource.RLIMIT_AS, (limite, limite))
 except Exception:
     pass

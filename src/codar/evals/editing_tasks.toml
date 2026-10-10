@@ -1,0 +1,80 @@
+# Fixtures de edição; gabaritos verificam os testes, sem contar como acerto de IA.
+[[task]]
+id = "empty-average"
+intent = "Corrija media para rejeitar uma lista vazia com ValueError, preserve a assinatura e a constante do módulo."
+before = "UNIT = 'points'\n"
+selected = "def media(values):\n    return sum(values) / len(values)\n"
+reference = "def media(values):\n    if not values:\n        raise ValueError('empty')\n    return sum(values) / len(values)\n"
+test = '''
+assert UNIT == 'points' and media([2, 4]) == 3
+try:
+    media([])
+except ValueError:
+    pass
+else:
+    raise AssertionError('lista vazia aceita')
+'''
+
+[[task]]
+id = "iterator-total"
+intent = "Complete total para consumir um iterador uma única vez e somar preços de registros ativos. Preserve registros e o filtro active."
+selected = "def total(records):\n    active = (r for r in records if r['active'])\n    count = len(list(active))\n    return sum(r['price'] for r in active)\n"
+reference = "def total(records):\n    return sum(r['price'] for r in records if r['active'])\n"
+after = "\nDEFAULT = 42\n"
+test = '''
+records = [{'active': True, 'price': 5}, {'active': False, 'price': 20}, {'active': True, 'price': 7}]
+assert total(iter(records)) == 12 and total(iter([])) == 0
+assert records[1]['price'] == 20 and DEFAULT == 42
+'''
+
+[[task]]
+id = "ordered-unique"
+intent = "Corrija unique para remover duplicatas preservando a ordem da primeira ocorrência. Não ordene nem altere a entrada."
+selected = "def unique(items):\n    return sorted(set(items))\n"
+reference = "def unique(items):\n    return list(dict.fromkeys(items))\n"
+test = '''
+items = [3, 1, 3, 2, 1]
+assert unique(items) == [3, 1, 2] and items == [3, 1, 3, 2, 1]
+assert unique([]) == [] and unique(['b', 'a', 'b']) == ['b', 'a']
+'''
+
+[[task]]
+id = "finish-generator"
+intent = "Complete chunks para produzir todos os grupos incluindo o último incompleto, e rejeite size zero ou negativo com ValueError."
+selected = "def chunks(values, size):\n    for i in range(0, len(values) - size, size):\n        yield values[i:i + size]\n"
+reference = "def chunks(values, size):\n    if size <= 0:\n        raise ValueError('size')\n    for i in range(0, len(values), size):\n        yield values[i:i + size]\n"
+test = '''
+assert list(chunks([1, 2, 3, 4, 5], 2)) == [[1, 2], [3, 4], [5]]
+assert list(chunks([], 2)) == []
+for size in (0, -1):
+    try:
+        list(chunks([1], size))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('size inválido aceito')
+'''
+
+[[task]]
+id = "mutating-default"
+intent = "Corrija o argumento mutável padrão de collect. Chamadas sem bucket devem ser independentes e bucket fornecido deve continuar sendo atualizado."
+before = "SENTINEL = {'untouched': True}\n"
+selected = "def collect(value, bucket=[]):\n    bucket.append(value)\n    return bucket\n"
+reference = "def collect(value, bucket=None):\n    if bucket is None:\n        bucket = []\n    bucket.append(value)\n    return bucket\n"
+test = '''
+assert collect(1) == [1] and collect(2) == [2]
+bucket = [3]
+assert collect(4, bucket) is bucket and bucket == [3, 4]
+assert SENTINEL == {'untouched': True}
+'''
+
+[[task]]
+id = "decimal-rounding"
+intent = "Corrija cents para converter o preço recebido como string para centavos usando Decimal e ROUND_HALF_UP; mantenha os imports existentes e não use float."
+before = "from decimal import Decimal, ROUND_HALF_UP\nCURRENCY = 'BRL'\n"
+selected = "def cents(price):\n    return int(float(price) * 100)\n"
+reference = "def cents(price):\n    return int((Decimal(price) * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))\n"
+test = '''
+assert cents('1.005') == 101 and cents('0.29') == 29
+assert cents('-1.005') == -101 and CURRENCY == 'BRL'
+'''

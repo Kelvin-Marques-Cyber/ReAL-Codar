@@ -22,6 +22,42 @@ codar restart                   # o daemon relê os plugins
 
 Um plugin desativa-se com `[plugins] disabled = ["nome"]` no `config.toml`. Plugins do usuário não executam Python, a menos que você ative `[plugins] allow_python = true`.
 
+## Instalação, compatibilidade e recuperação
+
+```bash
+codar plugins validate ./meu-plugin
+codar plugins install ./meu-plugin
+codar plugins install https://github.com/SEU-USUARIO/SEU-REPO.git --ref v1.0.0 --subdir plugins/meu-plugin
+codar plugins info meu-plugin
+codar plugins update meu-plugin
+codar plugins update meu-plugin ./outra-origem
+codar plugins disable meu-plugin
+codar plugins enable meu-plugin
+codar plugins remove meu-plugin
+codar plugins restore meu-plugin
+```
+
+O exemplo Git requer uma URL, referência e subpasta existentes. `--ref` aceita branch, tag ou SHA; `info` mostra a revisão obtida. Sem referência fixa, atualizar busca novamente a branch padrão. A instalação valida os TOMLs, nomes, versões, regex e dependências antes de publicar. Recusa links simbólicos e limita o pacote a 1000 arquivos, 20 MB totais, 8 MB por arquivo e 2 MB por TOML.
+
+Um manifesto pode declarar requisitos:
+
+```toml
+[plugin]
+name = "meu-plugin"
+version = "1.0.0"
+description = "Convenções da equipe"
+requires_codar = ">=0.3.0,<0.4.0"
+# requires_plugins = { outro_plugin = ">=1.0.0,<2.0.0" }
+```
+
+As faixas aceitam comparações numéricas `>=`, `>`, `<=`, `<`, `==` e `!=`, separadas por vírgula. Não aceitam expressões npm (`^`, `~`, curingas). Instale dependências antes do pacote; ciclos e dependências indisponíveis impedem sua ativação. Nomes embutidos são reservados; um plugin próprio pode sobrescrever ids de padrões existentes sem usar o nome do pacote embutido.
+
+Atualizar valida uma cópia preparada e preserva a instalação anterior se falhar. Se uma instalação gerenciada foi editada diretamente, recusa a atualização para guardar suas mudanças. Mantenha as alterações no repositório de origem ou use a pasta editada como origem de outro plugin. Instalações antigas sem metadados aceitam uma origem explícita.
+
+Atualização e remoção guardam versões nos dados privados do Codar; `restore` recupera a cópia mais recente, mantendo a origem original registrada. Remoção é bloqueada enquanto plugins ativos dependem dele. Um diário recupera trocas interrompidas no próximo início do daemon ou na próxima operação de gestão. Operações pedem recarga ao daemon já iniciado; se não for possível, a CLI pede `codar restart`.
+
+Pacotes declarativos inválidos não entram no banco e não desativam os demais. `allow_python=true` autoriza extensões locais de confiança: exceções comuns de importação são relatadas, mas código Python pode travar, executar comandos ou falhar em código nativo. Essa opção não cria sandbox ou isolamento de processo.
+
 ## Padrões
 
 Um padrão é uma solução com boas práticas para um pedido de funcionalidade, em uma ou mais linguagens.
@@ -126,7 +162,7 @@ Para Python há também regras sobre a árvore sintática (`src/codar/audit/pyth
 
 ## Skills
 
-Consulte as diretrizes carregadas com `codar skills list -l dart` ou `codar skills show flutter.widgets`. Para instalar um plugin local com seus padrões, regras e `skills.toml`, execute `codar plugins install ./pasta-do-plugin` e depois `codar restart`. A pasta precisa ter `plugin.toml`; arquivos inválidos, links simbólicos e destinos existentes são recusados. A validação não executa `plugin.py`.
+Consulte as diretrizes com `codar skills list -l dart` ou `codar skills show flutter.widgets`. Instale um plugin com `codar plugins install ./pasta-do-plugin`; a pasta precisa ter `plugin.toml`. Em `codar.toml`, use `[project] skills = ["flutter.widgets"]` para ativar uma skill por projeto. Ids inexistentes são recusados durante a geração. A validação do pacote não executa seu `plugin.py`.
 
 Skills são diretrizes curtas que entram no prompt da IA quando ela gera código livre (não no modo literal). Ficam em inglês porque modelos pequenos seguem instruções em inglês com mais consistência:
 

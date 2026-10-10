@@ -519,7 +519,7 @@ def cmd_studio(args) -> int:
         if _terminal_interativo() and (extras.packaged() or extras.in_venv()):
             # em vez de cair no REPL sem explicar: oferece instalar e abre o Studio em seguida
             print(hud.pill("STUDIO", "orange") + " " + hud.c("o Studio (IDE no terminal) ainda não está instalado.", "text"))
-            print(hud.c("  ele e a IA local vêm do PyPI e ficam só no seu usuário (~60 MB, pacotes já compilados)",
+            print(hud.c("  Studio, gramáticas e IA local ficam no seu usuário; o modelo é baixado separadamente",
                         "dim"))
             if _perguntar_sim("Instalar agora?") and extras.install(list(extras.EXTRAS)) == 0:
                 _reabrir_studio(args)
@@ -640,6 +640,9 @@ def build_parser() -> argparse.ArgumentParser:
     from codar.cli import modelcmd
 
     modelcmd.register(sub)
+    from codar.cli import projectcmd
+
+    projectcmd.register(sub)
 
     p = sub.add_parser("advise", help="consultor de projeto: sugestões com opções executáveis")
     p.add_argument("path", nargs="?", default=".")
@@ -710,9 +713,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-l", "--lang")
     p.set_defaults(fn=lambda a: __import__("codar.cli.skillcmd", fromlist=["x"]).cmd_skills(a))
 
-    p = sub.add_parser("plugins", help="plugins: list | new NOME | install PASTA")
-    p.add_argument("action", choices=["list", "new", "install"])
+    p = sub.add_parser("plugins", help="instalar, atualizar, verificar e recuperar plugins")
+    p.add_argument("action", choices=["list", "new", "install", "update", "remove", "restore", "validate", "enable", "disable", "info"])
     p.add_argument("name", nargs="?")
+    p.add_argument("source", nargs="?")
+    p.add_argument("--ref", help="branch, tag ou commit da origem Git")
+    p.add_argument("--subdir", help="pasta do plugin dentro do repositório")
     p.set_defaults(fn=lambda a: __import__("codar.cli.plugincmd", fromlist=["x"]).cmd_plugins(a))
 
     p = sub.add_parser("vscode", help="alterna para o VS Code (abre arquivo/linha)")

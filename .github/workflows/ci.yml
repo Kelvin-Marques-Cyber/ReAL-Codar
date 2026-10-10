@@ -42,6 +42,22 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: python -m codar.evals.patternlint
 
+  plataformas:
+    name: Edição e recuperação (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[studio,syntax]" pytest
+      - run: python packaging/check_versions.py
+      - run: python -m pytest tests/test_project_context.py tests/test_workspace_history.py tests/test_plugin_lifecycle.py tests/test_edit_pipeline.py tests/test_edit_budget.py tests/test_project_validation.py tests/test_editbench.py
+
   editores:
     name: Plugins de Neovim e Vim
     runs-on: ubuntu-latest
@@ -57,6 +73,37 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq vim
       - run: pip install -e .
       - run: tests/clients/run.sh "$(command -v codar)"
+
+  vscode:
+    name: Cliente VS Code (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CODAR_HOME: ${{ github.workspace }}/.codar-client-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: clients/vscode/package-lock.json
+      - run: pip install -e .
+      - run: codar config set model.backend none
+      - run: codar start
+      - run: npm ci
+        working-directory: clients/vscode
+      - run: npm run compile
+        working-directory: clients/vscode
+      - run: npm test
+        working-directory: clients/vscode
+      - run: codar stop
+        if: always()
 
   pacotes:
     name: Pacotes (deb, rpm, apk, Arch) instalados em contêineres

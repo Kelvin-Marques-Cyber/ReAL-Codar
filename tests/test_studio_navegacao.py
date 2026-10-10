@@ -42,6 +42,7 @@ def _studio(tmp_path: Path, monkeypatch, arquivos: dict[str, str]):
     for nome, texto in arquivos.items():
         (tmp_path / nome).write_text(texto, encoding="utf-8")
     app = Studio(tmp_path)
+    app.preview_edits = False  # os cenários de revisão têm sua própria suíte
     app.backend = Backend()
     return app
 

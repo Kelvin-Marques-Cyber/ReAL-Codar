@@ -26,6 +26,7 @@ def check(root: Path, tag: str | None = None) -> list[str]:
         "packaging/debian/changelog": r"\Acodar \(([^)]+)-\d+\)",
         "clients/powershell/Codar/Codar.psd1": r"ModuleVersion\s*=\s*'([^']+)'",
         "packaging/codar.1": r'"codar ([^"]+)"',
+        "README.md": r"Versão do código:\s*(\d+\.\d+\.\d+)",
     }.items():
         match = re.search(pattern, read(path), re.MULTILINE)
         versions[path] = match.group(1) if match else None

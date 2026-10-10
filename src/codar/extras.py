@@ -20,6 +20,9 @@ CPU_WHEELS = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
 EXTRAS: dict[str, dict] = {
     "studio": {"module": "textual", "requirements": ["textual[syntax]>=1.0"], "pip_args": [],
                "what": "Studio (IDE no terminal)"},
+    "syntax": {"module": "tree_sitter_dart", "requirements": ["tree-sitter>=0.23", "tree-sitter-dart",
+               "tree-sitter-javascript", "tree-sitter-typescript", "tree-sitter-go", "tree-sitter-rust"],
+               "pip_args": [], "what": "Gramáticas para validação e edição por funções"},
     # --only-binary: sem pacote pronto para esta máquina, falha na hora em vez de compilar o llama.cpp (10+ minutos
     # de CPU a 100%, ruim para notebooks)
     "llm": {"module": "llama_cpp", "requirements": ["llama-cpp-python>=0.3.16"],

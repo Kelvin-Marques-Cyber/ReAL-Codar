@@ -98,6 +98,12 @@ class Daemon:
         self.dcfg = cfg["daemon"]
         self.limit = int(self.dcfg.get("max_request_kb", 256)) * 1024
         self.memguard = MemGuard(cfg["memory"])
+        from codar.plugin_manager import recover_plugins
+
+        try:
+            recover_plugins()
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            log.warning("recuperação de plugins pendente: %s", exc)
         self.bundle = discover(cfg)
         paths.data_dir().mkdir(parents=True, exist_ok=True)
         self.store = PatternStore(paths.db_path())
@@ -121,6 +127,20 @@ class Daemon:
             "rules.list": self.m_rules, "skills.list": self.m_skills, "langs.list": self.m_langs,
             "advise": self.m_advise, "plugins.list": self.m_plugins,
         }
+        from codar.editing import METHODS
+
+        for method in METHODS:
+            self.methods[method] = self._workspace_handler(method)
+
+    def _workspace_handler(self, method):
+        async def handler(conn, p, rid):
+            from codar.editing import workspace_call
+
+            try:
+                return await workspace_call(self.router, method, p, p.get("_cancel"))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise RpcError(INVALID_PARAMS, str(exc)) from exc
+        return handler
 
     def _needle(self):
         if not self.cfg.get("needle", {}).get("enabled"):
@@ -329,6 +349,7 @@ class Daemon:
         return {"ok": True}
 
     async def m_reload(self, conn, p, rid):
+        self.cfg["plugins"] = config.load()["plugins"]
         self.bundle = discover(self.cfg)
         changed = self.store.sync(self.bundle.patterns, self.bundle.fingerprint, force=bool(p.get("force")))
         self.router = Router(self.cfg, self.store, self.bundle, self.stage2, needle=self.router.needle)

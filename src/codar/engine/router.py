@@ -98,6 +98,10 @@ class Request:
     before: str = ""
     after: str = ""
     selected: str = ""
+    project_root: str | None = None
+    project_context: str = ""
+    project_guidance: list[str] = field(default_factory=list)
+    project_skills: list[str] = field(default_factory=list)
     indent: str = ""
     indent_unit: str | None = None
     stages: tuple[int, ...] = (0, 1, 2)
@@ -113,6 +117,7 @@ class Request:
         return cls(intent=str(p.get("intent", "")), lang=p.get("lang") or default_lang,
                    lang_explicit=bool(p.get("lang")), file=ctx.get("file"), before=str(ctx.get("before", ""))[-6000:],
                    after=str(ctx.get("after", ""))[:3000], selected=str(ctx.get("selected", "")),
+                   project_root=ctx.get("root"),
                    indent=str(ctx.get("indent", "")), indent_unit=ctx.get("indent_unit"), stages=stages,
                    audit=bool(opts.get("audit", True)), hints=bool(opts.get("hints", False)),
                    mode=str(opts.get("mode", "auto")))
@@ -195,7 +200,8 @@ class Router:
     # ------------------------------------------------------------------ cache
     def _key(self, req: Request, lang: str, intent: str) -> str:
         # O compilador também depende das variáveis do contexto. Caixa e aspas da intenção importam.
-        ctx = hashlib.sha256(repr((req.before, req.after, req.selected)).encode()).hexdigest()
+        ctx = hashlib.sha256(repr((req.before, req.after, req.selected, req.project_context,
+                                  req.project_guidance, req.project_skills)).encode()).hexdigest()
         return "|".join([intent, lang, req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
                          str(req.hints), str(req.audit), req.mode, ctx])
 
@@ -227,6 +233,8 @@ class Router:
         intent = clean_intent(req.intent) if "\n" not in req.intent.strip() else req.intent.strip("\n")
         intent, hinted = extract_lang_hint(intent)
         lang = self._resolve_lang(req, hinted)
+        if req.mode == "edit" and not req.project_context:
+            req = await asyncio.to_thread(self._with_project, req, intent)
         key = self._key(req, lang.id, intent)
         if (hit := self.cache_get(key)) is not None:
             res = Result(**{**hit.as_dict(), "cached": True})
@@ -250,6 +258,26 @@ class Router:
             self.cache_put(key, res)
         self.metrics.record(res, intent)
         return res
+
+    @staticmethod
+    def _with_project(req: Request, intent: str) -> Request:
+        from codar.project import Project, find_root
+
+        root = req.project_root or find_root(req.file)
+        if not root:
+            return req
+        try:
+            project = Project.load(root)
+            current = ""
+            if req.file:
+                from pathlib import Path
+
+                current = Path(req.file).resolve().relative_to(project.root).as_posix()
+            context = project.context(intent, current)
+            return dataclasses.replace(req, project_context=context["context"], project_guidance=project.guidance,
+                                       project_skills=project.skills)
+        except (OSError, ValueError) as exc:
+            raise TranslateError(f"contexto de projeto inválido: {exc}") from exc
 
     def _resolve_lang(self, req: Request, hinted: str | None) -> langs.Lang:
         if req.lang_explicit and req.lang:
@@ -307,11 +335,12 @@ class Router:
             return build_prompt(self.stage2.fmt, lang.name, lang.fence, intent, selected=req.selected,
                                 context=req.before[-3000:] if level == 0 else "",
                                 after=req.after[:3000] if level == 0 else "",
-                                guidance=self._guidance(guidance_task, lang.id))
+                                project=req.project_context if level < 2 else "",
+                                guidance=self._guidance(guidance_task, lang.id, req.project_skills) + req.project_guidance)
 
         t = time.perf_counter()
         gen = await asyncio.wrap_future(self.stage2.submit(self.stage2.generate, builder, on_token=on_token,
-                                                           cancel=cancel))
+                                                           cancel=cancel, required_output=req.selected))
         timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = gen.tokens
         # Não "conserta" Python removendo o fim do arquivo nem poda imports usados fora da seleção.
@@ -418,7 +447,7 @@ class Router:
             ref_pattern = None
         # 2b: gerador ancorado (RAG + skills)
         reference = self._reference(ref_pattern, lang.id) if ref_pattern else None
-        guidance = self._guidance(intent, lang.id)
+        guidance = self._guidance(intent, lang.id, req.project_skills) + req.project_guidance
         context = "\n".join(req.before.rstrip("\n").split("\n")[-int(self.rcfg.get("context_lines", 12)):]) \
             if req.before.strip() else ""
         fmt = self.stage2.fmt
@@ -428,7 +457,8 @@ class Router:
             if ref and level == 1:
                 ref = (ref[0], ref[1], "\n".join(ref[2].split("\n")[:30]))
             return build_prompt(fmt, lang.name, lang.fence, intent, guidance=guidance if level < 3 else guidance[:2],
-                                reference=ref, context=context if level == 0 else "", after=req.after[:3000])
+                                reference=ref, context=context if level == 0 else "", after=req.after[:3000],
+                                project=req.project_context if level < 2 else "")
 
         t = time.perf_counter()
         try:
@@ -502,17 +532,21 @@ class Router:
         fence = langs.LANGS[code_lang].fence if code_lang in langs.LANGS else code_lang
         return (f"{p.title} [{code_lang}]", fence, code)
 
-    def _guidance(self, intent: str, lang: str) -> list[str]:
+    def _guidance(self, intent: str, lang: str, forced: list[str] | None = None) -> list[str]:
         concepts = {_norm(c) for _, cs, _ in analyze(intent) for c in cs}
+        forced = forced or []
+        unknown = set(forced) - {s.id for s in self.skills}
+        if unknown:
+            raise TranslateError("skills de projeto não encontradas: " + ", ".join(sorted(unknown)))
         scored = []
         for s in self.skills:
             if s.langs and lang not in s.langs:
                 continue
             base = s.id.endswith(".base")
             overlap = len(s.concepts & concepts)
-            if base or overlap:
-                scored.append((2 if base else 1, overlap, s))
-        scored.sort(key=lambda x: (x[0] == 2, x[1]), reverse=True)
+            if base or overlap or s.id in forced:
+                scored.append((3 if s.id in forced else 2 if base else 1, overlap, s))
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
         out: list[str] = []
         for _, _, s in scored[:4]:
             for g in s.guidance:

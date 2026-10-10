@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
 import * as net from "node:net";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 
 const { CodarClient, RpcError, discoverEndpoint, parseEndpoint } = createRequire(import.meta.url)("../out/client.js");
 
@@ -13,6 +16,51 @@ test("parseEndpoint entende unix, pipe e tcp", () => {
 });
 
 const ep = discoverEndpoint();
+const { applyHunks } = createRequire(import.meta.url)("../out/changes.js");
+
+test("prévia e histórico da extensão usam os mesmos intervalos do daemon", { skip: !ep && "daemon parado" }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "codar projeto á "));
+  const client = new CodarClient({ autoStart: false });
+  try {
+    const before = Array.from({ length: 30 }, (_, i) => `v${i}=${i}\r\n`).join("");
+    const after = before.replace("v1=1\r\n", "v1=101\r\n").replace("v28=28\r\n", "v28=128\r\n");
+    await fs.writeFile(path.join(root, "app.py"), before);
+    const info = await client.call("project.info", { root });
+    assert.deepEqual(info.files, ["app.py"]);
+    const largeBefore = `value='${"a".repeat(160000)}'\n`, largeAfter = `value='${"b".repeat(160000)}'\n`;
+    const largePreview = await client.call("edits.preview", { root, path: "app.py", before: largeBefore, after: largeAfter });
+    assert.equal(applyHunks({ path: "app.py", before: largeBefore, after: largeAfter }, largePreview.hunks,
+      new Set(largePreview.hunks.map(h => h.id))), largeAfter);
+    const preview = await client.call("edits.preview", { root, path: "app.py", before, after });
+    assert.equal(preview.hunks.length, 2);
+    const change = { path: "app.py", before, after };
+    assert.equal(applyHunks(change, preview.hunks, new Set(preview.hunks.map(h => h.id))), after);
+    const selected = applyHunks(change, preview.hunks, new Set([preview.hunks[0].id]));
+    assert.equal(selected, before.replace("v1=1\r\n", "v1=101\r\n"));
+    assert.equal((await client.call("edits.validate", { root, path: "app.py", before, after: selected })).status, "ok");
+    const prepared = await client.call("edits.prepare", { root, path: "app.py", before, after: selected, intent: "corrija" });
+    await client.call("edits.commit", { root, id: prepared.id });
+    await fs.writeFile(path.join(root, "app.py"), selected);
+    await client.call("edits.restore", { root, id: prepared.id });
+    assert.equal(await fs.readFile(path.join(root, "app.py"), "utf8"), before);
+    assert.equal((await client.call("edits.list", { root }))[0].status, "restored");
+    assert.equal((await client.call("edits.validate", { root, path: "app.py", before, after: "def broken(:" })).status, "error");
+    await assert.rejects(client.call("edits.prepare", { root, path: "../escape.py", before, after }), e => e.code === -32602);
+    await assert.rejects(client.call("project.edit", { root, files: "app.py", intent: "corrija" }), e => e.code === -32602);
+    assert.equal((await client.call("ping")).pong, true);
+  } finally {
+    client.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("seleção de alterações suporta criação, remoção e linha sem quebra final", () => {
+  const h = { id: "a:0", path: "a", start: 1, diff: "", opcodes: [["replace", 0, 1, 0, 1]] };
+  assert.equal(applyHunks({ path: "a", before: "x=1", after: "x=2" }, [h], new Set([h.id])), "x=2");
+  assert.equal(applyHunks({ path: "a", before: null, after: "x=2" }, [h], new Set()), null);
+  assert.equal(applyHunks({ path: "a", before: "x=1", after: null }, [h], new Set([h.id])), null);
+});
+
 test("daemon: ping, translate, audit, stats, erro e cancelamento", { skip: !ep && "daemon parado (rode codar start)" }, async () => {
   const c = new CodarClient({ autoStart: false });
   await c.connect();

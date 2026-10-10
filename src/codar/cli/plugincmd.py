@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import sys
-import re
-import shutil
-import tempfile
+import json
 from pathlib import Path
 
 from codar import config, paths
-from codar.plugin_loader import discover, load_plugin
+from codar.plugin_loader import discover
 
 TEMPLATE_PATTERN = '''# Padrões = ferramentas verificadas que a IA reutiliza em vez de escrever código do zero.
 [[pattern]]
@@ -67,8 +65,8 @@ def cmd_plugins(args) -> int:
                 f"{len(p.patterns):3} padrões · {len(p.skills):2} skills · {len(p.rules):3} regras · "
                 f"{len(p.advice):2} conselhos", "text") + ("  " + hud.c(f"{len(p.errors)} erro(s)", "red") if p.errors else ""))
         return 0
-    if args.action == "install":
-        return install_plugin(args.name)
+    if args.action not in ("new", "list"):
+        return manage_plugin(args)
     if not args.name or not args.name.replace("-", "").replace("_", "").isalnum():
         print("uso: codar plugins new <nome>", file=sys.stderr)
         return 1
@@ -90,29 +88,64 @@ def cmd_plugins(args) -> int:
 
 
 def install_plugin(directory: str | None) -> int:
-    """Instala um plugin local validado, sem sobrescrever outro nem executar plugin.py."""
+    """Interface preservada para scripts que instalam uma pasta local."""
+    from codar.plugin_manager import install_plugin as install
+
     try:
-        source = Path(directory or "").expanduser().resolve()
-        if not directory or not (source / "plugin.toml").is_file():
+        if not directory:
             raise ValueError("uso: codar plugins install <pasta-com-plugin.toml>")
-        plugin = load_plugin(source, builtin=False)
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", plugin.name):
-            raise ValueError("nome do plugin inválido")
-        if plugin.errors:
-            raise ValueError("plugin inválido: " + "; ".join(plugin.errors))
-        if any(file.is_symlink() for file in source.rglob("*")):
-            raise ValueError("plugins locais devem conter arquivos próprios, sem links simbólicos")
-        parent = paths.user_plugins_dir()
-        parent.mkdir(parents=True, exist_ok=True)
-        destination = parent / plugin.name
-        if destination.exists():
-            raise ValueError(f"já existe: {destination}; seus arquivos foram preservados")
-        with tempfile.TemporaryDirectory(prefix=".install-", dir=parent) as temporary:
-            stage = Path(temporary) / plugin.name
-            shutil.copytree(source, stage, ignore=shutil.ignore_patterns(".git", "__pycache__", ".venv", "node_modules"))
-            stage.rename(destination)
-        print(f"plugin {plugin.name} instalado: {destination}")
+        result = install(directory)
+        print(f"plugin {result['name']} instalado: {paths.user_plugins_dir() / result['name']}")
         print("rode `codar restart` para carregar padrões, skills e regras")
+        return 0
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"codar: {exc}", file=sys.stderr)
+        return 1
+
+
+def manage_plugin(args) -> int:
+    from codar import plugin_manager as manager
+
+    try:
+        if not args.name:
+            raise ValueError("informe o nome, pasta ou URL do plugin")
+        if args.action == "install":
+            result = manager.install_plugin(args.name, ref=args.ref, subdir=args.subdir)
+        elif args.action == "update":
+            result = manager.update_plugin(args.name, args.source, ref=args.ref, subdir=args.subdir)
+        elif args.action == "remove":
+            result = manager.remove_plugin(args.name)
+        elif args.action == "restore":
+            result = manager.restore_plugin(args.name)
+        elif args.action == "validate":
+            plugin = manager.validate_plugin(Path(args.name).expanduser().resolve())
+            result = {"name": plugin.name, "version": plugin.version, "valid": True}
+        elif args.action in ("enable", "disable"):
+            name = manager.valid_name(args.name)
+            available = {p.name for p in discover({}).plugins}
+            if name not in available:
+                raise ValueError("plugin não encontrado")
+            disabled = set(config.load()["plugins"].get("disabled", []))
+            disabled.discard(name) if args.action == "enable" else disabled.add(name)
+            config.set_value("plugins.disabled", json.dumps(sorted(disabled)))
+            result = {"name": name, "enabled": args.action == "enable"}
+        else:
+            plugin = next((p for p in discover({}).plugins if p.name == args.name), None)
+            if not plugin:
+                raise ValueError("plugin não encontrado")
+            result = {"name": plugin.name, "version": plugin.version, "builtin": plugin.builtin,
+                      "errors": plugin.errors, "requires_codar": plugin.requires_codar,
+                      "requires_plugins": plugin.requires_plugins, "origin": manager._metadata(plugin.root)}
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if args.action in ("install", "update", "remove", "restore", "enable", "disable"):
+            try:
+                from codar.client import Client
+
+                with Client.connect(autostart=False, timeout=3) as client:
+                    client.call("reload")
+                print("plugins recarregados no daemon")
+            except Exception:
+                print("rode codar restart para carregar a mudança")
         return 0
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"codar: {exc}", file=sys.stderr)

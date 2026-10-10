@@ -55,6 +55,17 @@ class LocalClient:
 
     def call(self, method: str, params: dict | None = None, on_notify=None) -> Any:
         p = params or {}
+        from codar.editing import METHODS, workspace_call
+
+        if method in METHODS:
+            try:
+                return asyncio.run(workspace_call(self.router, method, p))
+            except TranslateError as exc:
+                raise RpcError(-32004, str(exc), {"candidates": exc.candidates}) from exc
+            except ModelUnavailable as exc:
+                raise RpcError(-32003, str(exc)) from exc
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise RpcError(-32602, str(exc)) from exc
         if method == "patterns.search":
             lang = langs.try_resolve(p.get("lang"))
             return [m.as_dict() for m in self.store.search(p.get("intent", ""), lang.id if lang else None,

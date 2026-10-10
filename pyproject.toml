@@ -34,8 +34,10 @@ dependencies = ["tomli>=2; python_version < '3.11'"]
 #   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 llm = ["llama-cpp-python>=0.3.16"]
 studio = ["textual[syntax]>=1.0"]
+syntax = ["tree-sitter>=0.23", "tree-sitter-dart", "tree-sitter-javascript", "tree-sitter-typescript",
+          "tree-sitter-go", "tree-sitter-rust"]
 needle = ["cactus-needle>=3.0"]
-all = ["codar[llm,studio]"]
+all = ["codar[llm,studio,syntax]"]
 dev = ["pytest>=8", "pyflakes>=3", "tree-sitter>=0.23", "tree-sitter-python", "tree-sitter-javascript", "tree-sitter-typescript",
        "tree-sitter-go", "tree-sitter-rust", "tree-sitter-java", "tree-sitter-c", "tree-sitter-cpp",
        "tree-sitter-c-sharp", "tree-sitter-bash", "tree-sitter-powershell", "tree-sitter-lua", "tree-sitter-php",

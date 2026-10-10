@@ -3,6 +3,7 @@ import { CodarClient, Finding, RpcError, TranslateResult } from "./client";
 import { looksLikeIntent, wantsEdit } from "./intent";
 import { MissionControl } from "./missionControl";
 import { hoistImports } from "./imports";
+import { editHistory, editProject, prepareBuffer, registerReview, reviewBuffer } from "./review";
 
 let client: CodarClient;
 let diagnostics: vscode.DiagnosticCollection;
@@ -184,10 +185,25 @@ async function translate(editor: vscode.TextEditor, range: vscode.Range, intent:
     replacement = imp.text;
     if (imp.at <= startLine) startLine += imp.added;
   }
+  if (mode === "edit") {
+    const reviewed = await reviewBuffer(client, doc, all, replacement, cfg("editing.preview", true));
+    if (reviewed === undefined) return;
+    replacement = reviewed;
+  }
+  if (doc.isClosed || doc.version !== version) {
+    await vscode.window.showWarningMessage("O arquivo mudou durante a revisão; código preservado.");
+    return;
+  }
+  const prepared = await prepareBuffer(client, doc, all, replacement, intent);
+  if (doc.isClosed || doc.version !== version) return;
   const edit = new vscode.WorkspaceEdit();
   edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount - 1, doc.lineAt(doc.lineCount - 1).text.length), replacement);
   const ok = await vscode.workspace.applyEdit(edit); // corpo e imports numa única operação = um único Ctrl+Z
   if (!ok) return;
+  if (prepared) {
+    try { await client.call("edits.commit", prepared); }
+    catch (error) { output.appendLine(`Original guardado; confirmação do histórico falhou: ${String(error)}`); }
+  }
   if (hintsMode === "diagnostics" || hintsMode === "both") {
     const diags = res.findings.map((f) => makeDiagnostic(doc, f, startLine + Math.max(1, f.body_line ?? f.line) - 1));
     diagnostics.set(doc.uri, diags);
@@ -367,6 +383,41 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
+async function safely(action: () => Promise<void>): Promise<void> {
+  try { await action(); }
+  catch (error) {
+    if (error instanceof RpcError && error.code === -32800) return;
+    await vscode.window.showErrorMessage(`Codar: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function cmdCheckProject(): Promise<void> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!root) return;
+  const selected = await vscode.window.showQuickPick([
+    { label: "Sintaxe dos arquivos salvos", action: "" },
+    { label: "Executar analisador", action: "analyze" },
+    { label: "Executar testes", action: "test" },
+  ], { title: "Codar — verificar projeto" });
+  if (!selected) return;
+  const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Codar — verificando" },
+    () => client.call<{ ok: boolean; skipped: number; files: unknown[]; commands: unknown[] }>("project.check",
+      { root, actions: selected.action ? [selected.action] : [] }));
+  output.appendLine(JSON.stringify(result, null, 2)); output.show();
+  await vscode.window.showInformationMessage(`Codar: ${result.ok ? "sem erros detectados" : "verificação falhou"}; ${result.skipped} não verificadas.`);
+}
+
+async function cmdManagePlugins(): Promise<void> {
+  const command = await vscode.window.showQuickPick(["list", "install", "update", "remove", "restore", "enable", "disable", "info"],
+    { title: "Codar — gerenciar plugins" });
+  if (!command) return;
+  const name = command === "list" ? "" : await vscode.window.showInputBox({ prompt: command === "install" ? "Pasta local ou URL Git HTTPS" : "Nome do plugin" });
+  if (name === undefined) return;
+  const terminal = vscode.window.createTerminal({ name: "Codar — plugins", shellPath: cfg("executable", "codar"),
+    shellArgs: ["plugins", command, ...(name ? [name] : [])] });
+  terminal.show();
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel("Codar");
   diagnostics = vscode.languages.createDiagnosticCollection("codar");
@@ -377,16 +428,20 @@ export function activate(context: vscode.ExtensionContext): void {
   client = makeClient();
   const timer = setInterval(() => void refreshStatus(), 10_000);
   context.subscriptions.push(
-    output, diagnostics, status,
+    output, diagnostics, status, registerReview(),
     { dispose: () => clearInterval(timer) },
     { dispose: () => client.dispose() },
-    vscode.commands.registerCommand("codar.translateLine", cmdTranslateLine),
-    vscode.commands.registerCommand("codar.translateSelection", cmdTranslateSelection),
-    vscode.commands.registerCommand("codar.translateInput", cmdTranslateInput),
+    vscode.commands.registerCommand("codar.translateLine", () => safely(cmdTranslateLine)),
+    vscode.commands.registerCommand("codar.translateSelection", () => safely(cmdTranslateSelection)),
+    vscode.commands.registerCommand("codar.translateInput", () => safely(cmdTranslateInput)),
     vscode.commands.registerCommand("codar.auditFile", cmdAuditFile),
     vscode.commands.registerCommand("codar.advise", cmdAdvise),
     vscode.commands.registerCommand("codar.openStudio", cmdOpenStudio),
     vscode.commands.registerCommand("codar.showHistory", cmdHistory),
+    vscode.commands.registerCommand("codar.editHistory", () => safely(() => editHistory(client))),
+    vscode.commands.registerCommand("codar.editProject", () => safely(() => editProject(client))),
+    vscode.commands.registerCommand("codar.checkProject", () => safely(cmdCheckProject)),
+    vscode.commands.registerCommand("codar.managePlugins", () => safely(cmdManagePlugins)),
     vscode.commands.registerCommand("codar.saveAsPattern", cmdSaveAsPattern),
     vscode.commands.registerCommand("codar.restartDaemon", cmdRestart),
     vscode.commands.registerCommand("codar.missionControl", () => MissionControl.show(context, client)),

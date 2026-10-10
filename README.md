@@ -18,7 +18,7 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.1.1.** A branch `main` recebe as mudanças mais recentes. Pacotes binários só ficam disponíveis depois que uma tag é compilada e publicada em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases). Para instalar ou atualizar a partir do código atual, use o fluxo com `pipx` abaixo.
+**Versão do código: 0.3.0.** A branch `main` recebe as mudanças mais recentes. Pacotes binários só ficam disponíveis depois que uma tag é compilada e publicada em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases). Para instalar ou atualizar a partir do código atual, use o fluxo com `pipx` abaixo.
 
 ## Por que existe
 
@@ -43,6 +43,8 @@ Além da tradução:
 - **Auditoria estática a cada geração**: 117 regras nos plugins, além das verificações de AST Python e segredos. Detecta casos como injeção de SQL e comandos de shell que apagam o próprio arquivo, com sugestões de correção.
 - **Consultor de projeto**: "O projeto usa npm. pnpm e Bun instalam as mesmas dependências bem mais rápido…". Você escolhe a opção e ele executa a migração.
 - **19 linguagens** de programação: Python, JavaScript, TypeScript, Go, Rust, Java, Kotlin, Swift, Dart, C#, C, C++, PHP, Ruby, Lua, R, Julia, Bash e PowerShell, mais HTML e CSS.
+- **Edição revisável pela CLI**: propostas para até oito arquivos, comparação das mudanças, seleção de trechos e histórico durável dos originais. Configuração e contexto por projeto em `codar.toml`.
+- **Plugins com recuperação**: instalar de pasta ou Git HTTPS, validar compatibilidade, atualizar, desativar, remover e restaurar a versão anterior.
 
 ## Instalação
 
@@ -171,9 +173,75 @@ O Studio funciona em qualquer terminal, inclusive via SSH; no console puro do Li
 
 O Studio também tem explorer de arquivos, abas, terminal integrado, execução com **F5**, auditoria com **F6**, modo de estudo com **F7** e consultor com **F8**. `Ctrl+E`, `Ctrl+T` e `Esc` alternam o foco entre explorer, terminal e editor. `codar explicar -- python app.py` executa um programa e explica erros reconhecidos; também aceita a saída pelo stdin.
 
-### Corrigir e completar código existente
+### Editar um projeto pela CLI
 
-No Studio, selecione o trecho, pressione **Ctrl+L** e descreva a alteração, por exemplo: `corrija a validação sem mudar a assinatura`. A resposta **substitui a seleção**. No VS Code, use **Codar: Traduzir intenção…** com o trecho selecionado.
+Dentro da pasta do projeto, inicialize suas convenções e peça uma alteração. A geração de edições exige o extra `llm` e um modelo local instalado; `project`, `check` e o histórico funcionam sem IA.
+
+```bash
+codar project init
+codar project info
+codar project context "corrigir autenticação" --file app.py
+codar edit "corrija a autenticação e atualize os testes" --file app.py --file test_app.py
+```
+
+`edit` mostra uma proposta e seu identificador, sem escrever nos arquivos. Revise o diff e então use o id real mostrado:
+
+```bash
+codar edits list
+codar edits show ID
+codar edits apply ID
+codar check --tests
+codar edits restore ID          # recupera os originais, se não houve novas alterações
+codar edits recover             # recupera uma aplicação interrompida
+```
+
+`edits show ID --json` lista os identificadores dos trechos. `edits apply ID --hunk 'app.py:0'` aplica apenas aquele trecho; repita `--hunk` para escolher vários. `edit --apply` aplica diretamente depois da validação. `--root PASTA` escolhe o projeto; `edit --local` gera sem daemon.
+
+O Codar recebe referências de arquivos relacionados e as convenções do projeto. Diretórios de dependências e saída, arquivos gerados, links simbólicos e nomes usuais de segredos ficam excluídos. Em repositórios Git, a seleção de referências respeita `.gitignore`; fora deles, interpreta regras comuns do arquivo da raiz. Use `project.exclude` para regras próprias. Não é uma análise semântica completa como a de um servidor de linguagem.
+
+Arquivos grandes são divididos em **declarações completas**, preservando o texto fora delas. Python e PowerShell têm divisão própria; Dart, JavaScript, TypeScript, Go e Rust usam gramáticas opcionais (`codar extras install syntax`). Uma função que não cabe no orçamento é recusada, sem truncar seu código. Novos arquivos e arquivos pequenos são gerados por inteiro.
+
+Antes de aplicar, o Codar verifica a sintaxe disponível e rejeita novas definições Python duplicadas. Dart usa `dart format --output=none`; PowerShell usa seu parser oficial. Esses verificadores não executam o programa gerado. A geração tenta corrigir erros de sintaxe no máximo duas vezes, conforme `repair_attempts`; erros restantes ficam na proposta e bloqueiam sua aplicação. Se faltar um validador, o resultado aparece como `skipped`, sem alegar que passou.
+
+Os originais ficam nos dados privados do Codar. A aplicação compara o texto atual com o snapshot, guarda um diário antes de trocar arquivos e tenta desfazer trocas já realizadas se ocorrer uma falha. Mudanças feitas por outro editor impedem a sobrescrita. Arquivos são trocados individualmente: a recuperação reduz o risco de uma edição parcial, mas não oferece uma transação do sistema de arquivos entre vários arquivos.
+
+### Convenções, comandos e SDKs por projeto
+
+Exemplo de `codar.toml` para Flutter:
+
+```toml
+[project]
+skills = ["flutter.widgets"]
+guidance = ["Preserve public APIs and the project architecture."]
+exclude = ["lib/generated/*"]
+context_chars = 4000
+repair_attempts = 1
+
+[commands]
+run = ["flutter", "run"]
+test = ["flutter", "test"]
+analyze = ["flutter", "analyze"]
+format = ["dart", "format", "."]
+
+[toolchains]
+dart = ">=3.0.0,<4.0.0"
+```
+
+```bash
+codar project doctor           # verifica versões declaradas; não instala nem troca SDKs
+codar project run --file lib/main.dart
+codar check lib/main.dart     # sintaxe de um arquivo salvo
+codar check --analyze --tests # executa os comandos explicitamente solicitados
+codar check --format          # formata arquivos com o comando do projeto
+```
+
+Os comandos são listas de argumentos, executadas sem shell; `{root}` e `{file}` representam caminhos. Testes, analisadores e formatadores só rodam quando solicitados e podem executar código do projeto. Há comandos padrão para projetos Flutter/Dart, pytest e scripts npm; `codar.toml` permite adaptá-los. `check --timeout 120` define o tempo de cada comando, até 300 segundos. A saída retornada é limitada aos últimos 32 KB.
+
+### Corrigir e completar código existente no editor
+
+No Studio, selecione o trecho, pressione **Ctrl+L** e descreva a alteração, por exemplo: `corrija a validação sem mudar a assinatura`. A resposta **substitui a seleção**. No VS Code, use **Codar: Gerar código a partir de uma intenção…** com o trecho selecionado.
+
+Studio e VS Code abrem uma comparação antes de aplicar edições e permitem escolher trechos. Cancelar mantém o original. No Studio, **Ctrl+Shift+H** abre as versões do arquivo e **Ctrl+Shift+G** propõe uma edição em vários arquivos salvos; a paleta de comandos também oferece verificações do projeto e gestão de plugins. No VS Code, os comandos equivalentes ficam em **Ctrl+Shift+P → Codar**.
 
 Sem seleção, pedidos que começam com `corrija`, `refatore`, `reescreva`, `substitua`, `complete`, `melhore` ou `otimize` substituem o **arquivo aberto inteiro**, se ele contém código. Pedidos de criação continuam inserindo código abaixo da linha atual. Para uma alteração pequena, selecione apenas o trecho necessário. **Ctrl+Z** desfaz corpo e imports juntos; o arquivo só é salvo quando você manda salvar.
 
@@ -291,6 +359,8 @@ code --install-extension codar.vsix --force
 
 Recarregue a janela do VS Code. Se houver instalações duplicadas, configure `codar.executable` com o caminho absoluto da CLI desejada (por exemplo, `/home/kelvin/.local/bin/codar`, substituindo pelo seu usuário).
 
+Para começar: abra uma pasta com **Arquivo → Abrir Pasta**, abra um `.py`, `.dart` ou `.ps1` e digite `x é igual a 10`. Pressione **Ctrl+Alt+Enter** para traduzir a linha. Para corrigir código, **selecione o trecho**, abra **Ctrl+Shift+P**, escolha **Codar: Gerar código a partir de uma intenção…**, descreva a correção e revise a comparação antes de aplicar. Reescrita requer a IA local instalada na CLI. Instalar a CLI não instala automaticamente a extensão; um guia completo está em [clients/vscode/README.md](clients/vscode/README.md).
+
 ## Memória: teto de 3 GB
 
 O daemon mede a própria memória (RSS) a cada 2 segundos e age antes de estourar:
@@ -337,6 +407,13 @@ Padrões, regras de auditoria, skills e sugestões do consultor são arquivos TO
 ```bash
 codar plugins new meu-plugin          # cria a estrutura em ~/.config/codar/plugins/meu-plugin
 codar plugins install ./meu-plugin    # valida e instala um plugin local, sem sobrescrever outro
+codar plugins install https://github.com/SEU-USUARIO/SEU-PLUGIN.git --ref v1.0.0
+codar plugins update meu-plugin      # repete a origem registrada e guarda a versão anterior
+codar plugins info meu-plugin        # versão, origem, revisão Git e erros
+codar plugins disable meu-plugin
+codar plugins enable meu-plugin
+codar plugins remove meu-plugin      # guarda uma cópia para recuperação
+codar plugins restore meu-plugin
 codar plugins list
 codar skills list -l dart
 codar skills show flutter.widgets
@@ -345,7 +422,7 @@ codar patterns add --title "Ler CSV" --keywords "ler csv arquivo" --code-file le
 
 Guia completo em [docs/EXTENDING.md](docs/EXTENDING.md). Arquitetura e protocolo em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) e [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-Skills do CODAR são diretrizes TOML usadas pela IA local. Você pode editá-las dentro de um plugin criado com `plugins new`, instalar a pasta com `plugins install` e executar `codar restart`. A instalação valida os arquivos sem executar `plugin.py`; extensões Python de terceiros continuam dependendo da opção explícita `plugins.allow_python`.
+Skills do CODAR são diretrizes TOML usadas pela IA local. Você pode editá-las dentro de um plugin criado com `plugins new`, instalar a pasta com `plugins install` e ativá-las por projeto. Operações de gestão pedem recarga ao daemon já iniciado; se isso falhar, execute `codar restart`. Manifestos inválidos e dependências incompatíveis ficam isolados; uma atualização inválida preserva a instalação anterior. Extensões Python de terceiros dependem da opção explícita `plugins.allow_python`: ela autoriza código local de confiança, sem sandbox nem proteção contra travamento nativo.
 
 ## Desenvolvimento
 
@@ -357,6 +434,8 @@ pip install -e ".[dev,studio]"
 python packaging/check_versions.py        # versões dos pacotes, fonte Python e changelog
 pytest                                   # motor, compilador, Emmet, roteamento e completar
 python -m codar.evals.patternlint        # sintaxe de cada padrão + testes executáveis
+python -m codar.evals.editbench --reference # verifica os gabaritos de edição; não mede IA
+python -m codar.evals.editbench --out editing-results.json # mede o modelo local configurado
 tests/clients/run.sh "$(command -v codar)"   # plugins de Neovim e Vim contra o daemon real
 ```
 

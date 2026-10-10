@@ -31,7 +31,7 @@ def test_aceitar_instala_e_reabre_o_studio(sem_studio, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda _: "")  # Enter = sim
     with pytest.raises(SystemExit):
         cli.cmd_studio(argparse.Namespace(path=".", lang=None))
-    assert sem_studio["install"] == [["studio", "llm"]]
+    assert sem_studio["install"] == [["studio", "syntax", "llm"]]
     assert sem_studio["execv"] == [["/usr/bin/codar", "studio", "."]]
 
 

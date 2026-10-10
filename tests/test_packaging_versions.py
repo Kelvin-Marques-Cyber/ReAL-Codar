@@ -19,14 +19,14 @@ def test_repository_versions_agree():
 
 @pytest.mark.parametrize("path", ["clients/vscode/package.json", "clients/vscode/package-lock.json",
                                    "clients/powershell/Codar/Codar.psd1", "packaging/rpm/codar.spec",
-                                   "packaging/debian/changelog", "packaging/codar.1"])
+                                   "packaging/debian/changelog", "packaging/codar.1", "README.md"])
 def test_guard_rejects_stale_manifest(tmp_path, path):
     from codar import __version__
 
     for name in ("src/codar/__init__.py", "src/codar/_compat.py", "pyproject.toml", "CHANGELOG.md",
                  "clients/vscode/package.json", "clients/vscode/package-lock.json",
                  "clients/powershell/Codar/Codar.psd1", "packaging/rpm/codar.spec",
-                 "packaging/debian/changelog", "packaging/codar.1"):
+                 "packaging/debian/changelog", "packaging/codar.1", "README.md"):
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / name, target)

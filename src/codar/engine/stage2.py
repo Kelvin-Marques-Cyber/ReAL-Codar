@@ -493,19 +493,27 @@ class Stage2:
         return max(0, min(wanted, n_ctx - self.backend.tokens(prompt) - 8))
 
     def generate(self, prompt_builder: Callable[[int], str], *, on_token=None, cancel=None,
-                 max_tokens: int | None = None, stop: list[str] | None = None) -> GenResult:
+                 max_tokens: int | None = None, stop: list[str] | None = None,
+                 required_output: str | None = None) -> GenResult:
         """prompt_builder(nível) devolve prompts progressivamente menores (0 = completo) até caber no n_ctx."""
         self.ensure_loaded()
         self.last_used = time.monotonic()
         wanted = min(int(self.mcfg.get("max_tokens", 384)), max_tokens or 10**9)
+        minimum = 32
+        if required_output is not None:
+            minimum = max(64, self.backend.tokens(required_output) + 32)
+            if minimum > wanted:
+                raise ModelUnavailable(f"substituição precisa de cerca de {minimum} tokens de saída; model.max_tokens="
+                                       f"{wanted}. Selecione uma função menor ou use `codar edit` para dividir por funções")
         prompt, budget = "", 0
         for level in range(4):
             prompt = prompt_builder(level)
             budget = self._budget(prompt, wanted)
-            if budget >= min(160, wanted):
+            if budget >= max(minimum, min(160, wanted)):
                 break
-        if budget < 32:
-            raise ModelUnavailable("prompt não cabe no contexto do modelo (aumente [model] n_ctx)")
+        if budget < minimum:
+            raise ModelUnavailable(f"prompt deixa {budget} tokens de saída, mas são necessários {minimum}; "
+                                   "selecione um trecho menor ou aumente [model] n_ctx. O original foi preservado")
         res = self.backend.complete(prompt, max_tokens=budget, temperature=float(self.mcfg.get("temperature", 0.15)),
                                     stop=stop or STOP, on_token=on_token, cancel=cancel)
         self.generations += 1

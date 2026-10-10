@@ -12,7 +12,8 @@ from codar.explicar import explicar
 def _rodar(tmp_path: Path, codigo: str, entrada: str = "") -> str:
     arquivo = tmp_path / "app.py"
     arquivo.write_text(codigo, encoding="utf-8")
-    r = subprocess.run([sys.executable, str(arquivo)], input=entrada, capture_output=True, text=True, cwd=tmp_path)
+    # As amostras de dependência ausente não dependem dos pacotes instalados na máquina de testes.
+    r = subprocess.run([sys.executable, "-S", str(arquivo)], input=entrada, capture_output=True, text=True, cwd=tmp_path)
     return r.stdout + r.stderr
 
 

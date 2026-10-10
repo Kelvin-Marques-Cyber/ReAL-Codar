@@ -1,5 +1,5 @@
 '\" -*- coding: utf-8 -*-
-.TH CODAR 1 "outubro de 2026" "codar 0.2.0" "Comandos do usuário"
+.TH CODAR 1 "outubro de 2026" "codar 0.3.0" "Comandos do usuário"
 .SH NOME
 codar \- traduz pseudocódigo e intenções em código, 100% offline
 .SH SINOPSE
@@ -41,6 +41,28 @@ Compila pseudocódigo indentado de várias linhas.
 .BI "audit " arquivo
 Auditoria estática: segredos, injeção de SQL, padrões perigosos de shell e mais.
 .TP
+.BI "edit " intenção " --file " arquivo
+Propõe uma alteração em até oito arquivos, com contexto e comparação. Não grava até
+.BR "edits apply" ;
+.B --apply
+aplica diretamente após validação. Requer IA local.
+.TP
+.BR "edits list" | show | apply | restore | recover
+Histórico durável, seleção de trechos e recuperação dos originais. Use
+.B --root
+para escolher o projeto.
+.TP
+.BR "project init" | info | context | doctor | run
+Configuração codar.toml, convenções, comandos e requisitos de SDKs por projeto.
+.TP
+.BR check " [arquivos]"
+Verifica sintaxe. Opções
+.BR --tests , --analyze , --format
+executam explicitamente os comandos do projeto.
+.TP
+.BR "plugins install" | update | remove | restore | validate | info | enable | disable
+Plugins locais ou Git HTTPS, com compatibilidade, origem e cópias de recuperação.
+.TP
 .BR studio " [" \fIdiretório\fR ]
 IDE no terminal. Precisa do extra
 .BR studio .
@@ -62,7 +84,9 @@ Modelos de IA locais e a memória que cada um usa.
 .BR "extras status" | install | remove
 Extras opcionais:
 .B studio
-(Textual) e
+(Textual),
+.B syntax
+(gramáticas) e
 .B llm
 (llama.cpp). Quando o codar veio de um pacote do sistema, os extras ficam num ambiente virtual do usuário.
 .TP
