@@ -1339,6 +1339,4 @@ Também consulte a documentação oficial de uv para instalar versões Python, d
 
 ## Vídeos e documentos do projeto
 
-As quatro demonstrações estão incorporadas no [README do projeto](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar). São vídeos H.264 de 21 a 34 segundos, com comandos reais e pausas de leitura; a proposta de edição foi preparada localmente para mostrar revisão, aplicação e restauração, sem avaliar a IA.
-
-O código e os pacotes versionados ficam no [repositório](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar) e na [Release 0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1). Para medições e condições completas, consulte [Desempenho e escolha de modelos](BENCHMARKS.md). As atualizações ficam registradas no [histórico](../CHANGELOG.md).
+Veja as quatro demonstrações no [README](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar) e os pacotes na [Release 0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1). A edição mostrada usa uma proposta preparada localmente e não mede a IA. [Medições e método](BENCHMARKS.md) e o [histórico](../CHANGELOG.md) detalham as condições e atualizações.
