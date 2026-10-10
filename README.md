@@ -18,7 +18,15 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.3.1.** [Downloads e notas da Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. A branch `main` recebe as mudanças mais recentes; os comandos abaixo distinguem a instalação de uma versão publicada da instalação de `main`.
+**Versão do código: 0.3.2.** [Downloads e notas da Release v0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. A branch `main` recebe as mudanças mais recentes; os comandos abaixo distinguem a instalação de uma versão publicada da instalação de `main`.
+
+## Novidades da 0.3.2
+
+Pedidos de bibliotecas agora geram somente importações, com validação de escopo para todas as linguagens. O caso `import de biblioteca de youtube` retorna apenas `from yt_dlp import YoutubeDL` no Python. A geração explícita de funcionalidades permanece disponível.
+
+- **Seu próprio código:** `importar função somar de util.py` procura a função nos arquivos reais e gera `from util import somar`. Inclui subpastas, imports relativos em pacotes e layout `src`; funções homônimas exigem a origem.
+- **Contexto de bibliotecas:** assinaturas, tipos, docstrings e documentação local entram nas próximas gerações, com catálogo por projeto, versão e conteúdo. A inspeção não executa a biblioteca. Referências fornecidas com `--source` funcionam nas 24 linguagens/formatos.
+- **Gerenciamento pelo CLI:** `codar libraries` consulta, verifica, remove referências e instala dependências explicitamente no ambiente do projeto, com prévia `--dry-run`. [Guia completo, exemplos e cobertura dos ecossistemas](docs/LIBRARIES.md).
 
 ## Novidades da 0.3.1
 
@@ -127,14 +135,14 @@ O terminal integrado executa comandos e entrada de programas. Para aliases, conc
 
 ### Começar pela versão publicada (pipx)
 
-Requer **Python 3.10+ e pipx**. Baixe `codar-0.3.1-py3-none-any.whl` na [Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1) e execute na pasta do download:
+Requer **Python 3.10+ e pipx**. Baixe `codar-0.3.2-py3-none-any.whl` na [Release v0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2) e execute na pasta do download:
 
 ```sh
-pipx install --force ./codar-0.3.1-py3-none-any.whl
+pipx install --force ./codar-0.3.2-py3-none-any.whl
 pipx ensurepath --prepend
 ```
 
-Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.3.1`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
+Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.3.2`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
 
 ### Código atual da branch `main` (pipx)
 
@@ -207,7 +215,7 @@ Baixe o pacote da sua distro em [Releases](https://github.com/Kelvin-Marques-Cyb
 curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 ```
 
-O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.1` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
+O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.2` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
 
 | Distro | Comando |
 |---|---|
@@ -225,14 +233,31 @@ Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônom
 
 | Sistema | Arquivo | Comando dentro da pasta extraída |
 |---|---|---|
-| Windows | `codar-0.3.1-windows-python.zip` | `py -3 .\install.py` no PowerShell |
-| macOS | `codar-0.3.1-macos-python.tar.gz` | `sh install.sh` |
+| Windows | `codar-0.3.2-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.3.2-macos-python.tar.gz` | `sh install.sh` |
 
 O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
 
 Cada Release inclui `SHA256SUMS` e `RELEASE.json` com versões, tamanhos, hashes e a revisão de origem. As notas da Release descrevem quais verificações foram executadas; uma compilação bem-sucedida não comprova a instalação em todos os sistemas.
 
-### Depois de instalar
+### Importar bibliotecas sem gerar uma aplicação
+
+Pedidos de importação têm escopo próprio em todas as linguagens. A finalidade da biblioteca não é uma ordem para implementar funções, exemplos ou downloads. Por exemplo:
+
+```bash
+codar run "import de biblioteca de youtube" --lang python --local
+# from yt_dlp import YoutubeDL
+codar run "importar biblioteca de YouTube para ler vídeos e playlists" --lang dart --local
+# import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+```
+
+O catálogo local escolhe **yt-dlp** (Python), **youtubei.js** (JavaScript/TypeScript), **youtube_explode_dart** (Dart/Flutter) ou **YoutubeExplode** (C#). Um pacote escrito explicitamente, como `pytubefix`, mantém seu nome. A instalação é separada, no ambiente do projeto; importar não executa pip, npm, pub, consultas nem downloads.
+
+Fora do catálogo, a IA local opcional sugere somente declarações de importação. O motor valida e descarta qualquer implementação extra antes de mostrar ou aplicar o resultado. Respostas inválidas ou incompletas preservam o código existente. SQL, YAML e Dockerfile explicam que não possuem esse tipo de importação. Para pedir uma implementação, escreva explicitamente, por exemplo: `crie uma função para ler uma playlist do YouTube`.
+
+Fontes do catálogo: [yt-dlp](https://github.com/yt-dlp/yt-dlp#embedding-yt-dlp), [YouTube.js](https://ytjs.dev/guide/getting-started), [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart) e [YoutubeExplode](https://github.com/Tyrrrz/YoutubeExplode).
+
+## Depois de instalar
 
 ```bash
 codar run "x é igual a 10"     # o compilador e o banco de padrões já funcionam, sem nada extra
@@ -615,4 +640,4 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) e o [histórico de mudanças](CHANGELOG.
 
 ---
 
-**In English:** CODAR translates line-by-line pseudocode into 19 languages, with HTML/CSS abbreviations and optional local AI. Version 0.3.1 adds native study guides for all 24 supported languages and file formats, file/project search, optional autosave, project-specific Python versions and virtual environments, improved editing context, terminal completion/copy, and guided dependency installation. It includes reviewed edits, history, plugins, Dart/Flutter and PowerShell workflows, a terminal Studio and editor clients. In a reproducible Linux benchmark without AI, the engine used about 26 MiB and the headless Studio about 60 MiB; model and external process memory are separate. Local translation and study work offline after installation; downloads require network access. [Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1) includes Linux packages, Python/pipx installers for Windows/macOS, wheel/source archives and VSIX. Alpha project, Apache-2.0 licensed.
+**In English:** Version 0.3.2 restricts library requests to imports, without implementing their purpose. CODAR translates line-by-line pseudocode into 19 languages, with HTML/CSS abbreviations and optional local AI. Version 0.3.1 adds native study guides for all 24 supported languages and file formats, file/project search, optional autosave, project-specific Python versions and virtual environments, improved editing context, terminal completion/copy, and guided dependency installation. It includes reviewed edits, history, plugins, Dart/Flutter and PowerShell workflows, a terminal Studio and editor clients. In a reproducible Linux benchmark without AI, the engine used about 26 MiB and the headless Studio about 60 MiB; model and external process memory are separate. Local translation and study work offline after installation; downloads require network access. [Release v0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2) includes Linux packages, Python/pipx installers for Windows/macOS, wheel/source archives and VSIX. Alpha project, Apache-2.0 licensed.

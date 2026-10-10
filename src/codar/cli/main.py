@@ -97,8 +97,11 @@ def cmd_run(args) -> int:
     except (DaemonNotRunning, OSError, TimeoutError, RuntimeError) as exc:
         print(f"codar: daemon indisponível: {exc}", file=sys.stderr)
         return EXIT_NO_DAEMON
+    from codar.libraries import project_root
+
     before, selected = "", ""
     ctx = args.context or (args.file if args.file and args.file != "-" and Path(args.file).is_file() else None)
+    root = project_root(args.root, args.file or ctx) or Path.cwd()
     if ctx:  # a intenção entra logo depois desse código (o fim do arquivo, ou o trecho que o editor mandou)
         source = Path(ctx).read_text(encoding="utf-8", errors="replace")
         if args.mode == "edit":
@@ -116,7 +119,8 @@ def cmd_run(args) -> int:
                 res = client.translate(intent, args.lang, file=args.file, before=before, indent=args.indent or "", stages=_stages(args.stages),
                                        selected=selected,
                                        audit=not args.no_audit, hints=args.hints, mode=args.mode, on_delta=on_delta,
-                                       indent_unit=args.indent_unit)
+                                       indent_unit=args.indent_unit,
+                                       project_root=str(root))
             except RpcError as exc:
                 cands = (exc.data or {}).get("candidates") or []
                 print(hud.pill("UNRESOLVED", "red") + " " + hud.c(exc.message, "text"), file=sys.stderr)
@@ -573,6 +577,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("intent", nargs="*")
     common_engine(p)
     p.add_argument("--file", help="arquivo de destino (contexto e detecção de linguagem)")
+    p.add_argument("--root", help="raiz do projeto para resolver imports e documentação local")
     p.add_argument("--context", metavar="ARQUIVO", help="código que vem antes da intenção (editores mandam o buffer)")
     p.add_argument("--indent", help="indentação da linha atual, aplicada ao código gerado")
     p.add_argument("--stages", help="estágios permitidos, ex.: 0,1")
@@ -718,6 +723,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--json', action='store_true')
     p.set_defaults(fn=lambda a: __import__('codar.cli.studycmd', fromlist=['x']).cmd_study(a))
+
+    p = sub.add_parser('libraries', aliases=['bibliotecas'], help='bibliotecas: list | show | learn | install | verify | forget')
+    p.add_argument('action', choices=['list', 'show', 'learn', 'install', 'verify', 'forget'])
+    p.add_argument('name', nargs='?')
+    p.add_argument('-l', '--lang', default='python')
+    p.add_argument('--root', default='.', help='projeto ao qual pertence a referência')
+    p.add_argument('--source', metavar='ARQUIVO', help='código, tipos ou documentação local da biblioteca')
+    p.add_argument('--library-version', help='versão da documentação fornecida')
+    p.add_argument('--module', help='nome usado no import quando difere do nome do pacote instalado')
+    p.add_argument('--dry-run', action='store_true', help='mostra a instalação sem executar/baixar')
+    p.add_argument('--json', action='store_true')
+    p.set_defaults(fn=lambda a: __import__('codar.cli.librarycmd', fromlist=['x']).cmd_libraries(a))
 
     p = sub.add_parser("skills", help="skills locais da IA: list | show ID")
     p.add_argument("action", nargs="?", choices=["list", "show"], default="list")

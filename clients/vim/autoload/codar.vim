@@ -42,7 +42,7 @@ function! s:run(args, input, Done) abort
   return l:ctx
 endfunction
 
-function! s:hoist_imports(imports) abort
+function! s:hoist_imports(imports, join) abort
   if !g:codar_imports || empty(a:imports)
     return 0
   endif
@@ -59,7 +59,8 @@ function! s:hoist_imports(imports) abort
   if l:at == 0 && trim(getline(1)) !=# ''
     call add(l:missing, '')
   endif
-  undojoin | call append(l:at, l:missing)
+  if a:join | undojoin | endif
+  call append(l:at, l:missing)
   return len(l:missing)
 endfunction
 
@@ -85,9 +86,12 @@ function! s:apply(buf, first, last, original, tick, mode, out, code, err) abort
     call s:echo('o texto mudou enquanto o codar respondia; nada foi alterado', 'WarningMsg')
     return
   endif
-  let l:body = split(l:res.body, "\n", 1)
+  let l:body = split(g:codar_imports ? l:res.body : l:res.code, "\n", 1)
+  let l:only_imports = a:mode ==# 'insert' && g:codar_imports && empty(l:res.body) && !empty(get(l:res, 'imports', []))
   let &undolevels = &undolevels " a tradução vira um passo próprio de desfazer
-  if a:mode ==# 'insert'
+  if l:only_imports
+    let l:start = a:first
+  elseif a:mode ==# 'insert'
     let l:base = matchstr(getline(a:first), '^\s*')
     call map(l:body, {_, l -> l ==# '' ? l : l:base . l})
     if trim(getline(a:first)) ==# ''
@@ -110,7 +114,7 @@ function! s:apply(buf, first, last, original, tick, mode, out, code, err) abort
     endif
     let l:start = a:first
   endif
-  let l:shift = s:hoist_imports(get(l:res, 'imports', []))
+  let l:shift = s:hoist_imports(get(l:res, 'imports', []), !l:only_imports)
   let l:start += l:shift
   call cursor(l:start + len(l:body) - 1, 1)
   let l:loc = map(copy(get(l:res, 'findings', [])), {_, f -> {

@@ -1,12 +1,16 @@
 # Manual do CODAR
 
-Versão 0.3.1 • 10 de outubro de 2026
+Versão 0.3.2 • 10 de outubro de 2026
 
 Kelvin e Silva Marques
 
 Programação por intenção, CLI, Studio e integrações de editor. Este manual reúne o uso diário e a referência técnica do projeto em um único documento. O CODAR está em fase alfa; as notas de cada Release identificam os testes e os sistemas verificados.
 
 As capturas foram exportadas da interface real do Studio em Linux, usando o driver de teste do Textual. O terminal da captura executou o programa de exemplo. A IA não foi carregada nas capturas nem nas quatro demonstrações; a busca contextual e a geração livre precisam de um modelo instalado.
+
+### Bibliotecas e funções próprias na 0.3.2
+
+Imports de funções/classes próprias usam os arquivos reais, incluindo subpastas, pacotes relativos e layout `src`. Referências de APIs, tipos e documentação local são consultadas sem executar o pacote e alimentam as gerações seguintes. O CLI `libraries`/`bibliotecas` oferece catálogo, atualização/verificação e instalação explícita no ambiente do projeto, com `--dry-run`. Veja [o guia completo de bibliotecas](LIBRARIES.md) para exemplos, cobertura e limites.
 
 ## Como consultar
 
@@ -87,6 +91,23 @@ Outras vantagens no trabalho diário:
 
 O [CHANGELOG](../CHANGELOG.md) separa as mudanças por versão. As [notas da Release v0.3.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
 
+## Importar bibliotecas sem gerar uma aplicação
+
+Pedidos de importação têm escopo próprio em todas as linguagens. A finalidade da biblioteca não é uma ordem para implementar funções, exemplos ou downloads. Por exemplo:
+
+```bash
+codar run "import de biblioteca de youtube" --lang python --local
+# from yt_dlp import YoutubeDL
+codar run "importar biblioteca de YouTube para ler vídeos e playlists" --lang dart --local
+# import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+```
+
+O catálogo local escolhe **yt-dlp** (Python), **youtubei.js** (JavaScript/TypeScript), **youtube_explode_dart** (Dart/Flutter) ou **YoutubeExplode** (C#). Um pacote escrito explicitamente, como `pytubefix`, mantém seu nome. A instalação é separada, no ambiente do projeto; importar não executa pip, npm, pub, consultas nem downloads.
+
+Fora do catálogo, a IA local opcional sugere somente declarações de importação. O motor valida e descarta qualquer implementação extra antes de mostrar ou aplicar o resultado. Respostas inválidas ou incompletas preservam o código existente. SQL, YAML e Dockerfile explicam que não possuem esse tipo de importação. Para pedir uma implementação, escreva explicitamente, por exemplo: `crie uma função para ler uma playlist do YouTube`.
+
+Fontes do catálogo: [yt-dlp](https://github.com/yt-dlp/yt-dlp#embedding-yt-dlp), [YouTube.js](https://ytjs.dev/guide/getting-started), [youtube_explode_dart](https://pub.dev/packages/youtube_explode_dart) e [YoutubeExplode](https://github.com/Tyrrrz/YoutubeExplode).
+
 ### Correções e praticidade na 0.3.1
 
 - **Ctrl+Enter respeita o foco**: na barra de intenção envia o pedido; no editor traduz a seleção exata ou, sem seleção, a linha do cursor; no terminal envia o comando. Ctrl+G é a alternativa para terminais que não distinguem Ctrl+Enter. A seleção termina antes da linha seguinte quando o fim está na coluna zero. Mover o cursor depois de enviar não muda o alvo capturado; se o texto mudar, a resposta fica na saída para revisão.
@@ -101,14 +122,14 @@ O terminal integrado executa comandos e entrada de programas. Para aliases, conc
 
 ### Começar pela versão publicada (pipx)
 
-Requer **Python 3.10+ e pipx**. Baixe `codar-0.3.1-py3-none-any.whl` na [Release v0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1) e execute na pasta do download:
+Requer **Python 3.10+ e pipx**. Baixe `codar-0.3.2-py3-none-any.whl` na [Release v0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2) e execute na pasta do download:
 
 ```sh
-pipx install --force ./codar-0.3.1-py3-none-any.whl
+pipx install --force ./codar-0.3.2-py3-none-any.whl
 pipx ensurepath --prepend
 ```
 
-Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.3.1`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
+Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.3.2`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
 
 ### Código atual da branch `main` (pipx)
 
@@ -181,7 +202,7 @@ Baixe o pacote da sua distro em [Releases](https://github.com/Kelvin-Marques-Cyb
 curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 ```
 
-O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.1` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
+O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.2` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
 
 | Distro | Comando |
 |---|---|
@@ -199,8 +220,8 @@ Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônom
 
 | Sistema | Arquivo | Comando dentro da pasta extraída |
 |---|---|---|
-| Windows | `codar-0.3.1-windows-python.zip` | `py -3 .\install.py` no PowerShell |
-| macOS | `codar-0.3.1-macos-python.tar.gz` | `sh install.sh` |
+| Windows | `codar-0.3.2-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.3.2-macos-python.tar.gz` | `sh install.sh` |
 
 O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
 
@@ -783,7 +804,7 @@ O daemon grava `endpoint.json` no diretório de execução ao subir e o apaga ao
 | qualquer um | `$CODAR_HOME/run/`, se `CODAR_HOME` estiver definido |
 
 ```json
-{"transport": "unix", "address": "/run/user/1000/codar/codar.sock", "token": "", "uri": "unix:/run/user/1000/codar/codar.sock", "pid": 5837, "version": "0.3.1"}
+{"transport": "unix", "address": "/run/user/1000/codar/codar.sock", "token": "", "uri": "unix:/run/user/1000/codar/codar.sock", "pid": 5837, "version": "0.3.2"}
 ```
 
 `transport` é `unix`, `pipe` (Windows, `\\.\pipe\codar-<usuário>`) ou `tcp` (`127.0.0.1:porta`). A variável `CODAR_ENDPOINT` (`unix:/caminho`, `pipe:\\.\pipe\nome`, `tcp://127.0.0.1:7878`) tem precedência; com TCP, `CODAR_TOKEN` leva o token.
@@ -801,7 +822,7 @@ Teste rápido no terminal:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"ping"}' | nc -U -q1 "$XDG_RUNTIME_DIR/codar/codar.sock"
-# {"jsonrpc":"2.0","id":1,"result":{"pong":true,"version":"0.3.1","pid":5837}}
+# {"jsonrpc":"2.0","id":1,"result":{"pong":true,"version":"0.3.2","pid":5837}}
 ```
 
 ### `translate`
@@ -845,7 +866,7 @@ Cada item de `findings`: `id`, `severity` (`info`, `warning`, `error`, `critical
 | Método | Parâmetros | Resultado |
 |---|---|---|
 | `project.search` | `root`, `query`, `file?`, `buffer?`, `names?`, `ai?` | termos, resultados reais com caminho/linha/prévia, arquivos ignorados e indicador de corte |
-| `ping` | | `{"pong": true, "version": "0.3.1", "pid": 5837}` |
+| `ping` | | `{"pong": true, "version": "0.3.2", "pid": 5837}` |
 | `auth` | `token` | `{"ok": true}` |
 | `audit` | `code`, `lang`, `hints?` | `{"findings": [...], "ms": 0.4}` |
 | `stats` | | memória, modelo, estágios, cache, número de pedidos |
@@ -1199,8 +1220,8 @@ Em máquinas com SELinux, os contêineres de teste rodam com `--security-opt lab
 
 1. Atualize `__version__` em `src/codar/__init__.py`. O `pyproject.toml` obtém a versão desse atributo; não adicione outra versão Python.
 2. Sincronize `clients/vscode/package.json`, os dois campos de versão do projeto em `clients/vscode/package-lock.json`, `clients/powershell/Codar/Codar.psd1`, `packaging/rpm/codar.spec` e `packaging/codar.1`. Adicione uma entrada em `packaging/debian/changelog`, preservando o histórico.
-3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.3.1` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
-4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.3.1 && git push origin v0.3.1`. Não reaproveite uma tag publicada. Se a publicação precisar ser manual porque os runners não iniciam, gere os arquivos a partir do commit exato, execute as verificações locais disponíveis e declare nas notas os testes que não foram realizados.
+3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.3.2` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
+4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.3.2 && git push origin v0.3.2`. Não reaproveite uma tag publicada. Se a publicação precisar ser manual porque os runners não iniciam, gere os arquivos a partir do commit exato, execute as verificações locais disponíveis e declare nas notas os testes que não foram realizados.
 5. O fluxo [`release.yml`](../.github/workflows/release.yml) confere tag, manifestos e changelog, roda os testes Python, gera os formatos e testa a instalação nas nove imagens antes de publicar os arquivos.
 6. Confira os artefatos na página de Releases. O [instalador](../packaging/install.sh) padrão passa a baixar essa versão. Criar um commit, atualizar o README ou mudar a numeração, sozinho, não publica pacotes.
 
@@ -1339,4 +1360,4 @@ Também consulte a documentação oficial de uv para instalar versões Python, d
 
 ## Vídeos e documentos do projeto
 
-Veja as quatro demonstrações no [README](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar) e os pacotes na [Release 0.3.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.1). A edição mostrada usa uma proposta preparada localmente e não mede a IA. [Medições e método](BENCHMARKS.md) e o [histórico](../CHANGELOG.md) detalham as condições e atualizações.
+Veja as quatro demonstrações no [README](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar) e os pacotes na [Release 0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2). A edição mostrada usa uma proposta preparada localmente e não mede a IA. [Medições e método](BENCHMARKS.md) e o [histórico](../CHANGELOG.md) detalham as condições e atualizações.

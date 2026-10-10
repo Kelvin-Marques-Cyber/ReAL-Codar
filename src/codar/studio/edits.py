@@ -63,6 +63,11 @@ class EditTarget:
         """Calcula uma única substituição (corpo + imports), desfeita com um Ctrl+Z."""
         first, last = offset(self.text, self.start), offset(self.text, self.end)
         start_row = self.start[0]
+        if self.mode == "insert" and not body.strip() and imports:
+            # Importar pela barra de intenção não insere uma linha vazia no
+            # meio do código, nem altera a posição de instruções existentes.
+            text, added = hoist_imports(self.text, imports, lang)
+            return text, start_row + added, start_row + added
         if self.mode == "insert":
             body = "\n".join(indent + ln if ln.strip() else ln for ln in body.split("\n"))
             if self.start[1]:

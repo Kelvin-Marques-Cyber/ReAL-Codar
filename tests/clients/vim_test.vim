@@ -84,5 +84,18 @@ while empty(getloclist(0)) && s:n < 200 | sleep 50m | let s:n += 1 | endwhile
 let s:l = getloclist(0)
 call Check('audit: loclist', len(s:l) == 1 && s:l[0].text =~# 'PY017', string(map(copy(s:l), 'v:val.text')))
 
+for s:hoist in [1, 0]
+  let g:codar_imports = s:hoist
+  call Buf('python', ['x = 10', 'print(x)'])
+  call cursor(2, 1)
+  let s:b = getline(1, '$')
+  Codar import de biblioteca de youtube
+  call WaitChange(s:b)
+  let s:expected = s:hoist ? ['from yt_dlp import YoutubeDL', '', 'x = 10', 'print(x)'] : ['x = 10', 'print(x)', 'from yt_dlp import YoutubeDL']
+  call Check('importação sem programa; hoist=' . s:hoist, getline(1, '$') == s:expected, string(getline(1, '$')))
+  silent normal! u
+  call Check('um undo restaura importação; hoist=' . s:hoist, getline(1, '$') == s:b, string(getline(1, '$')))
+endfor
+
 call writefile(s:log + [s:fails ? s:fails . ' FALHA(S)' : 'TUDO OK'], $CODAR_RESULT !=# '' ? $CODAR_RESULT : '/dev/stdout')
 qa!

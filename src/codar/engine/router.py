@@ -23,7 +23,8 @@ from codar.engine import emmet, ir
 from codar.engine.emit import EmitError, emit, emit_else
 from functools import lru_cache
 
-from codar.engine.models import STOP, build_literal_prompt, build_prompt
+from codar.engine.imports import IMPORT_LANGS, catalog_import, import_prefix, is_import_request, is_native_import
+from codar.engine.models import STOP, build_import_prompt, build_literal_prompt, build_prompt
 from codar.engine.postprocess import (clean_generation, detect_indent_unit, join_imports, prune_imports,
                                      prune_sample_data, reindent, split_imports, strip_context_echo)
 from codar.engine.stage0 import Stage0, clean_intent, extract_lang_hint
@@ -100,6 +101,7 @@ class Request:
     selected: str = ""
     project_root: str | None = None
     project_context: str = ""
+    library_context: str = ""
     project_guidance: list[str] = field(default_factory=list)
     project_skills: list[str] = field(default_factory=list)
     indent: str = ""
@@ -200,7 +202,8 @@ class Router:
     # ------------------------------------------------------------------ cache
     def _key(self, req: Request, lang: str, intent: str) -> str:
         # O compilador também depende das variáveis do contexto. Caixa e aspas da intenção importam.
-        ctx = hashlib.sha256(repr((req.before, req.after, req.selected, req.project_context,
+        ctx = hashlib.sha256(repr((req.before, req.after, req.selected, req.project_context, req.library_context,
+                                  req.file, req.project_root,
                                   req.project_guidance, req.project_skills)).encode()).hexdigest()
         return "|".join([intent, lang, req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
                          str(req.hints), str(req.audit), req.mode, ctx])
@@ -233,17 +236,47 @@ class Router:
         intent = clean_intent(req.intent) if "\n" not in req.intent.strip() else req.intent.strip("\n")
         intent, hinted = extract_lang_hint(intent)
         lang = self._resolve_lang(req, hinted)
+        native_import = is_native_import(req.intent.strip(), lang.id)
+        if native_import:
+            intent = req.intent.strip()
         if req.mode == "edit" and not req.project_context:
             req = await asyncio.to_thread(self._with_project, req, intent)
+        from codar.libraries import LibraryCatalog, project_root
+
+        catalog = LibraryCatalog(project_root(req.project_root, req.file), req.file)
+        context = await asyncio.to_thread(catalog.context, req.before + '\n' + req.selected + '\n' + req.after, lang.id)
+        req = dataclasses.replace(req, library_context=context)
+        import_lines = [line.strip() if is_native_import(line.strip(), lang.id) else clean_intent(line)
+                        for line in intent.splitlines() if line.strip()]
+        if native_import:
+            import_lines = [intent]
+        only_imports = bool(import_lines and all(is_import_request(line, lang.id) for line in import_lines))
         key = self._key(req, lang.id, intent)
-        if (hit := self.cache_get(key)) is not None:
+        if not only_imports and (hit := self.cache_get(key)) is not None:
             res = Result(**{**hit.as_dict(), "cached": True})
             res.timings = {**hit.timings, "total_ms": round((time.perf_counter() - t0) * 1000, 3)}
             self.metrics.record(res, intent)
             return res
         # Nomes no código abaixo também são referência, por exemplo funções definidas mais adiante.
         known = set(_IDENT.findall(req.before[-3000:] + "\n" + req.after[:3000]))
-        if req.mode == "edit":
+        if only_imports:
+            maximum = int(self.rcfg.get("max_block_lines", 30))
+            if len(import_lines) > maximum:
+                raise TranslateError(f"máximo de {maximum} pedidos de importação por bloco")
+            imports = []
+            notes = []
+            stages = []
+            for line in import_lines:
+                imported = await self._import_only(line, lang, req, timings, on_token, cancel)
+                imports.extend(x for x in imported.imports if x not in imports)
+                notes.extend(x for x in imported.notes if x not in notes)
+                stages.append(imported.stage)
+            # Uma seleção de código existente é contexto, não autorização para
+            # apagar funções quando a ação pedida é somente importar.
+            body = req.selected if req.mode == "edit" and req.selected.strip() != intent.strip() else ""
+            res = Result(code="", body=body, imports=imports, lang=lang.id, stage=max(stages),
+                         source="imports:only", notes=notes)
+        elif req.mode == "edit":
             res = await self._edit(intent, lang, req, timings, on_token, cancel)
         elif req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip()):
             linhas = sum(1 for ln in intent.splitlines() if ln.strip())
@@ -254,8 +287,15 @@ class Router:
             res = await self._compile_block(intent, lang, req, known, timings, cancel)
         else:
             res = await self._translate_line(intent, lang, req, known, timings, on_token, cancel)
+        if res.imports:
+            learned = await asyncio.to_thread(catalog.context, '\n'.join(res.imports), lang.id)
+            if learned:
+                res.notes.append('API/documentação local consultada; catálogo separado por origem, versão e conteúdo')
+            elif only_imports:
+                res.notes.append('fontes/tipos/documentação local indisponíveis; use codar libraries learn NOME '
+                                 '--source ARQUIVO ou instale a dependência no ambiente do projeto')
         self._finish(res, req, timings, t0)
-        if res.complete and (res.stage != "2:gen" or not res.notes):
+        if not only_imports and res.complete and (res.stage != "2:gen" or not res.notes):
             self.cache_put(key, res)
         self.metrics.record(res, intent)
         return res
@@ -337,6 +377,7 @@ class Router:
                                 context=req.before[-3000:] if level == 0 else "",
                                 after=req.after[:3000] if level == 0 else "",
                                 project=req.project_context if level < 2 else "",
+                                libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]],
                                 guidance=self._guidance(guidance_task, lang.id, req.project_skills) + req.project_guidance)
 
         t = time.perf_counter()
@@ -357,6 +398,83 @@ class Router:
         return res
 
     # ------------------------------------------------------------------ uma linha
+    async def _import_only(self, intent, lang, req, timings, on_token, cancel) -> Result:
+        """Não passa pelo banco de funcionalidades, RAG, compositor ou gerador geral."""
+        if lang.id not in IMPORT_LANGS:
+            raise TranslateError(f"{lang.name} não possui importação de bibliotecas neste formato; "
+                                 "informe a linguagem do código que usará a dependência")
+        if cancel is not None and cancel.is_set():
+            raise Cancelled()
+        native = is_native_import(intent, lang.id)
+        local = None
+        if lang.id == 'python' and not native and any(s in req.stages for s in (0, 1)):
+            from codar.libraries import local_python_import, project_root
+
+            try:
+                root = project_root(req.project_root, req.file)
+                if root is None and re.search(r'\b[\w./-]+\.py\b|\b(?:minha|minhas|meu|meus|propri[oa]s?)\b', fold(intent)):
+                    raise ValueError('Informe a raiz do projeto (--root) ou o arquivo de destino (--file) para importar código próprio.')
+                local = await asyncio.to_thread(local_python_import, intent,
+                                                root, req.file)
+            except (OSError, ValueError) as exc:
+                raise TranslateError(str(exc)) from exc
+        chosen = catalog_import(intent, lang.id) if not native and any(s in req.stages for s in (0, 1)) else None
+        code = ""
+        notes = ["pedido limitado às importações; a finalidade da biblioteca não foi implementada"]
+        stage = "0" if 0 in req.stages else "1"
+        if local:
+            code = local
+            notes.append('importação resolvida nos arquivos Python do projeto, sem executar o módulo')
+        elif chosen:
+            code, package, source = chosen
+            notes.append(f"biblioteca YouTube: {package}; instalação separada no ambiente do projeto; fonte: {source}")
+        elif 0 in req.stages:
+            # Preserva nomes e aliases fornecidos explicitamente.
+            if native:
+                code = intent
+            parsed = self.stage0.parse(intent, set()) if not native else None
+            if parsed and all(isinstance(n, ir.Import) for n in parsed.nodes):
+                try:
+                    needed, body = emit(parsed.nodes, lang.id)
+                    code = join_imports(needed, body, lang.id)
+                except EmitError:
+                    pass
+            if not code and import_prefix(intent, lang.id):
+                code = intent
+        imports = import_prefix(code, lang.id) if code else []
+        if not imports:
+            if 2 not in req.stages or self.stage2 is None or not self.stage2.configured():
+                raise TranslateError("não consegui resolver a biblioteca localmente; informe o nome do pacote/módulo "
+                                     "ou habilite a IA local para sugerir somente a importação")
+
+            def builder(level):
+                return build_import_prompt(self.stage2.fmt, lang.name, lang.fence, intent,
+                                           req.before[-2000:] if level == 0 else "",
+                                           req.after[:1000] if level == 0 else "",
+                                           libraries=req.library_context[:3000])
+
+            t = time.perf_counter()
+            try:
+                # Não transmite tokens ainda não validados: até a prévia fica
+                # restrita às importações, sem exibir um programa inventado.
+                gen = await asyncio.wrap_future(self.stage2.submit(self.stage2.generate, builder,
+                                                                   cancel=cancel, max_tokens=160))
+            except ModelUnavailable as exc:
+                raise TranslateError(str(exc)) from exc
+            timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
+            timings["tokens"] = gen.tokens
+            if gen.finish == "length":
+                raise TranslateError("a sugestão de importação ficou incompleta; o código original foi preservado")
+            imports = import_prefix(clean_generation(gen.text, lang.id, repair=False), lang.id)
+            if not imports:
+                raise TranslateError("a IA não retornou uma importação válida; o código original foi preservado. "
+                                     "Informe o nome do pacote/módulo desejado")
+            stage = "2:import"
+            notes.append("biblioteca sugerida pela IA local; confira a dependência no ambiente do projeto")
+        if on_token:
+            on_token(join_imports(imports, "", lang.id))
+        return Result(code="", body="", imports=imports, lang=lang.id, stage=stage, source="imports:only", notes=notes)
+
     @staticmethod
     def _emmet(intent: str, lang: langs.Lang, req: Request) -> Result | None:
         """Abreviações Emmet em HTML/CSS (e em JSX/TSX, só as inequívocas): "ul>li*3", "df+jcc"."""
@@ -376,6 +494,8 @@ class Router:
 
     async def _translate_line(self, intent: str, lang: langs.Lang, req: Request, known: set[str],
                               timings: dict[str, float], on_token, cancel) -> Result:
+        if is_import_request(intent, lang.id):
+            return await self._import_only(intent, lang, req, timings, on_token, cancel)
         if 0 in req.stages and (res := self._emmet(intent, lang, req)) is not None:
             return res
         if 0 in req.stages:
@@ -460,7 +580,8 @@ class Router:
             return build_prompt(fmt, lang.name, lang.fence, intent, guidance=guidance if level < 3 else guidance[:2],
                                 reference=ref, context=context if level == 0 else "",
                                 after=req.after[:(3000, 1200, 400)[min(level, 2)]],
-                                project=req.project_context if level < 2 else "")
+                                project=req.project_context if level < 2 else "",
+                                libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]])
 
         t = time.perf_counter()
         try:
@@ -491,7 +612,8 @@ class Router:
         def builder(level: int) -> str:
             return build_literal_prompt(fmt, lang.name, lang.fence, intent, examples[: 3 - level] if level else examples,
                                         context if level == 0 else "",
-                                        after=req.after[:(3000, 1200, 400)[min(level, 2)]])
+                                        after=req.after[:(3000, 1200, 400)[min(level, 2)]],
+                                        libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]])
 
         n_lines = intent.count("\n") + 1
         t = time.perf_counter()

@@ -4,6 +4,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.3.2] - 2026-10-10
+
+- Pedidos como `import de biblioteca de youtube` usam um fluxo limitado às importações. A finalidade da biblioteca não vira uma implementação; padrões, compositor e RAG não participam desse fluxo.
+- Catálogo offline para YouTube: yt-dlp no Python, youtubei.js no JavaScript/TypeScript, youtube_explode_dart no Dart/Flutter e YoutubeExplode no C#. A instalação permanece separada, no ambiente do projeto.
+- A IA opcional recebe um prompt próprio e somente imports completos e validados podem ser mostrados/aplicados. Funções, classes, downloads, instalação e comandos concatenados são descartados; respostas inválidas/incompletas preservam o código original.
+- Imports nativos preservam ponto e vírgula, `#include`, nomes e aliases. SQL, YAML e Dockerfile explicam que não possuem esse tipo de importação, sem inventar código.
+- Importações com seleção preservam o código existente. Studio, VS Code, Neovim e Vim tratam respostas sem corpo; imports continuam presentes quando o usuário desliga a inserção automática no topo.
+- Regressões cobrem todos os 24 tipos de arquivo, imports multilinha, preservação da seleção/linhas vizinhas, streaming e pedidos explícitos de implementação.
+- Imports de funções/classes próprias são resolvidos nos arquivos reais do projeto, incluindo subpastas, pacotes relativos e layout `src`. Homônimos, funções inexistentes e caminhos externos exigem correção da origem, sem chamar a IA para inventar módulos.
+- Catálogo de referências por projeto, linguagem, origem, versão e hash de conteúdo. Lê APIs/docstrings Python, tipos/fontes de Node e Dart, crates do Cargo.lock, módulos do go.mod e documentação XML das dependências NuGet; nunca executa imports para inspecioná-los. Assinaturas/documentação disponíveis entram como dados de referência nos prompts de inserção, tradução literal e edição.
+- CLI `libraries`/`bibliotecas`: list, show, learn, verify, forget e install. Documentação local fornecida pelo usuário funciona nas 24 linguagens/formatos, com limites de leitura e proteção contra delimitadores de prompt. Instalação explícita tem prévia `--dry-run`, usa o gerenciador do projeto e mantém dependências Python em venv separado do CODAR.
+
 ## [0.3.1] - 2026-10-10
 
 ### Studio e praticidade

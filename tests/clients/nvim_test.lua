@@ -81,6 +81,19 @@ vim.wait(1500, function() return false end, 50)
 check("não sobrescreve texto editado durante a resposta", lines(b)[1] == "outra coisa", vim.inspect(lines(b)))
 
 local out = vim.env.CODAR_RESULT
+for _, hoist in ipairs({ true, false }) do
+  codar.setup({ cmd = vim.env.CODAR_CMD or "codar", imports = hoist })
+  b = buffer("python", { "x = 10", "print(x)" })
+  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  before = lines(b)
+  vim.cmd("Codar import de biblioteca de youtube")
+  local expected = hoist and { "from yt_dlp import YoutubeDL", "", "x = 10", "print(x)" }
+    or { "x = 10", "print(x)", "from yt_dlp import YoutubeDL" }
+  check("importação sem programa; hoist=" .. tostring(hoist), wait_change(b, before)
+    and vim.deep_equal(lines(b), expected), vim.inspect(lines(b)))
+  vim.cmd("undo")
+  check("um undo restaura importação; hoist=" .. tostring(hoist), vim.deep_equal(lines(b), before), vim.inspect(lines(b)))
+end
 log[#log + 1] = fails == 0 and "TUDO OK" or (fails .. " FALHA(S)")
 if out and out ~= "" then vim.fn.writefile(log, out) else print(table.concat(log, "\n")) end
 vim.cmd(fails == 0 and "qa!" or "cq!")

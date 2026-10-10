@@ -165,14 +165,15 @@ async function translate(editor: vscode.TextEditor, range: vscode.Range, intent:
     }
     return;
   }
-  let body = res.body;
+  const hoist = cfg("imports.hoist", true);
+  let body = hoist ? res.body : res.code;
   if ((hintsMode === "comments" || hintsMode === "both") && res.findings.length) body = commentHints(body, res.findings, doc.languageId);
   const eol = doc.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
   let startLine = range.start.line;
   if (mode === "insert") {
     const base = firstLine.slice(0, firstLine.length - firstLine.trimStart().length);
     body = body.split("\n").map((l) => (l.trim() ? base + l : l)).join("\n");
-    if (firstLine.trim()) { body = "\n" + body; startLine++; }
+    if (firstLine.trim() && body) { body = "\n" + body; startLine++; }
   } else if (mode === "edit") {
     if (range.start.character > 0 && indent && body.startsWith(indent)) body = body.slice(indent.length);
     if (original.endsWith("\n") && !body.endsWith("\n")) body += "\n";
@@ -180,7 +181,7 @@ async function translate(editor: vscode.TextEditor, range: vscode.Range, intent:
   body = body.replace(/\r?\n/g, eol);
   const all = doc.getText();
   let replacement = all.slice(0, doc.offsetAt(range.start)) + body + all.slice(doc.offsetAt(range.end));
-  if (cfg("imports.hoist", true)) {
+  if (hoist) {
     const imp = hoistImports(replacement, res.imports, doc.languageId, eol);
     replacement = imp.text;
     if (imp.at <= startLine) startLine += imp.added;

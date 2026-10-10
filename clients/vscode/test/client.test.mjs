@@ -73,6 +73,28 @@ test("daemon: ping, translate, audit, stats, erro e cancelamento", { skip: !ep &
     const r2 = await c.translate({ intent: "função soma com a e b que retorna a + b", lang: "typescript",
       context: { indent: "  ", indent_unit: "  " }, options: { stages: [0] } });
     assert.match(r2.body, /^ {2}function soma\(a: number, b: number\): number \{/);
+    for (const [lang, code] of [
+      ["python", "from yt_dlp import YoutubeDL"],
+      ["dart", "import 'package:youtube_explode_dart/youtube_explode_dart.dart';"],
+      ["typescript", "import { Innertube } from 'youtubei.js';"],
+    ]) {
+      const imported = await c.translate({ intent: "import de biblioteca de youtube", lang,
+        options: { stages: [0] } });
+      assert.equal(imported.body, "");
+      assert.equal(imported.code, code);
+      assert.deepEqual(imported.imports, [code]);
+    }
+    const libraryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "codar own library "));
+    try {
+      await fs.writeFile(path.join(libraryRoot, "util.py"), "def somar(a, b):\n    return a + b\n");
+      const own = await c.translate({ intent: "importar minha função somar de util.py", lang: "python",
+        context: { root: libraryRoot, file: path.join(libraryRoot, "app.py") }, options: { stages: [0] } });
+      assert.equal(own.code, "from util import somar");
+      assert.equal(own.body, "");
+      assert.ok(own.notes.some(note => note.includes("API/documentação local")));
+    } finally {
+      await fs.rm(libraryRoot, { recursive: true, force: true });
+    }
     const a = await c.call("audit", { code: "eval(x)", lang: "javascript" });
     assert.ok(a.findings.some((f) => f.id === "INJ010"));
     const s = await c.call("stats");

@@ -14,7 +14,7 @@ O daemon grava `endpoint.json` no diretório de execução ao subir e o apaga ao
 | qualquer um | `$CODAR_HOME/run/`, se `CODAR_HOME` estiver definido |
 
 ```json
-{"transport": "unix", "address": "/run/user/1000/codar/codar.sock", "token": "", "uri": "unix:/run/user/1000/codar/codar.sock", "pid": 5837, "version": "0.3.1"}
+{"transport": "unix", "address": "/run/user/1000/codar/codar.sock", "token": "", "uri": "unix:/run/user/1000/codar/codar.sock", "pid": 5837, "version": "0.3.2"}
 ```
 
 `transport` é `unix`, `pipe` (Windows, `\\.\pipe\codar-<usuário>`) ou `tcp` (`127.0.0.1:porta`). A variável `CODAR_ENDPOINT` (`unix:/caminho`, `pipe:\\.\pipe\nome`, `tcp://127.0.0.1:7878`) tem precedência; com TCP, `CODAR_TOKEN` leva o token.
@@ -32,7 +32,7 @@ Teste rápido no terminal:
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"ping"}' | nc -U -q1 "$XDG_RUNTIME_DIR/codar/codar.sock"
-# {"jsonrpc":"2.0","id":1,"result":{"pong":true,"version":"0.3.1","pid":5837}}
+# {"jsonrpc":"2.0","id":1,"result":{"pong":true,"version":"0.3.2","pid":5837}}
 ```
 
 ## `translate`
@@ -76,7 +76,7 @@ Cada item de `findings`: `id`, `severity` (`info`, `warning`, `error`, `critical
 | Método | Parâmetros | Resultado |
 |---|---|---|
 | `project.search` | `root`, `query`, `file?`, `buffer?`, `names?`, `ai?` | termos, resultados reais com caminho/linha/prévia, arquivos ignorados e indicador de corte |
-| `ping` | | `{"pong": true, "version": "0.3.1", "pid": 5837}` |
+| `ping` | | `{"pong": true, "version": "0.3.2", "pid": 5837}` |
 | `auth` | `token` | `{"ok": true}` |
 | `audit` | `code`, `lang`, `hints?` | `{"findings": [...], "ms": 0.4}` |
 | `stats` | | memória, modelo, estágios, cache, número de pedidos |

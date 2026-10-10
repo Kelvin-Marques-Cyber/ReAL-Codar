@@ -1,3 +1,11 @@
+codar (0.3.2-1) unstable; urgency=medium
+
+  * Limita pedidos de bibliotecas às declarações de importação.
+  * Corrige importações no Studio, VS Code, Neovim e Vim.
+  * Adiciona catálogo local de bibliotecas para vídeos/playlists do YouTube.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Sat, 10 Oct 2026 17:00:00 -0300
+
 codar (0.3.1-1) unstable; urgency=medium
 
   * Corrige Ctrl+Enter na barra de intenção e contexto de arquivos citados.

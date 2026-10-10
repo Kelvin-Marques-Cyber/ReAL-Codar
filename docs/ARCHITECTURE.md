@@ -39,6 +39,14 @@ O teto padrão é 3072 MB de RSS para o processo inteiro. As decisões abaixo vi
 
 O `MemGuard` amostra o RSS (incluindo o processo filho no backend `llama_server`) e reage em dois níveis. Antes de carregar um modelo, o daemon lê o cabeçalho GGUF, estima pesos + KV + buffers e recusa o carregamento se a soma passaria do teto duro.
 
+## Imports e referências de bibliotecas
+
+Pedidos limitados a imports usam `engine/imports.py` e um prompt próprio, antes de padrões/RAG/composição. O validador aceita somente declarações nativas completas; propósito da biblioteca não autoriza gerar uma implementação. Código próprio Python é resolvido estaticamente nos arquivos permitidos do projeto.
+
+`libraries.py` lê fontes, tipos e documentação como dados, sem importar/executar pacotes. O catálogo privado separa projeto, linguagem, origem e versão; SHA-256 do conteúdo detecta atualizações. Os prompts de geração, tradução literal e edição recebem um contexto limitado dessas referências. O hash/contexto participa da chave do cache de tradução. Imports não usam esse cache, para revalidar a origem dos módulos próprios.
+
+A consulta ocorre fora do event loop e tem limites de leitura e contexto. Referências manuais estendem a cobertura a todos os formatos; APIs sem fontes/tipos/documentação permanecem desconhecidas. `library_packages.py` gera planos de instalação explícita com argumentos separados, executados pelo gerenciador do projeto. [Contrato e exemplos](LIBRARIES.md).
+
 ## Concorrência e cancelamento
 
 O daemon é um único processo asyncio. A IA roda numa thread dedicada com fila, porque o llama.cpp não é reentrante; o compilador, o banco e o auditor respondem no event loop sem esperar a IA. Cada conexão aceita até 8 pedidos simultâneos e pedidos de até 2048 KB por padrão, com snapshots individuais de até 512 KB. `$/cancelRequest` interrompe a geração no próximo token. Os tokens chegam ao cliente como notificações `$/progress`.

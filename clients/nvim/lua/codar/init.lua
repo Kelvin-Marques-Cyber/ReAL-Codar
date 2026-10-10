@@ -227,15 +227,19 @@ local function translate(buf, first, last, intent, mode)
       return show_scratch(res.code, ft, "codar://resultado")
     end
 
-    local body = vim.split(res.body, "\n", { plain = true })
+    local body_text = M.config.imports and res.body or res.code
+    local body = vim.split(body_text, "\n", { plain = true })
     if (M.config.hints == "comments" or M.config.hints == "both") and #res.findings > 0 then
       body = with_hints(buf, body, res.findings)
     end
     local imp = import_edit(buf, res.imports)
     local first_row
+    local only_imports = mode == "insert" and M.config.imports and res.body == "" and #res.imports > 0
     vim.api.nvim_buf_call(buf, function()
       vim.cmd("let &undolevels = &undolevels") -- a tradução vira um passo próprio de desfazer
-      if mode == "insert" then
+      if only_imports then
+        first_row = first
+      elseif mode == "insert" then
         local cur = original[1] or ""
         local base = cur:match("^%s*")
         for i, l in ipairs(body) do
@@ -253,7 +257,7 @@ local function translate(buf, first, last, intent, mode)
         first_row = first
       end
       if imp then
-        vim.cmd("undojoin") -- código e imports num único passo de desfazer (u)
+        if not only_imports then vim.cmd("undojoin") end -- código e imports num único passo de desfazer (u)
         vim.api.nvim_buf_set_lines(buf, imp.row, imp.row, false, imp.lines)
         if imp.row <= first_row then
           first_row = first_row + #imp.lines
