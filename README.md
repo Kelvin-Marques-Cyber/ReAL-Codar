@@ -148,7 +148,7 @@ codar init                     # configuração e modelo de IA padrão (~1,1 GB)
 codar restart
 ```
 
-Sem o modelo, só as frases que nem o compilador nem o banco entendem ficam sem resposta, com uma mensagem dizendo como instalar o modelo. Testado em Linux, inclusive Ubuntu Server via SSH. O código também cobre macOS e Windows (Named Pipe, Job Object), mas essas plataformas ainda não têm testes automatizados.
+Sem o modelo, só as frases que nem o compilador nem o banco entendem ficam sem resposta, com uma mensagem dizendo como instalar o modelo. Testado em Linux, inclusive Ubuntu Server via SSH. O código também cobre macOS e Windows (Named Pipe, Job Object). Os workflows de CI incluem testes de edição e recuperação em Windows e macOS, além do cliente VS Code em Windows e Linux. Confira os resultados no GitHub Actions; a validação local desta versão foi feita em Linux.
 
 ## Primeiros passos
 
