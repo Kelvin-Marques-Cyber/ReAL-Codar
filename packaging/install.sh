@@ -5,7 +5,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 #
 # Variáveis opcionais:
-#   CODAR_VERSION=0.1.1   Release específica em vez da última (também aceita v0.1.1)
+#   CODAR_VERSION=0.3.0   Release específica em vez da última (também aceita v0.3.0)
 #   CODAR_PKG=/caminho    instala um pacote já baixado (sem acessar a rede)
 set -eu
 

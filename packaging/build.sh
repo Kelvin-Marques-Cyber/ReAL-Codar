@@ -41,4 +41,6 @@ for f in $formats; do
     "$nfpm" package --config "$config" --packager "$f" --target dist/ | sed 's/^/  /'
 done
 rm -rf build/root
+echo "distribuições Python para Windows/macOS e checksums…"
+python3 packaging/build_portable.py
 ls -1 dist/

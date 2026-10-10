@@ -21,6 +21,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - Studio e VS Code mostram prévias com escolha de trechos, histórico de edições, edição de vários arquivos, verificações e gestão de plugins.
 - README com fluxo principal da CLI e guia de uso da extensão; seu número de versão passa a ser conferido pelo guard de publicação.
 - Suíte de comportamento de edição Python, testes de falhas e cancelamento, integração do cliente VS Code com daemon real e CI de edição para Windows/macOS.
+- Distribuições Windows/macOS com a wheel incluída e instalador Python/pipx, módulo PowerShell no Windows, inventário de Release e SHA-256 dos arquivos. O sdist inclui scripts de build e clientes; o workflow publica esses formatos junto aos pacotes Linux e ao VSIX.
 
 ## [0.2.0] - 2026-10-09
 

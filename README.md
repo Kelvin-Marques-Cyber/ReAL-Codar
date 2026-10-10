@@ -18,7 +18,7 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.3.0.** A branch `main` recebe as mudanças mais recentes. Pacotes binários só ficam disponíveis depois que uma tag é compilada e publicada em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases). Para instalar ou atualizar a partir do código atual, use o fluxo com `pipx` abaixo.
+**Versão do código: 0.3.0.** A branch `main` recebe as mudanças mais recentes. As distribuições versionadas ficam em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS e extensão do VS Code. Para instalar ou atualizar a partir do código atual, use o fluxo com `pipx` abaixo.
 
 ## Por que existe
 
@@ -113,13 +113,13 @@ O serviço opcional `codar.service` usa **`/usr/bin/codar`**. Se você o ativou 
 
 ### Linux, por uma Release publicada
 
-Use esta opção quando houver uma Release com o pacote da sua distro. **O instalador padrão não instala `main` e não atualiza uma instalação pipx.** Sem uma Release disponível, use a opção anterior.
+Baixe o pacote da sua distro em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases) ou use o instalador abaixo. **O instalador padrão não instala `main` e não atualiza uma instalação pipx.**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 ```
 
-O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.1.1` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
+O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.3.0` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
 
 | Distro | Comando |
 |---|---|
@@ -129,7 +129,20 @@ O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última
 | Arch | `sudo pacman -U ./codar-<versao>-1-any.pkg.tar.zst` |
 | Alpine | `sudo apk add --allow-untrusted ./codar_<versao>-r1_noarch.apk` |
 
-O pacote traz o comando `codar`, a página de manual (`man codar`), o completar com Tab para bash, zsh e fish, os plugins de Neovim e Vim já ativos e um serviço opcional do systemd (`systemctl --user enable --now codar`). Ele depende só do Python 3.10+ do sistema. A cada mudança, o CI instala o pacote em contêineres limpos de todas essas distros, usa o codar e remove o pacote ([docs/PACKAGING.md](docs/PACKAGING.md)).
+O pacote traz o comando `codar`, a página de manual (`man codar`), o completar com Tab para bash, zsh e fish, os plugins de Neovim e Vim já ativos e um serviço opcional do systemd (`systemctl --user enable --now codar`). Ele depende só do Python 3.10+ do sistema. O CI está configurado para instalar e remover os pacotes em contêineres limpos dessas distros; confira os resultados da execução, especialmente em publicações manuais ([docs/PACKAGING.md](docs/PACKAGING.md)).
+
+### Windows e macOS, por uma Release publicada
+
+Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônomos EXE/DMG. Baixe e extraia o arquivo correspondente em [Releases](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases):
+
+| Sistema | Arquivo | Comando dentro da pasta extraída |
+|---|---|---|
+| Windows | `codar-0.3.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.3.0-macos-python.tar.gz` | `sh install.sh` |
+
+O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
+
+Cada Release inclui `SHA256SUMS` e `RELEASE.json` com versões, tamanhos, hashes e a revisão de origem. As notas da Release descrevem quais verificações foram executadas; uma compilação bem-sucedida não comprova a instalação em todos os sistemas.
 
 ### Depois de instalar
 

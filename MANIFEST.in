@@ -1,0 +1,9 @@
+include CHANGELOG.md
+graft packaging
+recursive-include docs *.md *.svg *.png
+recursive-include clients/nvim *.lua *.md
+recursive-include clients/vim *.vim *.md
+recursive-include clients/powershell *.ps1 *.psm1 *.psd1 *.md
+recursive-include clients/vscode/src *.ts
+include clients/vscode/package.json clients/vscode/package-lock.json clients/vscode/tsconfig.json clients/vscode/README.md clients/vscode/.vscodeignore
+global-exclude *.py[cod]

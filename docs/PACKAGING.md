@@ -1,6 +1,6 @@
 # Empacotamento e publicação
 
-O build do CODAR prepara seis formatos, todos gerados de uma única árvore de instalação. Eles só estão disponíveis para download depois de uma Release publicada; a branch `main` pode ser instalada diretamente com pipx conforme o [README](../README.md#instalação).
+O build do CODAR prepara os pacotes Linux de uma única árvore de instalação e distribuições Python para Windows/macOS a partir da mesma wheel. Eles ficam disponíveis para download depois de uma Release publicada; a branch `main` pode ser instalada diretamente com pipx conforme o [README](../README.md#instalação).
 
 | Formato | Gerenciador | Distros testadas |
 |---|---|---|
@@ -9,7 +9,11 @@ O build do CODAR prepara seis formatos, todos gerados de uma única árvore de i
 | `.apk` | apk | Alpine (apk-tools 2 e 3) |
 | `.pkg.tar.zst` | pacman | Arch |
 | wheel e sdist | pip, pipx | qualquer sistema com Python 3.10+ |
+| `windows-python.zip` | instalador Python/pipx; módulo PowerShell incluído | requer Python 3.10+ e pipx; não é um EXE |
+| `macos-python.tar.gz` | instalador Python/pipx | requer Python 3.10+ e pipx; não é um DMG |
 | `codar.vsix` | VS Code | |
+
+`SHA256SUMS` cobre os arquivos distribuídos e `RELEASE.json` registra seus tamanhos, versões e a revisão Git quando o checkout está limpo. As notas da Release distinguem as verificações locais da instalação nos sistemas de destino. Pacotes Linux de uma publicação manual podem não ter passado pelos testes em contêineres; não trate o build como prova dessa validação.
 
 ## O que vai no pacote
 
@@ -41,6 +45,8 @@ packaging/build.sh               # tudo em dist/
 packaging/build.sh deb rpm       # só alguns formatos
 ```
 
+O script também chama `packaging/build_portable.py`, que inclui a wheel, o instalador, a licença e o VSIX nos arquivos Windows/macOS. O instalador verifica os hashes antes de executar pipx e confirma a versão pelo caminho completo do executável. O sdist inclui os scripts de empacotamento e os clientes de editor necessários para reconstruir a distribuição.
+
 ## Testar a instalação
 
 ```bash
@@ -70,10 +76,12 @@ Em máquinas com SELinux, os contêineres de teste rodam com `--security-opt lab
 
 1. Atualize `__version__` em `src/codar/__init__.py`. O `pyproject.toml` obtém a versão desse atributo; não adicione outra versão Python.
 2. Sincronize `clients/vscode/package.json`, os dois campos de versão do projeto em `clients/vscode/package-lock.json`, `clients/powershell/Codar/Codar.psd1`, `packaging/rpm/codar.spec` e `packaging/codar.1`. Adicione uma entrada em `packaging/debian/changelog`, preservando o histórico.
-3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.1.1` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
-4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.1.1 && git push origin v0.1.1`. Não reaproveite uma tag publicada.
+3. Atualize o [CHANGELOG](../CHANGELOG.md) e a versão indicada no README. Execute `python packaging/check_versions.py --tag v0.3.0` (substituindo pela versão que vai publicar), `pytest`, o build e os testes de instalação.
+4. Faça commit dos arquivos, envie para `main` e aguarde o CI. Só então crie a tag correspondente: `git tag v0.3.0 && git push origin v0.3.0`. Não reaproveite uma tag publicada. Se a publicação precisar ser manual porque os runners não iniciam, gere os arquivos a partir do commit exato, execute as verificações locais disponíveis e declare nas notas os testes que não foram realizados.
 5. O fluxo [`release.yml`](../.github/workflows/release.yml) confere tag, manifestos e changelog, roda os testes Python, gera os formatos e testa a instalação nas nove imagens antes de publicar os arquivos.
 6. Confira os artefatos na página de Releases. O [instalador](../packaging/install.sh) padrão passa a baixar essa versão. Criar um commit, atualizar o README ou mudar a numeração, sozinho, não publica pacotes.
+
+Na publicação manual, envie apenas os arquivos enumerados em `SHA256SUMS`, mais o próprio `SHA256SUMS`; não envie versões antigas que ainda estejam em `dist/`. Mantenha os pacotes Linux, wheel, sdist, ZIP/TAR de Windows/macOS, VSIX e `RELEASE.json` na mesma Release.
 
 O CI também executa a checagem de versões em alterações comuns. O modo `packaging/install.sh --pipx` instala `main` diretamente e independe de Releases. Para confirmar a revisão Git instalada, use `codar version --verbose`; wheels e pacotes nativos podem não registrar um commit. Após atualizar, reinicie o daemon e reabra o Studio. O serviço systemd distribuído usa `/usr/bin/codar`, não a instalação do pipx.
 

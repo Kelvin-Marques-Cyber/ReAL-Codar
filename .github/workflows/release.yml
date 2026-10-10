@@ -43,4 +43,7 @@ jobs:
             dist/*.pkg.tar.zst
             dist/*.whl
             dist/*.tar.gz
-            clients/vscode/codar.vsix
+            dist/*.zip
+            dist/codar.vsix
+            dist/SHA256SUMS
+            dist/RELEASE.json
