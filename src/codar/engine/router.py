@@ -110,13 +110,14 @@ class Request:
     audit: bool = True
     hints: bool = False
     mode: str = "auto"  # auto | line | block | insert | edit
+    locale: str | None = None
 
     @classmethod
     def from_params(cls, p: dict[str, Any], default_lang: str | None = None) -> Request:
         ctx = p.get("context") or {}
         opts = p.get("options") or {}
         stages = tuple(int(s) for s in opts.get("stages", (0, 1, 2)))
-        return cls(intent=str(p.get("intent", "")), lang=p.get("lang") or default_lang,
+        return cls(intent=str(p.get("intent", "")), locale=p.get('locale'), lang=p.get("lang") or default_lang,
                    lang_explicit=bool(p.get("lang")), file=ctx.get("file"), before=str(ctx.get("before", ""))[-6000:],
                    after=str(ctx.get("after", ""))[:3000], selected=str(ctx.get("selected", "")),
                    project_root=ctx.get("root"),
@@ -206,7 +207,7 @@ class Router:
         ctx = hashlib.sha256(repr((req.before, req.after, req.selected, req.project_context, req.library_context,
                                   req.file, req.project_root,
                                   req.project_guidance, req.project_skills)).encode()).hexdigest()
-        return "|".join([intent, lang, req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
+        return "|".join([intent, lang, str(req.locale), req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
                          str(req.hints), str(req.audit), req.mode, ctx])
 
     def cache_get(self, key: str) -> Result | None:
@@ -237,6 +238,16 @@ class Router:
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         intent = clean_intent(req.intent) if "\n" not in req.intent.strip() else req.intent.strip("\n")
+        from codar.engine.locale_intents import normalize
+        from codar.i18n import normalize_locale
+
+        try:
+            locale = normalize_locale(req.locale or self.cfg.get('ui', {}).get('locale', 'pt-BR'))
+        except ValueError as exc:
+            raise TranslateError(str(exc)) from exc
+        req = dataclasses.replace(req, locale=locale)
+        known_locale = set(_IDENT.findall(req.before + '\n' + req.after + '\n' + req.selected))
+        intent = '\n'.join(normalize(line, locale, known_locale) for line in intent.split('\n'))
         intent, hinted = extract_lang_hint(intent)
         lang = self._resolve_lang(req, hinted)
         from codar.engine.actions import INFORMATIONAL, classify, information

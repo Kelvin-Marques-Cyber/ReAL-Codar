@@ -117,6 +117,7 @@ def cmd_run(args) -> int:
             on_delta = delta if args.stream and hud.mode != "none" else None
             try:
                 res = client.translate(intent, args.lang, file=args.file, before=before, indent=args.indent or "", stages=_stages(args.stages),
+                                       locale=getattr(args, 'locale', None),
                                        selected=selected,
                                        audit=not args.no_audit, hints=args.hints, mode=args.mode, on_delta=on_delta,
                                        indent_unit=args.indent_unit,
@@ -568,6 +569,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", metavar="comando")
 
     def common_engine(p):
+        p.add_argument('--locale', choices=['pt-BR', 'en', 'es', 'pt-PT'], help='idioma humano; --lang escolhe a linguagem do código')
         p.add_argument("-l", "--lang", help="linguagem alvo (py, js, ts, go, rs, java, cs, c, cpp, sh, ps1, dart, flutter…)")
         p.add_argument("--local", action="store_true", help="roda o motor no próprio processo, sem daemon")
         p.add_argument("--no-autostart", action="store_true", help="não sobe o daemon automaticamente")

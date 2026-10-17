@@ -191,8 +191,10 @@ class Client:
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
                   on_delta: Callable[[str], None] | None = None,
-                  cancel: threading.Event | None = None) -> dict:
-        params = {"intent": intent, "lang": lang,
+                  cancel: threading.Event | None = None, locale: str | None = None) -> dict:
+        from codar.i18n import get_locale
+
+        params = {"intent": intent, "lang": lang, 'locale': locale or get_locale(),
                   "context": {"file": file, "before": before, "after": after, "selected": selected,
                               "root": project_root, "indent": indent, "indent_unit": indent_unit},
                   "options": {"stages": list(stages), "audit": audit, "hints": hints, "mode": mode,

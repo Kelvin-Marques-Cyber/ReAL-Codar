@@ -32,9 +32,11 @@ class StudioBackend:
                   on_delta: Callable[[str], None] | None = None,
                   cancel: threading.Event | None = None) -> dict:
         with self._client() as c:
+            from codar.i18n import get_locale
+
             return c.translate(intent, lang, file=file, before=before, indent=indent, indent_unit=indent_unit,
                                after=after, selected=selected, project_root=project_root, mode=mode,
-                               stages=stages, hints=hints, on_delta=on_delta, cancel=cancel)
+                               stages=stages, hints=hints, on_delta=on_delta, cancel=cancel, locale=get_locale())
 
     def audit(self, code: str, lang: str) -> dict:
         with self._client() as c:

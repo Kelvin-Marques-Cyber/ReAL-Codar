@@ -39,8 +39,9 @@ class LocalClient:
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
                   on_delta: Callable[[str], None] | None = None,
-                  cancel: threading.Event | None = None) -> dict:
-        req = Request(intent=intent, lang=lang, lang_explicit=bool(lang), file=file, before=before, indent=indent,
+                  cancel: threading.Event | None = None, locale: str | None = None) -> dict:
+        req = Request(intent=intent, locale=locale or self.cfg.get('ui', {}).get('locale', 'pt-BR'),
+                      lang=lang, lang_explicit=bool(lang), file=file, before=before, indent=indent,
                       after=after, selected=selected, project_root=project_root,
                       indent_unit=indent_unit, stages=tuple(stages), audit=audit, hints=hints, mode=mode)
         try:

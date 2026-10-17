@@ -99,3 +99,10 @@ def test_manifesto_linkado_fora_do_projeto_nao_e_lido(tmp_path):
     except OSError:
         pytest.skip('symlinks indisponíveis')
     assert inventory(project, 'javascript') == []
+
+
+def test_formas_invalidas_de_manifestos_nao_derrubam_inventario(tmp_path):
+    write(tmp_path, 'pyproject.toml', '[tool]\npoetry="invalido"\n[project]\noptional-dependencies="invalido"\n')
+    assert inventory(tmp_path, 'python') == []
+    write(tmp_path, 'Cargo.toml', 'target="invalido"\n')
+    assert inventory(tmp_path, 'rust') == []

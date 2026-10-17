@@ -41,9 +41,11 @@ class Dependency:
 
     @property
     def status(self):
+        from codar.i18n import tr
+
         flags = [('declarada', self.declared), ('instalada', self.installed), ('importada', self.imported),
                  ('documentada', self.documented), ('não resolvida', self.unresolved)]
-        return ' · '.join(label for label, yes in flags if yes) or self.origin or 'referência'
+        return ' · '.join(tr(label) for label, yes in flags if yes) or self.origin or 'referência'
 
 
 def _read(file):
@@ -67,6 +69,10 @@ def _toml(file):
         return tomllib.loads(_read(file) or '')
     except ValueError:
         return {}
+
+
+def _mapping(value):
+    return value if isinstance(value, dict) else {}
 
 
 def _key(name, lang):
@@ -108,15 +114,15 @@ def inventory(root: Path, lang: str, query: str = '') -> list[Dependency]:
 
     if lang == 'python':
         data = _toml(root / 'pyproject.toml')
-        pkg = data.get('project', {})
+        pkg = _mapping(data.get('project'))
         requirements = list(pkg.get('dependencies', [])) if isinstance(pkg, dict) else []
-        for group in pkg.get('optional-dependencies', {}).values() if isinstance(pkg, dict) else []:
+        for group in _mapping(pkg.get('optional-dependencies')).values() if isinstance(pkg, dict) else []:
             if isinstance(group, list):
                 requirements += group
         for value in requirements:
             if isinstance(value, str) and (match := re.match(r'^\s*([A-Za-z0-9][\w.-]*)', value)):
                 declared(match[1], value[match.end():].strip(), 'pyproject.toml')
-        poetry = data.get('tool', {}).get('poetry', {}).get('dependencies', {})
+        poetry = _mapping(_mapping(_mapping(data.get('tool')).get('poetry')).get('dependencies'))
         if isinstance(poetry, dict):
             for name, version in poetry.items():
                 if name != 'python':
@@ -185,7 +191,7 @@ def inventory(root: Path, lang: str, query: str = '') -> list[Dependency]:
     elif lang == 'rust':
         data = _toml(root / 'Cargo.toml')
         groups = [data.get(name, {}) for name in ('dependencies', 'dev-dependencies', 'build-dependencies')]
-        for target in data.get('target', {}).values():
+        for target in _mapping(data.get('target')).values():
             if isinstance(target, dict):
                 groups += [target.get(name, {}) for name in ('dependencies', 'dev-dependencies', 'build-dependencies')]
         for group in groups:
@@ -211,7 +217,7 @@ def inventory(root: Path, lang: str, query: str = '') -> list[Dependency]:
                     version = node.get('Version') or next((n.text for n in node if n.tag.split('}')[-1] == 'Version'), '')
                     declared(node.get('Include'), version or '', file.name)
         assets = _json(root / 'obj/project.assets.json', root)
-        for package in assets.get('libraries', {}):
+        for package in _mapping(assets.get('libraries')):
             if '/' in package:
                 name, version = package.rsplit('/', 1)
                 found = catalog._resolve(name, lang)

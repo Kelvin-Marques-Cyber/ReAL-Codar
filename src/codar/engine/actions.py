@@ -21,7 +21,7 @@ def classify(intent: str, lang: str | None = None) -> str:
         return 'install'
     if re.match(r'^(?:estud\w*|study|learn|aprender|aprenda)\b', text):
         return 'study'
-    if re.match(r'^(?:execut\w*|rodar|rode|run|testar|teste|test)\b', text):
+    if re.match(r'^(?:execut\w*|ejecut\w*|rodar|rode|run|testar|teste|test|prueba)\b', text):
         return 'execute'
     if re.match(r'^(?:expli\w*|explain|consult\w*|mostrar a api|show (?:the )?(?:api|documentation)|'
                 r'como\b|how\b|qual\b|quais\b|what\b|que es\b|cual\b)\b', text):

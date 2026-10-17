@@ -11,6 +11,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, OptionList, RichLog, Select, Static
 from textual.widgets.option_list import Option
 
+from codar.i18n import tr, localize_widgets
 from codar import langs
 from codar.estudo.bibliotecas import LibraryTrack, track
 from codar.estudo import progresso
@@ -36,12 +37,12 @@ class InstallPlanScreen(ModalScreen[bool]):
 
     def compose(self):
         with Vertical(id='library-plan'):
-            yield Label('INSTALAR NO PROJETO · confira o plano')
+            yield Label(tr('INSTALAR NO PROJETO · confira o plano'))
             yield Static(Text(str(self.root)))
             yield RichLog(id='library-plan-output', wrap=True, markup=False)
             with Horizontal(id='library-plan-buttons'):
-                yield Button('Executar instalação', id='library-confirm', variant='success')
-                yield Button('Cancelar', id='library-decline')
+                yield Button(tr('Executar instalação'), id='library-confirm', variant='success')
+                yield Button(tr('Cancelar'), id='library-decline')
 
     def on_mount(self):
         log = self.query_one('#library-plan-output', RichLog)
@@ -77,12 +78,12 @@ class LibraryStudyScreen(ModalScreen[None]):
             yield Static('', id='library-study-progress')
             yield RichLog(id='library-lesson', wrap=True, markup=False, auto_scroll=False, min_width=1)
             with Grid(id='library-study-buttons'):
-                yield Button('Anterior', id='lesson-prev')
-                yield Button('Próxima', id='lesson-next')
-                yield Button('Dica', id='lesson-hint')
-                yield Button('Marcar praticado', id='lesson-mark')
-                yield Button('Fontes', id='lesson-sources')
-                yield Button('Fechar', id='lesson-close')
+                yield Button(tr('Anterior'), id='lesson-prev')
+                yield Button(tr('Próxima'), id='lesson-next')
+                yield Button(tr('Dica'), id='lesson-hint')
+                yield Button(tr('Marcar praticado'), id='lesson-mark')
+                yield Button(tr('Fontes'), id='lesson-sources')
+                yield Button(tr('Fechar'), id='lesson-close')
 
     def on_mount(self):
         self.render_lesson()
@@ -92,22 +93,22 @@ class LibraryStudyScreen(ModalScreen[None]):
         done = progresso.ler(self.root, self.value.lang)
         count = sum(item.id in done for item in self.value.lessons)
         self.query_one('#library-study-progress', Static).update(
-            Text(f'Etapa {self.index + 1}/{len(self.value.lessons)} · {count} práticas registradas manualmente'))
+            Text(tr('Etapa {step}/{total} · {count} práticas registradas manualmente', step=self.index+1, total=len(self.value.lessons), count=count)))
         log = self.query_one('#library-lesson', RichLog)
         log.clear()
-        log.write(Text(lesson.title, style='bold'))
-        log.write(Text('\n' + lesson.text))
+        log.write(Text(tr(lesson.title), style='bold'))
+        log.write(Text('\n' + tr(lesson.text)))
         if lesson.example:
             lexer = 'text' if self.index in (1, 3) else self.value.lang
             log.write(Syntax(lesson.example, lexer, word_wrap=True, background_color='default'))
         if lesson.practice:
-            log.write(Text('\nPratique: ' + lesson.practice))
+            log.write(Text('\n' + tr('Pratique: {text}', text=tr(lesson.practice))))
         for hint in lesson.hints[:self.hints]:
-            log.write(Text('\nDica: ' + hint))
+            log.write(Text('\n' + tr('Dica: {text}', text=tr(hint))))
         self.query_one('#lesson-prev', Button).disabled = self.index == 0
         self.query_one('#lesson-next', Button).disabled = self.index == len(self.value.lessons) - 1
         self.query_one('#lesson-hint', Button).disabled = self.hints >= len(lesson.hints)
-        self.query_one('#lesson-mark', Button).label = 'Praticado ✓' if lesson.id in done else 'Marcar praticado'
+        self.query_one('#lesson-mark', Button).label = tr('Praticado ✓' if lesson.id in done else 'Marcar praticado')
         log.scroll_home(animate=False)
 
     def on_button_pressed(self, event):
@@ -163,27 +164,28 @@ class LibrariesScreen(ModalScreen[dict | None]):
 
     def compose(self):
         with Vertical(id='libraries-card'):
-            yield Label('BIBLIOTECAS · ambiente, APIs e aprendizagem')
+            yield Label(tr('BIBLIOTECAS · ambiente, APIs e aprendizagem'))
             with Horizontal(id='libraries-filters'):
                 yield Select([(meta.name, key) for key, meta in langs.LANGS.items()], value=self.lang,
                              allow_blank=False, id='libraries-language', prompt='Linguagem')
-                yield Input(placeholder='Buscar nome ou estado (instalada, importada…)…', id='libraries-query')
+                yield Input(placeholder=tr('Buscar nome ou estado (instalada, importada…)…'), id='libraries-query')
             with Horizontal(id='libraries-content'):
                 yield OptionList(id='libraries-list')
                 yield RichLog(id='libraries-details', markup=False, wrap=True, auto_scroll=False, min_width=1)
-            yield Static('Carregando o ambiente…', id='libraries-status')
+            yield Static(tr('Carregando o ambiente…'), id='libraries-status')
             with Grid(id='libraries-actions'):
-                yield Button('Consultar API', id='libraries-api')
-                yield Button('Abrir trilha', id='libraries-study')
-                yield Button('Aprender fonte', id='libraries-source')
-                yield Button('Instalar…', id='libraries-install')
-                yield Button('Atualizar lista', id='libraries-refresh')
-                yield Button('Fechar', id='libraries-close')
+                yield Button(tr('Consultar API'), id='libraries-api')
+                yield Button(tr('Abrir trilha'), id='libraries-study')
+                yield Button(tr('Aprender fonte'), id='libraries-source')
+                yield Button(tr('Instalar…'), id='libraries-install')
+                yield Button(tr('Atualizar lista'), id='libraries-refresh')
+                yield Button(tr('Fechar'), id='libraries-close')
 
     def on_mount(self):
         self.ready = True
         self.refresh_inventory()
         self.query_one('#libraries-query', Input).focus()
+        localize_widgets(self)
 
     def refresh_inventory(self):
         self.generation += 1
@@ -222,10 +224,10 @@ class LibrariesScreen(ModalScreen[dict | None]):
         else:
             log = self.query_one('#libraries-details', RichLog)
             log.clear()
-            log.write(Text('Nenhuma biblioteca neste filtro. Confira a linguagem e o ambiente do projeto.\n'
-                           'Instalar… prepara um plano; Aprender fonte aceita documentação local.'))
+            log.write(Text(tr('Nenhuma biblioteca neste filtro. Confira a linguagem e o ambiente do projeto.\n'
+                           'Instalar… prepara um plano; Aprender fonte aceita documentação local.')))
         self.query_one('#libraries-status', Static).update(
-            Text(f'{len(self.filtered)} de {len(self.rows)} dependências · leitura local · sem executar bibliotecas'))
+            Text(tr('{count} de {total} dependências · leitura local · sem executar bibliotecas', count=len(self.filtered), total=len(self.rows))))
 
     @on(Input.Changed, '#libraries-query')
     def query_changed(self):
@@ -257,18 +259,17 @@ class LibrariesScreen(ModalScreen[dict | None]):
         log = self.query_one('#libraries-details', RichLog)
         log.clear()
         log.write(Text(f'{row.name} · {row.lang}', style='bold'))
-        log.write(Text(f'Versão: {row.version or "não detectada"}\nRequisito: {row.requirement or "não declarado"}\n'
-                       f'Módulo: {row.module}\nEstado: {row.status}\n\nFontes locais:'))
+        log.write(Text(tr('Versão: {version}\nRequisito: {requirement}\nMódulo: {module}\nEstado: {status}\n\nFontes locais:', version=row.version or tr('não detectada'), requirement=row.requirement or tr('não declarado'), module=row.module, status=row.status)))
         for source in row.sources:
             log.write(Text(source))
-        log.write(Text('\nConsultar API lê assinaturas e docstrings. Abrir trilha organiza a prática em seis etapas.'))
+        log.write(Text(tr('\nConsultar API lê assinaturas e docstrings. Abrir trilha organiza a prática em seis etapas.')))
         log.scroll_home(animate=False)
 
     def open_reference(self, study, source=None, name=None):
         row = self.selected_dependency()
         name = name or (row.module if row else '')
         if not name:
-            self.notify('Selecione uma biblioteca ou use Aprender fonte.')
+            self.notify(tr('Selecione uma biblioteca ou use Aprender fonte.'))
             return
         self.query_one('#libraries-status', Static).update('Lendo fontes e documentação…')
         self.load_reference(name, self.lang, study, source, self.generation)
@@ -295,7 +296,7 @@ class LibrariesScreen(ModalScreen[dict | None]):
                     log.write(Text(value.documentation))
                     log.write(Text('\nFontes:\n' + '\n'.join(value.sources)))
                 else:
-                    log.write(Text('Fontes/tipos indisponíveis. Use Aprender fonte para fornecer documentação local.'))
+                    log.write(Text(tr('Fontes/tipos indisponíveis. Use Aprender fonte para fornecer documentação local.')))
                 log.scroll_home(animate=False)
         self.app.call_from_thread(show)
 
@@ -314,8 +315,8 @@ class LibrariesScreen(ModalScreen[dict | None]):
                     def learn(path):
                         if path:
                             self.open_reference(False, source=(self.root / Path(path).expanduser()).resolve(), name=name)
-                    self.app.push_screen(PromptScreen('FONTE LOCAL · código, tipos ou documentação', ''), learn)
-            self.app.push_screen(PromptScreen('NOME DO MÓDULO/BIBLIOTECA', row.module if row else ''), ask_source)
+                    self.app.push_screen(PromptScreen(tr('FONTE LOCAL · código, tipos ou documentação'), ''), learn)
+            self.app.push_screen(PromptScreen(tr('NOME DO MÓDULO/BIBLIOTECA'), row.module if row else ''), ask_source)
         elif identity == 'libraries-install':
             row = self.selected_dependency()
             def plan(name):
@@ -330,7 +331,7 @@ class LibrariesScreen(ModalScreen[dict | None]):
                     if yes:
                         self.dismiss({'commands': commands, 'name': name})
                 self.app.push_screen(InstallPlanScreen(self.root, commands), confirm)
-            self.app.push_screen(PromptScreen('PACOTE PARA INSTALAR NO PROJETO', row.name if row else ''), plan)
+            self.app.push_screen(PromptScreen(tr('PACOTE PARA INSTALAR NO PROJETO'), row.name if row else ''), plan)
         else:
             self.dismiss(None)
 
