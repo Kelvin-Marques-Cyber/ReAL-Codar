@@ -66,6 +66,25 @@ _ANAPHORA = re.compile(r"\b(?:d|n)?(?:os|as)\s+(?:dois|duas|tres)\b|\b(?:ambos|a
                        r"the value|the total)\b")
 
 
+def _inside_class_method_scope(before: str, indent: str, lang: str) -> bool:
+    """Detecta recuo dentro de classe, sem transformar método em função global."""
+    depth = len(indent.expandtabs(4))
+    if depth == 0:
+        return False
+    for line in reversed(before.splitlines()):
+        if not line.strip() or line.lstrip().startswith(('#', '//')):
+            continue
+        level = len(line) - len(line.lstrip())
+        if level >= depth:
+            continue
+        if lang == 'python':
+            return bool(re.match(r'\s*class\s+\w+\s*(?:\([^)]*\))?\s*:', line))
+        # JS/TS: classe normalmente inicia antes da linha do método; não
+        # adivinha escopos com chaves arbitrárias e funções aninhadas.
+        return bool(re.match(r'\s*(?:export\s+)?class\s+\w+', line))
+    return False
+
+
 def generation_usable(code: str, lang: str) -> bool:
     """Código vazio, prosa ou sintaxe quebrada nunca equivalem a geração bem-sucedida."""
     return not generation_problem(code, lang)
@@ -644,6 +663,23 @@ class Router:
                     raise TranslateError(str(exc)) from exc  # sem IA: ela inventaria um if inteiro
                 return Result(code="", body=body, imports=imports, lang=lang.id, stage="0", source="stage0:else")
             if parsed:
+                method = bool(re.search(r'\b(?:metodo|method)\b', fold(intent))) and len(parsed.nodes) == 1 \
+                    and isinstance(parsed.nodes[0], ir.FuncDef)
+                if method and lang.id in ('python', 'javascript', 'typescript'):
+                    if not _inside_class_method_scope(req.before, req.indent, lang.id):
+                        raise TranslateError("Método POO precisa ficar dentro de uma classe. "
+                                             "Coloque a intenção com recuo no corpo da classe; "
+                                             "fora dela, use 'função'.")
+                    node = parsed.nodes[0]
+                    if lang.id == 'python' and (not node.params or node.params[0] not in ('self', 'cls')):
+                        node.params.insert(0, 'self')
+                    elif lang.id in ('javascript', 'typescript'):
+                        params = ', '.join(f'{p}: unknown' if lang.id == 'typescript' else p
+                                           for p in node.params)
+                        tail = ': void' if lang.id == 'typescript' else ''
+                        body = f'{node.name}({params}){tail} {{\n  // implemente o comportamento aqui\n}}'
+                        return Result(code="", body=body, imports=[], lang=lang.id,
+                                      stage="0", source="stage0:method")
                 try:
                     imports, body = emit(parsed.nodes, lang.id)
                     res = Result(code="", body=body, imports=imports, lang=lang.id, stage="0",
