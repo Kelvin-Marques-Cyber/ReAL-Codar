@@ -104,12 +104,12 @@ def test_import_proprio_nao_usa_cache_obsoleto(translate, tmp_path):
         translate('importar função somar de util.py', project_root=str(tmp_path))
 
 
-def test_consulta_python_sem_executar_codigo(translate, router, tmp_path):
+def test_geracao_consulta_api_python_sem_executar_biblioteca(translate, router, tmp_path):
     sentinel = tmp_path / 'executou'
     write(tmp_path, 'minhalib.py', f'from pathlib import Path\nPath({str(sentinel)!r}).touch()\n'
           'def buscar_video(url: str, playlist: bool = False) -> dict:\n'
           '    """Lê informações sem fazer download."""\n    return {}\n')
-    result = translate('consulte minha API para buscar vídeo', project_root=str(tmp_path),
+    result = translate('crie uma função que usa minha API para buscar vídeo', project_root=str(tmp_path),
                        before='from minhalib import buscar_video\n', stages=(2,))
     prompt = router.stage2.prompts[-1]
     assert 'def buscar_video(url: str, playlist: bool=False) -> dict' in prompt

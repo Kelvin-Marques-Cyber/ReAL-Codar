@@ -20,6 +20,7 @@ def test_consulta_e_instalacao_nao_chamam_ia_nem_alteram_codigo(translate, route
     original = 'def somar(a, b):\n    return a+b\n'
     explained = translate('explique a função', selected=original, mode='edit', project_root=str(tmp_path))
     assert explained.action == 'query' and explained.body == '' and explained.imports == []
+    assert not explained.complete  # também protege clientes antigos que verificam código incompleto
     assert 'função' in explained.code.lower()
     planned = translate('instale requests', before=original, mode='edit', project_root=str(tmp_path))
     assert planned.action == 'install' and 'pip install requests' in planned.code
@@ -57,3 +58,12 @@ def test_consulta_no_studio_preserva_selecao_e_arquivo(tmp_path, monkeypatch):
             assert editor.text == original and file.read_text() == original
             assert app.query_one('#panel').active == 'tab-output'
     asyncio.run(scenario())
+
+
+def test_cli_consulta_tem_sucesso_sem_ser_marcada_como_codigo_incompleto(tmp_path, monkeypatch, capsys):
+    from codar.cli.main import main
+    monkeypatch.setenv('CODAR_HOME', str(tmp_path / 'home'))
+    monkeypatch.setenv('CODAR_BACKEND', 'none')
+    assert main(['run', 'explique uma função', '--local', '--root', str(tmp_path)]) == 0
+    output = capsys.readouterr()
+    assert 'função' in output.out and 'resposta incompleta' not in output.err

@@ -4,6 +4,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.4.0] - 2026-10-16
+
+- Perspectivas Essencial, Desenvolvimento e Aprendizagem, com preferência persistente, editor utilizável em 80 colunas e altura limitada do painel.
+- Respostas informativas sinalizam que não são código completo, protegendo também clientes anteriores que recusam respostas incompletas. Hooks preservam o texto diante de geração incompleta.
+
 - Autocompletar inclui funções do projeto e assinaturas de APIs locais; F10 exibe assinatura/origem e aplica o nome com desfazer e proteção contra mudanças do editor. Índice limitado, atualizado ao abrir/salvar, sem executar dependências nem varrer o disco durante a digitação.
 - Base de internacionalização com recursos pt-BR, en, es e pt-PT, preferência `ui.locale`, seleção no Studio e `--locale` nos comandos do motor. Gramática ES conservadora compartilha a IR existente, preservando identificadores, strings e indentação. Rótulos principais/bibliotecas/trilhas traduzidos; mensagens legadas e conteúdo não traduzido mantêm fallback documentado.
 - Perguntas, consultas, estudo e planos de instalação são respostas informativas. Studio, VS Code, Vim, Neovim e hooks preservam o código/seleção, em vez de substituir texto por explicações.

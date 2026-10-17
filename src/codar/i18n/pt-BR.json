@@ -102,6 +102,11 @@
     "Codar: Completar símbolo": "Codar: Completar símbolo",
     "COMPLETAR · assinatura e origem": "COMPLETAR · assinatura e origem",
     "Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.": "Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.",
-    "O editor mudou durante a escolha; nenhum texto foi alterado.": "O editor mudou durante a escolha; nenhum texto foi alterado."
+    "O editor mudou durante a escolha; nenhum texto foi alterado.": "O editor mudou durante a escolha; nenhum texto foi alterado.",
+    "PERSPECTIVA DO STUDIO": "PERSPECTIVA DO STUDIO",
+    "Essencial": "Essencial",
+    "Desenvolvimento": "Desenvolvimento",
+    "Aprendizagem": "Aprendizagem",
+    "Codar: Perspectiva do Studio": "Codar: Perspectiva do Studio"
   }
 }

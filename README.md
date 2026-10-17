@@ -18,7 +18,18 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.3.2.** [Downloads e notas da Release v0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. A branch `main` recebe as mudanças mais recentes; os comandos abaixo distinguem a instalação de uma versão publicada da instalação de `main`.
+**Versão do código: 0.4.0 (preparação de release).** A versão publicada para download continua sendo a 0.3.2. [Downloads e notas da Release v0.3.2](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.3.2): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. A branch `main` recebe as mudanças mais recentes; os comandos abaixo distinguem a instalação de uma versão publicada da instalação de `main`.
+
+## Novidades da 0.4.0
+
+- **Bibliotecas no Studio:** botão BIBLIOTECAS ou Ctrl+Shift+L reúne inventário de dependências, versões/origens, fontes e tipos, APIs reais e trilhas em seis etapas. Não executa bibliotecas durante a consulta.
+- **Aprendizagem verificável:** exercícios de entrada/saída, dicas progressivas e exportação/importação de progresso por projeto e linguagem. `codar study exercises` lista os problemas; `study check ID --file ARQUIVO` executa sua solução sem substituí-la.
+- **Controle do que muda:** perguntas e planos aparecem na saída; F2 cancela gerações e descarta respostas tardias. Instalação mostra o plano e exige confirmação; scripts usam `--yes`.
+- **Três perspectivas:** Essencial, Desenvolvimento e Aprendizagem, com preferência persistente e laterais que cedem espaço em terminais estreitos.
+- **Autocompletar com origem:** símbolos do projeto e APIs locais, com assinatura em F10. A indexação é estática, limitada e feita em segundo plano ao abrir/salvar.
+- **Idiomas humanos separados:** recursos pt-BR/en/es/pt-PT, escolha de interface e front-end espanhol para construções determinísticas. `--locale es --lang python` não traduz identificadores nem strings do código. Mensagens legadas têm fallback documentado.
+
+[Como usar bibliotecas, trilhas, exercícios e F10](docs/STUDIO_BIBLIOTECAS.md) · [Idiomas e cobertura](docs/I18N.md).
 
 ## Novidades da 0.3.2
 

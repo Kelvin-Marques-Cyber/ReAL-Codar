@@ -1,3 +1,11 @@
+codar (0.4.0-1) unstable; urgency=medium
+
+  * Integra inventário, APIs e trilhas de bibliotecas ao Studio.
+  * Adiciona exercícios verificáveis, progresso portável e autocompletar estático.
+  * Protege consultas e cancelamentos; separa idiomas humanos da linguagem alvo.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Fri, 16 Oct 2026 23:00:00 -0300
+
 codar (0.3.2-1) unstable; urgency=medium
 
   * Limita pedidos de bibliotecas às declarações de importação.

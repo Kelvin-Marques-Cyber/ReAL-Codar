@@ -206,6 +206,7 @@ class Studio(App):
         self.streaming = False
         self._translation_serial = 0
         self._generation_cancel = None
+        self.perspective = estado.ler().get('perspective', 'development')
         self.rede_srv = None  # prévia na rede ou repasse de servidor (F4: ver no celular)
         self.estudo = False  # modo estudo (F7): o painel ESTUDO acompanha o cursor
         self._estudo_timer = None
@@ -305,7 +306,38 @@ class Studio(App):
         self.render_status()
         self.sync_welcome()
         self.query_one("#intent", Input).focus()
+        self.apply_perspective(self.perspective, save=False)
         localize_widgets(self)
+
+    def resize_workspace(self, width):
+        from textual.css.query import NoMatches
+
+        try:
+            self.query_one('#left').display = self.perspective != 'essential' and width >= 84
+            self.query_one('#right').display = self.perspective == 'development' and width >= 118
+        except NoMatches:
+            pass
+
+    def apply_perspective(self, perspective, save=True):
+        self.perspective = perspective if perspective in ('essential', 'development', 'learning') else 'development'
+        self.resize_workspace(self.size.width)
+        panel = self.query_one('#panel', TabbedContent)
+        panel.display = self.perspective != 'essential'
+        if self.perspective == 'learning':
+            self.estudo = True
+            panel.active = 'tab-estudo'
+            self.atualizar_estudo()
+        self.render_pills()
+        if save:
+            estado.salvar(perspective=self.perspective)
+
+    def action_perspective(self):
+        def chosen(value):
+            if value:
+                self.apply_perspective(value)
+        self.push_screen(ChoiceScreen(tr('PERSPECTIVA DO STUDIO'),
+                                     [('essential', tr('Essencial')), ('development', tr('Desenvolvimento')),
+                                      ('learning', tr('Aprendizagem'))]), chosen)
 
     # ------------------------------------------------------------------ tema
     def get_css_variables(self) -> dict[str, str]:
@@ -339,14 +371,7 @@ class Studio(App):
                 f"S2 SLM[/]\n[{C['dim']}]OFFLINE · TETO[/] [{C['red']}]{_budget_gb()} GB[/] [{C['dim']}]· v{__version__}[/]")
 
     def on_resize(self, event) -> None:
-        from textual.css.query import NoMatches
-
-        try:  # o primeiro resize chega antes de o layout estar montado
-            w = event.size.width
-            self.query_one("#right").display = w >= 118
-            self.query_one("#left").display = w >= 84
-        except NoMatches:
-            pass
+        self.resize_workspace(event.size.width)
 
     # ------------------------------------------------------------------ HUD
     def feed(self, text: str, color: str = "green") -> None:
@@ -2156,6 +2181,7 @@ class Studio(App):
 
     def _palette_base(self) -> list[tuple[str, str, object]]:
         return [
+            ('Codar: Perspectiva do Studio', 'Essencial · Desenvolvimento · Aprendizagem', self.action_perspective),
             ('Codar: Completar símbolo', 'F10 — funções do projeto e APIs locais', self.action_complete_symbol),
             ('Codar: Idioma da interface', 'pt-BR · English · Español · Português (Portugal)', self.action_ui_language),
             ('Codar: Cancelar geração', 'F2 — interrompe o pedido e preserva seu código', self.action_cancel_generation),

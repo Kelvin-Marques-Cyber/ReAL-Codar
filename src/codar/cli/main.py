@@ -134,7 +134,7 @@ def cmd_run(args) -> int:
             if k:
                 print()
             print_result(res, args, hud)
-            if not res.get("complete", True):
+            if not res.get("complete", True) and res.get('action') not in ('query', 'install', 'execute', 'study'):
                 print("codar: resposta incompleta; selecione um trecho menor ou aumente model.max_tokens", file=sys.stderr)
                 status = EXIT_UNRESOLVED
     return status

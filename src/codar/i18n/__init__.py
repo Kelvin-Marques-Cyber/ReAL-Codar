@@ -44,6 +44,8 @@ def localize_widgets(surface):
         if widget.border_title:
             widget.border_title = tr(widget.border_title, locale)
         if isinstance(widget, (Button, Tab)):
+            if isinstance(widget, Tab) and any(parent.id == 'editors' for parent in widget.ancestors):
+                continue
             label = widget.label
             plain = label.plain if isinstance(label, Text) else str(label)
             translated = tr(plain, locale)

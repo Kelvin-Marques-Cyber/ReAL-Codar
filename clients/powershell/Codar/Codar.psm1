@@ -315,6 +315,10 @@ function ConvertTo-CodarLine {
             Write-Host $res.code
             return $null
         }
+        if ($res.complete -eq $false) {
+            Write-Warning 'Codar: resposta incompleta; código preservado.'
+            return $null
+        }
         return $res.code
     }
     finally { Close-Codar $conn }

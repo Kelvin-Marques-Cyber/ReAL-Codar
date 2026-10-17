@@ -262,7 +262,8 @@ class Router:
             if cancel is not None and cancel.is_set():
                 raise TranslateError('requisição cancelada')
             res = Result(code=message, body='', imports=[], lang=lang.id, stage='0', source='action:' + action,
-                         action=action, timings={'total_ms': round((time.perf_counter() - t0) * 1000, 3)})
+                         action=action, complete=False,
+                         timings={'total_ms': round((time.perf_counter() - t0) * 1000, 3)})
             self.metrics.record(res, req.intent)
             return res
         native_import = is_native_import(req.intent.strip(), lang.id)
@@ -283,6 +284,8 @@ class Router:
         only_imports = bool(import_lines and all(is_import_request(line, lang.id) for line in import_lines))
         key = self._key(req, lang.id, intent)
         if not only_imports and (hit := self.cache_get(key)) is not None:
+            if cancel is not None and cancel.is_set():
+                raise TranslateError('requisição cancelada')
             res = Result(**{**hit.as_dict(), "cached": True})
             res.timings = {**hit.timings, "total_ms": round((time.perf_counter() - t0) * 1000, 3)}
             self.metrics.record(res, intent)

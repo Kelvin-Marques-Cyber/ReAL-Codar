@@ -103,6 +103,7 @@ Botao:hover {
 
 #panel {
     height: 14;
+    max-height: 60%;
 }
 
 #panel.alto {

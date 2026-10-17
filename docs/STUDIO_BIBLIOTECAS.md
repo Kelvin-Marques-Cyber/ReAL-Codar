@@ -61,3 +61,9 @@ Pedidos como `explique esta função`, `consulte API de util` e `instale request
 O autocompletar prioriza palavras do arquivo, depois símbolos estáticos do projeto e APIs das bibliotecas disponíveis, antes do vocabulário geral. **F10** abre a seleção com assinatura e origem; Enter insere somente o identificador e Ctrl+Z desfaz. Se o documento ou cursor mudar durante a escolha, a inserção é recusada.
 
 O índice é atualizado ao abrir e ao salvar explicitamente o arquivo, em segundo plano. A digitação não varre o disco. A varredura respeita exclusões e links, até 300 arquivos, 2 MB de fontes do projeto e 1.200 símbolos. É um complemento estático, sem inferência de tipos ou resolução completa de escopo de um servidor LSP. LSP/DAP continuam integrações futuras, sem funcionalidade simulada nesta versão.
+
+## Perspectivas e terminais estreitos
+
+A paleta **Perspectiva do Studio** oferece Essencial (editor em foco), Desenvolvimento (ferramentas e telemetria) e Aprendizagem (Estudo aberto). A escolha persiste entre sessões e preserva os buffers. Em larguras menores, as laterais cedem espaço ao editor; o painel inferior tem altura limitada para não ocupar a tela inteira.
+
+Respostas informativas usam `action` próprio e `complete=false`, pois não são código completo para aplicar. Clientes atualizados mostram a informação antes de considerar edições; clientes anteriores que verificam `complete` preservam o texto. Os hooks também recusam código gerado incompleto.
