@@ -27,6 +27,31 @@ O Studio agora oferece **Catálogo**, **Continuar**, **Exercícios**, **Marcar p
 
 Marcar uma aula como praticada registra somente a atividade declarada pelo aluno no projeto e linguagem atuais. **Não executa nem aprova automaticamente a solução.** Para um desafio com correção automática, utilize **Exercícios** ou `codar study check` com um arquivo escolhido explicitamente. O material, os identificadores e o progresso usam a mesma fonte dos comandos `codar study path` e `codar study resume`.
 
+## Programação orientada a objetos (POO)
+
+O material de POO diferencia **classe**, **instância**, **método**, **atributo**, **construtor**, **herança** e **composição**. No editor Python, uma intenção como `crie um método depositar com valor` precisa estar **dentro da classe**, com recuo. Fora da classe, use `crie uma função depositar com valor`. O compilador S0 cria a **assinatura/esqueleto** do método; implementar o seu comportamento exige instrução adicional ou edição do corpo. Não considere o esqueleto uma solução funcional de negócio.
+
+Exemplo mínimo distribuído em dois arquivos:
+
+```python
+# receiver.py
+class PlaylistExtract:
+    def extract(self, url):
+        return url
+```
+
+```python
+# teste.py
+from receiver import PlaylistExtract
+
+extractor = PlaylistExtract()
+print(extractor.extract("https://exemplo.invalid/lista"))
+```
+
+`extract` é um **método de instância**, não um símbolo importável diretamente de `receiver`. Portanto `from receiver import extract` está incorreto para esse exemplo. O Codar deve identificar a diferença e sugerir importar `PlaylistExtract`, sem executar `receiver.py` durante a análise. O usuário precisa conferir o construtor e fornecer seus argumentos reais: uma classe com `__init__(self, token)`, por exemplo, exige um token para criar a instância.
+
+No painel ESTUDO, a trilha detecta campos gerados por `@dataclass`, inclusive o `__init__` implícito. **Shift+F7** pode sugerir um `main.py` demonstrativo; métodos que exigem parâmetros, propriedades e corrotinas não são chamados às cegas. A sugestão nunca garante que código do projeto com dependências externas, argumentos desconhecidos ou efeitos colaterais esteja pronto para produção. Revise e execute o exemplo explicitamente com F5.
+
 ## Desafios e correção real
 
 ```console
