@@ -21,6 +21,12 @@ Marcar prática é uma decisão do aluno e não certifica domínio. Aprovações
 
 O progresso é salvo por projeto e linguagem, com bloqueio e substituição atômica. A exportação não inclui caminhos do projeto nem código. Importações são mescladas após validação. Se salvar o progresso falhar após a correção, `check` mantém o resultado dos testes e informa o erro de gravação.
 
+## Estudo diretamente no Studio
+
+O Studio agora oferece **Catálogo**, **Continuar**, **Exercícios**, **Marcar praticado** e **Fontes** na aba ESTUDO. É possível abrir uma aula pelo Catálogo ou retomar a primeira prática pendente pelo botão **Continuar** sem criar um arquivo de código antes. As aulas são apresentadas por nível (iniciante, intermediário, avançado) e módulo, com indicação de prática registrada. Se um arquivo estiver aberto, o painel também continua acompanhando o contexto do editor.
+
+Marcar uma aula como praticada registra somente a atividade declarada pelo aluno no projeto e linguagem atuais. **Não executa nem aprova automaticamente a solução.** Para um desafio com correção automática, utilize **Exercícios** ou `codar study check` com um arquivo escolhido explicitamente. O material, os identificadores e o progresso usam a mesma fonte dos comandos `codar study path` e `codar study resume`.
+
 ## Desafios e correção real
 
 ```console
