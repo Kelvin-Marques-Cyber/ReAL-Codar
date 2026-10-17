@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from difflib import SequenceMatcher
 
 from codar.textutil import fold
 
@@ -58,6 +59,41 @@ class EditTarget:
     @property
     def selected(self):
         return self.text[offset(self.text, self.start):offset(self.text, self.end)]
+
+    def rebase(self, current: str) -> EditTarget | None:
+        """Realinha um alvo intacto após mudanças em outras linhas, sem buscar outra ocorrência.
+
+        Edições do arquivo inteiro, linhas alteradas e âncoras repetidas continuam
+        exigindo revisão. Os limites evitam um diff caro durante a resposta da UI.
+        """
+        if current == self.text:
+            return self
+        if self.mode == 'edit' and self.start == (0, 0) and offset(self.text, self.end) == len(self.text):
+            return None
+        if max(len(current), len(self.text)) > 200_000:
+            return None
+        old, new = self.text.split('\n'), current.split('\n')
+        if max(len(old), len(new)) > 2000:
+            return None
+        first = self.start[0]
+        last = self.end[0] - (self.end[1] == 0 and self.end[0] > first)
+        for block in SequenceMatcher(None, old, new, autojunk=False).get_matching_blocks():
+            if not (block.a <= first <= last < block.a + block.size):
+                continue
+            a, b = max(block.a, first - 2), min(block.a + block.size, last + 3)
+            anchor = '\n' + '\n'.join(old[a:b]) + '\n'
+            if not anchor.strip():
+                return None
+            # Conta também ocorrências sobrepostas (duas linhas iguais, por exemplo).
+            for text in (self.text, current):
+                padded = '\n' + text + '\n'
+                at = padded.find(anchor)
+                if at < 0 or padded.find(anchor, at + 1) >= 0:
+                    return None
+            delta = block.b - block.a
+            return replace(self, text=current, start=(first + delta, self.start[1]),
+                           end=(self.end[0] + delta, self.end[1]))
+        return None
 
     def apply(self, body: str, imports: list[str], lang: str, indent: str) -> tuple[str, int, int]:
         """Calcula uma única substituição (corpo + imports), desfeita com um Ctrl+Z."""

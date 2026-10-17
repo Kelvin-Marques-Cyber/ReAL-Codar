@@ -184,6 +184,10 @@ Input > .input--placeholder {
     background: $codar-bg;
 }
 
+#output-status { height: auto; max-height: 3; padding: 0 1; color: $codar-text; }
+#output-actions { height: 1; padding: 0 1; }
+#output-actions Botao { width: auto; margin-right: 2; color: $codar-mint; }
+
 #term-input {
     dock: bottom;
 }

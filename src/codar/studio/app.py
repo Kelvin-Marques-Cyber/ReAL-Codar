@@ -245,6 +245,10 @@ class Studio(App):
                         self._terminal = TerminalPainel(self.root, id="terminal")
                         yield self._terminal
                     with TabPane(tr("SAÍDA"), id="tab-output"):
+                        yield Static(tr('Nenhum resultado recebido.'), id='output-status')
+                        with Horizontal(id='output-actions'):
+                            yield Botao(tr('ABRIR CÓDIGO'), acao='open_result', id='output-open', disabled=True)
+                            yield Botao(tr('COPIAR'), acao='copy_result', id='output-copy', disabled=True)
                         yield RichLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
                     with TabPane(tr("CONSULTOR"), id="tab-advisor"):
                         yield ListView(id="advice-list")
@@ -532,7 +536,7 @@ class Studio(App):
         if self.forced_lang:
             return self.forced_lang
         ed = self.current_editor() if self.is_mounted else None
-        lang = langs.from_path(ed.path) if ed and ed.path else None
+        lang = langs.from_path(ed.path) if ed and ed.path else langs.try_resolve(ed.lang_id) if ed else None
         return lang.id if lang else "python"
 
     async def open_file(self, path: Path) -> None:
@@ -551,9 +555,9 @@ class Studio(App):
         ed = await self._add_editor(text, str(path), path.name)
         self.verificar_pacotes(ed)
 
-    async def _add_editor(self, text: str, path: str | None, title: str) -> CodeEditor:
+    async def _add_editor(self, text: str, path: str | None, title: str, lang_id: str | None = None) -> CodeEditor:
         self.tab_seq += 1
-        lang = langs.from_path(path) if path else langs.try_resolve(self.current_lang())
+        lang = langs.try_resolve(lang_id) if lang_id else langs.from_path(path) if path else langs.try_resolve(self.current_lang())
         ts = EXT_TS.get(Path(path).suffix.lower()) if path else None
         ts = ts or (TS_LANG.get(lang.id) if lang else None)
         ed = CodeEditor.code_editor(text, language=ts, theme="monokai", soft_wrap=False, id=f"code-{self.tab_seq}")
@@ -1023,30 +1027,56 @@ class Studio(App):
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
         self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
         if res.get('action') in ('query', 'install', 'execute', 'study'):
+            self._output_status('Consulta concluída; arquivo preservado.')
             self.query_one('#panel', TabbedContent).display = True
             self.query_one('#panel', TabbedContent).active = 'tab-output'
             return
         if not res.get("complete", True):
-            self.notify(tr("resposta incompleta: seu código foi preservado. Selecione um trecho menor ou aumente "
-                        "model.max_tokens"), severity="warning", timeout=8)
+            self._output_status('Resposta incompleta; abra o código recebido para revisar.', warning=True)
+            return
+        if not res.get('code', '').strip():
+            self._output_status('A resposta não contém código para inserir.', warning=True)
             return
         body = (res.get("annotated_body") if self.hints else None) or res["body"]
         matches = list(self.query(f"#{editor_id}")) if editor_id else []
         if editor_id and not matches:
-            self.notify(tr("a aba foi fechada; resultado disponível em SAÍDA"), severity="warning")
+            self._output_status('A aba foi fechada; use ABRIR CÓDIGO para recuperar o resultado.', warning=True)
             return
         ed = matches[0] if matches else None
         if ed is None:
             self.call_later(self._new_buffer_with, res)
             return
-        if target is None or ed.text != target.text:
-            self.notify(tr("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA"), severity="warning")
+        target = target.rebase(ed.text) if target else None
+        if target is None:
+            self._output_status('O trecho mudou durante a geração; abra o resultado em uma nova aba.', warning=True)
             return
         text, start_row, end_row = target.apply(body, res.get("imports", []), res["lang"], indent)
         if target.mode == "edit" and self.preview_edits:
+            self._output_status('Aguardando sua aprovação na prévia.')
             self.review_worker(res, target, editor_id, text, start_row, end_row)
             return
         self._commit_edit(res, target, ed, text, start_row, end_row)
+
+    def _output_status(self, message, *, warning=False):
+        self.query_one('#output-status', Static).update(Text(tr(message)))
+        ready = bool(self.last and self.last.get('code', '').strip())
+        self.query_one('#output-copy').disabled = not ready
+        self.query_one('#output-open').disabled = not ready or self.last.get('action') in ('query', 'install', 'execute', 'study')
+        if warning:
+            self.query_one('#panel', TabbedContent).display = True
+            self.query_one('#panel', TabbedContent).active = 'tab-output'
+            self.notify(tr(message), severity='warning', timeout=8)
+
+    async def action_open_result(self):
+        res = self.last
+        if not res or not res.get('code', '').strip() or res.get('action') in ('query', 'install', 'execute', 'study'):
+            return
+        await self._new_buffer_with(res)
+
+    def action_copy_result(self):
+        if self.last and self.last.get('code'):
+            self.copy_to_clipboard(self.last['code'])
+            self.notify(tr('Resposta copiada.'))
 
     @work(thread=True, group="review")
     def review_worker(self, res, target, editor_id, text, start_row, end_row):
@@ -1064,6 +1094,8 @@ class Studio(App):
 
         def reviewed(selected):
             if selected is None:
+                if self.last is res:
+                    self._output_status('Aplicação cancelada; o código continua disponível em SAÍDA.')
                 return
             from codar.workspace import select_hunks
 
@@ -1077,34 +1109,33 @@ class Studio(App):
 
         check = validate_change(target.text, text, name, native=native)
         if check["status"] == "error":
-            self.call_from_thread(self.notify, "alteração preservada na prévia: " + check["message"], severity="error", timeout=8)
+            self.call_from_thread(self._output_status, 'Aplicação bloqueada pela validação: ' + check['message'], warning=True)
             return
         def apply():
             matches = list(self.query(f"#{editor_id}"))
             if not matches or matches[0].text != target.text:
-                self.notify(tr("o arquivo mudou durante a revisão; código preservado"), severity="warning")
+                self._output_status('O arquivo mudou durante a revisão; abra o código em uma nova aba.', warning=True)
                 return
             self._commit_edit(res, target, matches[0], text, start_row, end_row)
         self.call_from_thread(apply)
 
     def _commit_edit(self, res, target, ed, text, start_row, end_row):
         from codar.editing import validate_change
-        from codar.workspace import Change, EditStore
+        from codar.workspace import Change
 
         name = Path(ed.path).name if ed.path else "buffer.py"
         if target.mode == "edit":
             checked = validate_change(target.text, text, name, native=False, lang=res["lang"])
             if checked["status"] == "error":
-                self.notify("seu código foi preservado: " + checked["message"], severity="error", timeout=8)
+                self._output_status('Aplicação bloqueada pela validação: ' + checked['message'], warning=True)
                 return
         journal = None
         if ed.path and text != target.text:
             try:
-                name = Path(ed.path).resolve().relative_to(self.root).as_posix()
-                store = EditStore(self.root)
+                store, name = self._editor_store(ed)
                 journal = store.create([Change(name, target.text, text)], "edição no Studio", status="prepared")
             except (OSError, ValueError) as exc:
-                self.notify(f"não foi possível guardar o original: {exc}", severity="error")
+                self._output_status(f'Não foi possível guardar o original: {exc}. Abra o resultado em nova aba.', warning=True)
                 return
         ed.replace(text, (0, 0), ed.document.end)  # corpo e imports na mesma operação de desfazer
         if journal:
@@ -1116,14 +1147,26 @@ class Studio(App):
         ed.move_cursor((end_row, len(ed.document.get_line(end_row))))
         ed.destacar(start_row, end_row)
         ed.focus()
+        if self.last is res:
+            self._output_status('Código aplicado no editor.')
         self._show_findings(res.get("findings", []), start_row)
         if res.get("imports"):
             self.verificar_pacotes(ed)
         for note in res.get("notes", []):
             self.notify(note, title="codar")
 
-    def action_edit_history(self):
+    def _editor_store(self, ed):
+        """O histórico pertence ao projeto do arquivo, inclusive ao abri-lo de outra pasta."""
+        from codar.project import find_root
         from codar.workspace import EditStore
+
+        path = Path(ed.path).absolute()
+        root = self.root
+        if not path.is_relative_to(root):
+            root = find_root(path) or path.parent
+        return EditStore(root), path.relative_to(root).as_posix()
+
+    def action_edit_history(self):
         from datetime import datetime
 
         ed = self.current_editor()
@@ -1131,8 +1174,7 @@ class Studio(App):
             self.notify(tr("abra um arquivo salvo para consultar suas versões"))
             return
         try:
-            name = Path(ed.path).resolve().relative_to(self.root).as_posix()
-            store = EditStore(self.root)
+            store, name = self._editor_store(ed)
             entries = store.list(file=name)
         except (OSError, ValueError) as exc:
             self.notify(str(exc), severity="error")
@@ -1158,10 +1200,12 @@ class Studio(App):
     async def _new_buffer_with(self, res: dict) -> None:
         lang = langs.LANGS.get(res["lang"])
         ext = lang.exts[0] if lang and lang.exts else ".txt"
-        ed = await self._add_editor(res["code"] + "\n", None, f"sem título{ext}")
+        ed = await self._add_editor(res["code"].rstrip('\n') + "\n", None, f"resultado{ext}", res['lang'])
         ed.saved_text = ""
         self._update_tab_label(ed)
         self._show_findings(res.get("findings", []), 0, absolute=True)
+        if self.last is res:
+            self._output_status('Código aberto em nova aba; revise e salve com Ctrl+S.')
 
     def action_project_edit(self):
         def files_entered(value):
