@@ -11,11 +11,38 @@ def cmd_study(args):
     try:
         lang = langs.resolve(args.lang).id
         topics = estudo.catalogo(lang)
+        if args.action in ('path', 'resume'):
+            from codar.estudo.curriculo import percurso
+
+            value = percurso(lang, args.root)
+            if args.action == 'path':
+                if args.json:
+                    print(json.dumps(value, ensure_ascii=False, indent=2))
+                else:
+                    print(f"Percurso {lang}: {value['practiced']}/{value['total']} práticas registradas.")
+                    print(value['environment'])
+                    for lesson in value['lessons']:
+                        print(f"{'✓' if lesson['practiced'] else '·'} {lesson['id']} · {lesson['level']} · {lesson['module']} · {lesson['title']}")
+                    print(value['assessment'])
+                return 0
+            if value['next'] is None:
+                print(json.dumps({'language': lang, 'next': None}, ensure_ascii=False) if args.json else
+                      'Todas as práticas disponíveis foram registradas. Revise o projeto e os desafios; isso não certifica domínio da linguagem.')
+                return 0
+            args.name = value['next']
+        if args.action == 'search':
+            from codar.estudo.curriculo import buscar
+
+            matches = buscar(lang, args.name)
+            values = [{'id': c.id, 'title': c.titulo, 'track': estudo.TRILHAS[c.trilha]} for c in matches]
+            print(json.dumps(values, ensure_ascii=False, indent=2) if args.json else
+                  '\n'.join(f"{c['id']}: {c['title']}" for c in values) or 'Nenhuma aula corresponde à busca.')
+            return 0
         if args.action in ('exercises', 'exercise', 'check'):
             from codar.estudo.exercicios import EXERCISES, catalog, check
 
             if args.action == 'exercises':
-                values = catalog()
+                values = catalog(lang)
                 print(json.dumps(values, ensure_ascii=False, indent=2) if args.json else
                       '\n'.join(f"{item['id']}: {item['title']} — {item['task']}" for item in values))
                 return 0
@@ -26,7 +53,7 @@ def cmd_study(args):
                 from dataclasses import asdict
 
                 print(json.dumps(asdict(exercise), ensure_ascii=False, indent=2) if args.json else
-                      f'{exercise.title}\n{exercise.task}\n\nDicas:\n' + '\n'.join(exercise.hints))
+                      f'{exercise.title} · {exercise.difficulty} · avaliação: {exercise.assessment}\n{exercise.task}\n\nDicas:\n' + '\n'.join(exercise.hints))
                 return 0
             if not args.file:
                 raise ValueError('Informe --file ARQUIVO com sua solução; o comando executa este código.')
@@ -42,6 +69,8 @@ def cmd_study(args):
                     print(f"{'OK' if case['ok'] else 'FALHOU'} · entrada {case['input']!r} · esperado {case['expected']!r} · saída {case['actual']!r}")
                     if case['error']:
                         print(case['error'])
+                if result.get('progress_error'):
+                    print('Resultado validado, mas o progresso não foi salvo: ' + result['progress_error'])
             return 0 if result['status'] == 'ok' else 2 if result['status'] == 'skipped' else 1
         if args.action == 'progress':
             value = progresso.ler(args.root, lang)
@@ -82,6 +111,10 @@ def cmd_study(args):
         value = dict(id=concept.id, title=concept.titulo, language=lang, text=estudo.explicacao(concept, lang),
                      example=code, practice=concept.pratique, common_errors=concept.erros_comuns,
                      check=concept.verifique, sources=estudo.fontes(concept, lang))
+        from codar.estudo.curriculo import percurso
+
+        lesson = next(item for item in percurso(lang, args.root)['lessons'] if item['id'] == concept.id)
+        value.update({key: lesson[key] for key in ('level', 'module', 'previous', 'next', 'related', 'practiced')})
         if args.json:
             print(json.dumps(value, ensure_ascii=False, indent=2))
         else:
@@ -91,6 +124,13 @@ def cmd_study(args):
             if concept.verifique:
                 print('Confira: ' + concept.verifique)
             print('Fontes: ' + '\n'.join(value['sources']))
+            print(f"Percurso: {value['level']} · {value['module']}")
+            if value['previous']:
+                print('Anterior: ' + value['previous'])
+            if value['next']:
+                print('Próxima: ' + value['next'])
+            if value['related']:
+                print('Relacionadas: ' + ', '.join(value['related']))
         return 0
     except (OSError, ValueError, KeyError) as exc:
         print('codar: ' + str(exc), file=sys.stderr)

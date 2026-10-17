@@ -453,6 +453,9 @@ CONCEITOS += [
 from codar.estudo.ampliado import ampliar
 
 CONCEITOS.extend(ampliar(Conceito))
+from codar.estudo.curriculo import ampliar_curriculo
+
+CONCEITOS.extend(ampliar_curriculo(Conceito))
 POR_ID: dict[str, Conceito] = {c.id: c for c in CONCEITOS}
 TRILHA_POO = ["classe", "construtor", "atributo", "metodo", "objeto", "str", "encapsulamento", "heranca", "super",
               "polimorfismo", "composicao"]

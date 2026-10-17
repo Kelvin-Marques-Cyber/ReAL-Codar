@@ -720,7 +720,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=lambda a: __import__("codar.cli.toolchaincmd", fromlist=["x"]).cmd_toolchains(a))
 
     p = sub.add_parser('study', aliases=['estudar'], help='estudo offline: list | show ID, na linguagem escolhida')
-    p.add_argument('action', nargs='?', choices=['list', 'show', 'exercises', 'exercise', 'check', 'progress', 'mark', 'export', 'import'], default='list')
+    p.add_argument('action', nargs='?', choices=['list', 'show', 'path', 'search', 'resume', 'exercises', 'exercise', 'check', 'progress', 'mark', 'export', 'import'], default='list')
     p.add_argument('name', nargs='?')
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--json', action='store_true')
