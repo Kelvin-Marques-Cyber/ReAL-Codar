@@ -227,3 +227,46 @@ def test_ausencia_de_saida_nao_oferece_copia_vazia(tmp_path, monkeypatch):
             assert editor.text == 'pass\n'
 
     asyncio.run(scenario())
+
+
+def test_resultado_validado_pode_ser_inserido_manualmente_sem_apagar_edicao(tmp_path, monkeypatch):
+    """Se o alvo da resposta envelheceu, INSERIR usa o cursor ATUAL sem substituir o arquivo."""
+    app = setup_app(tmp_path, monkeypatch)
+    file = app.root / "main.py"
+    file.write_text("x = 10\n")
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)):
+            await app.open_file(file)
+            ed = app.current_editor()
+            target = EditTarget.capture(ed.text, "line", (0, 0), ((0, 0), (0, 0)), row=0)
+            ed.replace("x = 99\n", (0, 0), ed.document.end)
+            app._apply(result("y = 42"), target, ed.id, "")
+            assert ed.text == "x = 99\n"
+            assert not app.query_one("#output-insert").disabled
+            app.action_insert_result()
+            assert "x = 99" in ed.text
+            assert "y = 42" in ed.text
+            assert file.read_text() == "x = 10\n"
+            ed.action_undo()
+            assert ed.text == "x = 99\n"
+
+    asyncio.run(scenario())
+
+
+def test_botao_inserir_nao_aceita_geracao_incompleta(tmp_path, monkeypatch):
+    app = setup_app(tmp_path, monkeypatch)
+    file = app.root / "main.py"
+    file.write_text("x = 10\n")
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)):
+            await app.open_file(file)
+            ed = app.current_editor()
+            target = EditTarget.capture(ed.text, "insert", (0, 0), ((0, 0), (0, 0)))
+            app._apply({**result("y = 42"), "complete": False}, target, ed.id, "")
+            assert app.query_one("#output-insert").disabled
+            app.action_insert_result()
+            assert ed.text == "x = 10\n"
+
+    asyncio.run(scenario())
