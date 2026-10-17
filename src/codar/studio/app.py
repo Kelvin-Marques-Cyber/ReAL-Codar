@@ -236,6 +236,7 @@ class Studio(App):
                             yield Botao(acao=acao, id=f"pill-{pid}")
                     yield Static(id="lang-pill")
                 with Horizontal(id='tools-bar'):
+                    yield Botao(tr('▶ TRADUZIR F3'), acao='translate_line', id='translate-button')
                     yield Botao(tr('⌕ BUSCAR'), acao='find_project', id='search-button')
                     yield Botao(tr('SDKs'), acao='runtimes', id='runtimes-button')
                     yield Botao(tr('BIBLIOTECAS'), acao='libraries', id='libraries-button')
