@@ -239,3 +239,28 @@ def test_playlist_youtube_usa_padrao_verificado_sem_chamar_modelo(translate, rou
     assert "def ler_playlist_youtube" in res.code
     assert "download=False" in res.code
     assert "from yt_dlp import YoutubeDL" in res.code
+
+@pytest.mark.parametrize("lang, before, indent, fragment", [
+    ("python", "class Conta:\n", "    ", "def depositar(self, valor)"),
+    ("javascript", "class Conta {\n", "  ", "depositar(valor) {"),
+    ("typescript", "class Conta {\n", "  ", "depositar(valor: unknown): void {"),
+])
+def test_metodo_poo_e_gerado_no_escopo_da_classe(translate, lang, before, indent, fragment):
+    res = translate("crie um método depositar com valor", lang,
+                    mode="line", before=before, indent=indent, stages=(0,))
+    assert res.complete and fragment in res.code
+    if lang == "python":
+        import ast
+
+        ast.parse(before + res.code)
+    else:
+        assert "function depositar" not in res.code
+
+
+def test_metodo_poo_nao_e_emitido_como_funcao_global(translate):
+    from codar.engine.router import TranslateError
+
+    with pytest.raises(TranslateError, match="precisa ficar dentro de uma classe"):
+        translate("crie um método depositar com valor", stages=(0,))
+    # O usuário pode pedir função de módulo, sem classe, normalmente.
+    assert "def depositar" in translate("crie uma função depositar com valor", stages=(0,)).code
