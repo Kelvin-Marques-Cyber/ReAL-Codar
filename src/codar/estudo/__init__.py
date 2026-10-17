@@ -348,6 +348,55 @@ def _valor(param: str) -> str:
     return '"?"'
 
 
+
+def _argumentos_obrigatorios(params: ast.arguments, *, pular_primeiro: bool) -> list[tuple[str, bool]]:
+    """(nome, apenas_keyword) sem executar construtores/decoradores externos."""
+    positional = list(params.posonlyargs) + list(params.args)
+    required = positional[:len(positional) - len(params.defaults)] if params.defaults else positional
+    if pular_primeiro and positional:
+        required = [p for p in required if p is not positional[0]]
+    output = [(p.arg, False) for p in required]
+    output += [(p.arg, True) for p, default in zip(params.kwonlyargs, params.kw_defaults) if default is None]
+    return output
+
+
+def _chamadas_python(codigo: str, classe: str, variavel: str) -> tuple[str, list[str]]:
+    """Gera chamadas que não omitem argumentos obrigatórios de métodos.
+
+    Código-fonte só é analisado via AST. Métodos sem assinatura segura ficam
+    comentados, sem quebrar o main.py oferecido ao aluno.
+    """
+    try:
+        tree = ast.parse(codigo)
+    except (SyntaxError, ValueError):
+        return "", []
+    cls = next((n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classe), None)
+    if cls is None:
+        return "", []
+    ctor = next((n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 and n.name == "__init__"), None)
+    required = _argumentos_obrigatorios(ctor.args, pular_primeiro=True) if ctor else []
+    args = ", ".join(f"{name}={_valor(name)}" if keyword else _valor(name) for name, keyword in required)
+    calls = []
+    for method in cls.body:
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)) or method.name.startswith("_"):
+            continue
+        decorators = {d.id if isinstance(d, ast.Name) else d.attr if isinstance(d, ast.Attribute) else ""
+                      for d in method.decorator_list}
+        if "property" in decorators or "setter" in decorators or "deleter" in decorators:
+            calls.append(f"# {variavel}.{method.name} é propriedade; acesse sem parênteses")
+            continue
+        remove_first = not ("staticmethod" in decorators)
+        missing = _argumentos_obrigatorios(method.args, pular_primeiro=remove_first)
+        if missing:
+            labels = ", ".join(name for name, _ in missing)
+            calls.append(f"# {variavel}.{method.name}(...) requer {labels}; forneça valores antes de chamar")
+        elif isinstance(method, ast.AsyncFunctionDef):
+            calls.append(f"# {variavel}.{method.name}() é assíncrono; use await em uma função async")
+        else:
+            calls.append(f"{variavel}.{method.name}()")
+    return args, calls
+
 def sugestao_main(raiz: Path, arquivo: Path, codigo: str, lang: str | None) -> Sugestao | None:
     """Arquivo que só define classes e ninguém usa: sugere um main.py (main.js) comentado que cria e usa um objeto."""
     estado = trilha_poo(codigo, lang)
@@ -363,12 +412,13 @@ def sugestao_main(raiz: Path, arquivo: Path, codigo: str, lang: str | None) -> S
     C, var = estado.classe, estado.classe.lower()
     args = ", ".join(_valor(p) for p in estado.params)
     if g == "py":
+        args, chamadas_seguras = _chamadas_python(codigo, C, var)
         destino = raiz / "main.py"
         modulo = ".".join(rel.with_suffix("").parts)
         if destino.exists() and (f"import {C}" in destino.read_text(encoding="utf-8", errors="ignore")
                                  or modulo in destino.read_text(encoding="utf-8", errors="ignore")):
             return None
-        chamadas = "\n    ".join(f"{var}.{m}()  # confira os parâmetros de {m}" for m in estado.metodos[:2]) or \
+        chamadas = "\n    ".join(chamadas_seguras[:4]) or \
             f"# {C} ainda não tem métodos: crie um (é o próximo passo da trilha) e chame aqui"
         conteudo = f'''"""Ponto de entrada do programa: aqui você USA o que {rel.as_posix()} define.
 
