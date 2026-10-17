@@ -561,10 +561,22 @@ class Daemon:
             t.cancel()
         for srv in self._servers:
             srv.close()
+        pending = list(tasks)
         for conn in list(self.conns):
             conn.closed = True
+            for task, cancel in list(conn.tasks.values()):
+                cancel.set()
+                task.cancel()
+                pending.append(task)
             conn.writer.close()
-        self.stage2.shutdown()
+        # O modelo recebe o cancelamento antes de esperar o executor terminar.
+        # Esperar na thread do event loop impedia o fechamento das conexões.
+        await asyncio.gather(*pending, return_exceptions=True)
+        for srv in self._servers:
+            wait_closed = getattr(srv, "wait_closed", None)
+            if wait_closed is not None:
+                await wait_closed()
+        await asyncio.to_thread(self.stage2.shutdown)
         self.store.close()
         self.cleanup()
 

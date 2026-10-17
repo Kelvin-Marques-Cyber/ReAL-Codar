@@ -50,19 +50,23 @@ def start_daemon(wait: float = 30.0, cfg: dict | None = None) -> tuple[int, str]
     env.setdefault("NEEDLE_TELEMETRY", "0")
     env.setdefault("DO_NOT_TRACK", "1")
     env.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
-    out = open(paths.log_dir() / "daemon.out", "ab")  # noqa: SIM115 - herdado pelo processo filho
-    kwargs: dict = {"stdin": subprocess.DEVNULL, "stdout": out, "stderr": out, "env": env, "close_fds": True}
+    kwargs: dict = {"stdin": subprocess.DEVNULL, "env": env, "close_fds": True}
     if paths.IS_WIN:
         kwargs["creationflags"] = 0x00000008 | 0x00000200 | 0x08000000  # DETACHED | NEW_GROUP | NO_WINDOW
     else:
         kwargs["start_new_session"] = True
-    proc = subprocess.Popen(cmd, **kwargs)
-    out.close()
+    def spawn(command):
+        # Cada tentativa abre seu próprio descritor. O fallback de cgroup usava
+        # o arquivo já fechado da primeira tentativa e falhava antes do Popen.
+        with open(paths.log_dir() / "daemon.out", "ab") as out:
+            return subprocess.Popen(command, stdout=out, stderr=out, **kwargs)
+
+    proc = spawn(cmd)
     deadline = time.monotonic() + wait
     while time.monotonic() < deadline:
         if proc.poll() is not None and mode != "watchdog":
             cmd, mode = daemon_command({**cfg, "memory": {**cfg["memory"], "enforce": "soft"}})
-            proc = subprocess.Popen(cmd, **kwargs)
+            proc = spawn(cmd)
             continue
         if proc.poll() is not None:
             raise RuntimeError("o daemon terminou ao iniciar; veja " + str(paths.log_dir() / "daemon.out") +
@@ -70,8 +74,8 @@ def start_daemon(wait: float = 30.0, cfg: dict | None = None) -> tuple[int, str]
         if paths.discover_endpoint():
             try:
                 with Client.connect(autostart=False, timeout=2.0) as c:
-                    c.call("ping")
-                return proc.pid, mode
+                    info = c.call("ping")
+                return int(info.get("pid") or proc.pid), mode
             except (DaemonNotRunning, OSError, ConnectionError):
                 pass
         time.sleep(0.05)
