@@ -42,6 +42,13 @@ componente component endpoint conectar conexao connect implementar implemente im
 build construa construir escreva escrever write desenvolva develop projeto project cliente client servico service
 """.split())
 _CODE_TOKEN = re.compile(r"[=<>+*/%()\[\]{}]|\b\d+\b|\w_\w|\b[a-z]+[A-Z]\w*")
+# Integrações não são pseudocódigo simples: precisam usar APIs e bibliotecas.
+_EXTERNAL_CAPABILITY = re.compile(
+    r"\b(?:playlist\w*|youtube|videos?|urls?|https?|webhooks?|apis?|"
+    r"spotify|discord|telegram|postgres\w*|mysql|sqlite|"
+    r"servidor(?:es)?|sites?|navegador|browser|email\w*|"
+    r"sockets?|baixar|download)\b", re.I)
+
 # (frase mostrada ao modelo, pseudocódigo que o compilador traduz). O último ensina a nomear pelo que a frase diz
 # e a usar a coleção citada sem inventar dados: "quantos itens" -> itens, nunca a lista de outro exemplo.
 _EXAMPLES = [("x é igual a 10", "x é igual a 10"),
@@ -88,6 +95,8 @@ def is_pseudocode(intent: str) -> bool:
         return False
     if _CODE_TOKEN.search(intent):
         return True
+    if _EXTERNAL_CAPABILITY.search(fold(intent)):
+        return False
     # "uma playlist do youtube, variável" precisa do gerador com orçamento de
     # função/bloco; o tradutor literal de UMA linha não consegue criar a solução.
     if words[0] in {"um", "uma", "o", "a", "meu", "minha", "meus", "minhas", "the", "my"}:
@@ -658,9 +667,9 @@ class Router:
                 ref = (ref[0], ref[1], "\n".join(ref[2].split("\n")[:30]))
             return build_prompt(fmt, lang.name, lang.fence, intent, guidance=guidance if level < 3 else guidance[:2],
                                 reference=ref, context=context if level == 0 else "",
-                                after=req.after[:(3000, 1200, 400)[min(level, 2)]],
+                                after=req.after[:(3000, 1200, 400)[min(level, 2)]] if level < 3 else "",
                                 project=req.project_context if level < 2 else "",
-                                libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]])
+                                libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]] if level < 3 else "")
 
         t = time.perf_counter()
         try:
@@ -697,8 +706,8 @@ class Router:
         def builder(level: int) -> str:
             return build_literal_prompt(fmt, lang.name, lang.fence, intent, examples[: 3 - level] if level else examples,
                                         context if level == 0 else "",
-                                        after=req.after[:(3000, 1200, 400)[min(level, 2)]],
-                                        libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]])
+                                        after=req.after[:(3000, 1200, 400)[min(level, 2)]] if level < 3 else "",
+                                        libraries=req.library_context[:(6000, 3000, 1400)[min(level, 2)]] if level < 3 else "")
 
         n_lines = intent.count("\n") + 1
         t = time.perf_counter()
