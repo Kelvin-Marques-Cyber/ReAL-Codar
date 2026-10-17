@@ -270,3 +270,35 @@ def test_botao_inserir_nao_aceita_geracao_incompleta(tmp_path, monkeypatch):
             assert ed.text == "x = 10\n"
 
     asyncio.run(scenario())
+
+def test_erro_de_import_local_exibe_diagnostico_copiavel_sem_modelo(tmp_path, monkeypatch):
+    """Ausência de símbolo não gera código, mas permite copiar instrução de recuperação."""
+    from textual.widgets import Static
+    from codar.studio.screens import TerminalOutputScreen
+
+    app = setup_app(tmp_path, monkeypatch)
+    path = app.root / "teste.py"
+    path.write_text("from receiver import PlaylistExtract\n")
+    diagnostic = ("Função/classe não encontrada como exportação direta. 'extract' é método de "
+                  "PlaylistExtract.extract, não função exportada. "
+                  "Importe a classe com 'from receiver import PlaylistExtract'.")
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)) as pilot:
+            await app.open_file(path)
+            editor = app.current_editor()
+            app._output_text = ""
+            app._failed("importe a função extract do receiver", diagnostic, [])
+            assert editor.text == "from receiver import PlaylistExtract\n"
+            assert path.read_text() == editor.text
+            assert not app.query_one("#output-copy").disabled
+            assert not app.query_one("#output-select").disabled
+            assert app.query_one("#output-insert").disabled
+            assert "não resolvida" in str(app.query_one("#output-status", Static).content)
+            app.action_copy_result()
+            assert app.clipboard == diagnostic
+            await pilot.click("#output")
+            await pilot.pause()
+            assert isinstance(app.screen, TerminalOutputScreen)
+
+    asyncio.run(scenario())
