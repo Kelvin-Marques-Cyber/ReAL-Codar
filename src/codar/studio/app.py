@@ -1046,7 +1046,13 @@ class Studio(App):
         out.write(f"[b {C['error']}]✖ {_esc(message)}[/]")
         for c in cands[:3]:
             out.write(f"[{C['dim']}]  candidato {c['id']} ({c['score']:.2f}) {c['title']}[/]")
-        self._output_status('Falha na geração; copie ou selecione a resposta parcial, se houver.')
+        # Erros de resolução local não envolvem IA: nenhuma saída de modelo é
+        # recebida. Mesmo assim, a explicação completa deve ser copiável,
+        # em vez de exibir um botão COPIAR desativado e mensagem enganosa.
+        if not self._output_text.strip():
+            self._output_text = message
+        self._output_status('Solicitação não resolvida. A explicação está na SAÍDA e pode ser copiada.',
+                            warning=True)
         self.notify(message[:120], severity="error", title="não resolvido")
 
     def _apply(self, res: dict, target: EditTarget | None, editor_id: str | None, indent: str) -> None:
