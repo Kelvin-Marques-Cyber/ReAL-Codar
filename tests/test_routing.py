@@ -188,3 +188,38 @@ def test_senao_sozinho_em_go_explica_em_vez_de_chamar_a_ia(translate, router):
     with pytest.raises(TranslateError, match="selecione"):
         translate("senão imprimir 'oi'", "go")
     assert router.stage2.prompts == []  # antes, a IA inventava um if inteiro ("if not pedidos")
+
+def test_frase_nominal_youtube_usa_gerador_e_preserva_import(translate, router):
+    from codar.engine.router import is_pseudocode
+
+    assert not is_pseudocode("uma playlist do youtube, variável")
+    router.stage2.answer = "from yt_dlp import YoutubeDL\n"
+    res = translate("uma playlist do youtube, variável")
+    assert res.complete
+    assert res.code.strip() == "from yt_dlp import YoutubeDL"
+    assert res.imports == ["from yt_dlp import YoutubeDL"]
+
+
+def test_saida_python_invalida_tenta_uma_vez_e_recupera(translate, router, monkeypatch):
+    from codar.engine.stage2 import GenResult
+
+    answers = iter(["dt lp\n.Y\noutube\nDL\n()\n", "from yt_dlp import YoutubeDL\n"])
+    prompts = []
+
+    def generate(builder, **kwargs):
+        prompts.append(builder(0))
+        return GenResult(next(answers), 25, 50, 1.0, "stop")
+
+    monkeypatch.setattr(router.stage2, "generate", generate)
+    res = translate("uma playlist do youtube, variável")
+    assert len(prompts) == 2
+    assert res.complete and res.imports == ["from yt_dlp import YoutubeDL"]
+    assert res.code.strip() == "from yt_dlp import YoutubeDL"
+
+
+def test_saida_python_invalida_duas_vezes_nao_autoinserida(translate, router):
+    router.stage2.answer = "dt lp\n.Y\noutube\nDL\n()\n"
+    res = translate("uma playlist do youtube, variável")
+    assert not res.complete
+    assert any("geração inválida" in note for note in res.notes)
+    assert len(router.stage2.prompts) == 2
