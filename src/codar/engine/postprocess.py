@@ -192,6 +192,10 @@ def prune_imports(code: str, lang: str) -> str:
         tree = ast.parse(code)
     except SyntaxError:
         return code
+    # Um trecho contendo somente importações é uma resposta completa: as dependências
+    # podem ser usadas no arquivo aberto, mesmo que não haja referências no snippet.
+    if tree.body and all(isinstance(node, (ast.Import, ast.ImportFrom)) for node in tree.body):
+        return code
     used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
     used |= {n.value.id for n in ast.walk(tree) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)}
     drop: set[int] = set()
