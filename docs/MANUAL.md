@@ -1374,10 +1374,10 @@ Veja as quatro demonstrações no [README](https://github.com/Kelvin-Marques-Cyb
 
 **F3** e **Ctrl+G** traduzem a linha atual (ou o bloco selecionado) do Studio; o botão **TRADUZIR F3** na barra de ferramentas executa a mesma ação com o mouse. Essas opções não precisam de protocolos especiais.
 
-Em terminais que enviam Ctrl+Enter como o mesmo byte de Enter, nenhum programa TUI consegue distinguir as duas teclas. No **Konsole**, você pode configurar uma sequência exclusiva: abra **Configurações → Editar perfil atual → Teclado → Editar**, crie uma associação **Return+Ctrl** enviando **CSI-u** `\\E[13;5u` (ESC [ 13 ; 5 u) e salve o esquema de teclado. Reabra o terminal e teste novamente. A interface deste menu pode variar entre versões. O Konsole também permite arquivos `.keytab` personalizados, como:
+Em terminais que enviam Ctrl+Enter como o mesmo byte de Enter, nenhum programa TUI consegue distinguir as duas teclas. No **Konsole**, você pode configurar uma sequência exclusiva: abra **Configurações → Editar perfil atual → Teclado → Editar**, crie uma associação **Return+Ctrl** enviando **CSI-u** `\E[13;5u` (ESC [ 13 ; 5 u) e salve o esquema de teclado. Reabra o terminal e teste novamente. A interface deste menu pode variar entre versões. O Konsole também permite arquivos `.keytab` personalizados, como:
 
 ```text
-key Return+Ctrl : "\\E[13;5u"
+key Return+Ctrl : "\E[13;5u"
 ```
 
 Não sobrescreva o esquema padrão sem fazer uma cópia; a preferência de teclado pertence ao usuário. Se sua versão do Konsole ou do parser de entrada não suportar CSI-u, continue usando **F3**, **Ctrl+G** ou o botão clicável. Para testar o atalho, abra um `.py`, escreva `x é igual a 10` em uma linha e pressione a tecla desejada com o cursor nela. Se a linha não gerar código, confira o painel SAÍDA e a telemetria do daemon; um erro de geração não é erro de teclado.
