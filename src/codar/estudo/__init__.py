@@ -305,7 +305,7 @@ def _poo_python(arvore: ast.AST) -> EstadoPoo:
     return estado
 
 
-def _corpo_classe_js(codigo: str, fim_cabecalho: int) -> str:
+def _corpo_classe_js(codigo: str, fim_cabecalho: int) -> str | None:
     """Isola o corpo real de uma classe, ignorando chaves em strings/comentários.
 
     Não inclui código executado fora da classe nem métodos da classe seguinte.
@@ -313,7 +313,7 @@ def _corpo_classe_js(codigo: str, fim_cabecalho: int) -> str:
     """
     inicio = codigo.find("{", fim_cabecalho)
     if inicio < 0:
-        return ""
+        return None
     quote = None
     block_comment = False
     line_comment = False
@@ -352,7 +352,7 @@ def _corpo_classe_js(codigo: str, fim_cabecalho: int) -> str:
             if depth == 0:
                 return codigo[inicio + 1:i]
         i += 1
-    return ""  # classe incompleta enquanto o usuário digita
+    return None  # classe incompleta enquanto o usuário digita
 
 
 _JS_CLASSE = re.compile(r"^\s*(export\s+(?:default\s+)?)?class\s+(\w+)(?:\s+extends\s+(\w+))?", re.M)
@@ -366,7 +366,7 @@ def _poo_js(codigo: str) -> EstadoPoo:
     for m in classes:
         exportada, nome, mae = m.group(1), m.group(2), m.group(3)
         corpo = _corpo_classe_js(codigo, m.end())
-        if not corpo:
+        if corpo is None:
             continue  # não apresentar um estado inventado durante uma edição incompleta
         feitos["classe"] = True
         feitos["heranca"] |= bool(mae)
