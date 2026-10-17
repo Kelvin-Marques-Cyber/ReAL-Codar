@@ -249,6 +249,7 @@ class Studio(App):
                         yield Static(tr('Nenhum resultado recebido.'), id='output-status')
                         with Horizontal(id='output-actions'):
                             yield Botao(tr('ABRIR CÓDIGO'), acao='open_result', id='output-open', disabled=True)
+                            yield Botao(tr('INSERIR'), acao='insert_result', id='output-insert', disabled=True)
                             yield Botao(tr('COPIAR'), acao='copy_result', id='output-copy', disabled=True)
                             yield Botao(tr('SELECIONAR'), acao='select_result', id='output-select', disabled=True)
                         yield OutputLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
@@ -1108,6 +1109,8 @@ class Studio(App):
         self.query_one('#output-select').disabled = not selectable
         can_open = ready and self.last is not None and self.last.get('action') not in ('query', 'install', 'execute', 'study')
         self.query_one('#output-open').disabled = not can_open
+        can_insert = can_open and bool(self.last.get('complete', True)) and self.current_editor() is not None
+        self.query_one('#output-insert').disabled = not can_insert
         if warning:
             self.query_one('#panel', TabbedContent).display = True
             self.query_one('#panel', TabbedContent).active = 'tab-output'
@@ -1118,6 +1121,36 @@ class Studio(App):
         if not res or not res.get('code', '').strip() or res.get('action') in ('query', 'install', 'execute', 'study'):
             return
         await self._new_buffer_with(res)
+
+    def action_insert_result(self):
+        """Insere manualmente um resultado validado no cursor, sem sobrescrever o arquivo."""
+        res = self.last
+        ed = self.current_editor()
+        if not res or not res.get('complete', True) or not res.get('code', '').strip():
+            self.notify('Nenhum código completo e validado para inserir.', severity='warning')
+            return
+        if res.get('action') in ('query', 'install', 'execute', 'study'):
+            self.notify('Uma consulta não é código executável.', severity='warning')
+            return
+        if ed is None:
+            self.notify('Abra um arquivo antes de inserir a resposta.', severity='warning')
+            return
+        if ed.lang_id != res['lang']:
+            self.notify('A linguagem do arquivo difere da saída; use ABRIR CÓDIGO.', severity='warning')
+            return
+        selected = ed.selection.start != ed.selection.end
+        target = EditTarget.capture(ed.text, 'edit' if selected else 'insert',
+                                    ed.cursor_location, (ed.selection.start, ed.selection.end))
+        body = (res.get('annotated_body') if self.hints else None) or res.get('body', '')
+        text, first, last = target.apply(body, res.get('imports', []), res['lang'], '')
+        if text == ed.text:
+            self.notify('O resultado já está presente no arquivo.')
+            return
+        if selected and self.preview_edits:
+            self._output_status('Aguardando aprovação para substituir a seleção.')
+            self.review_worker(res, target, ed.id, text, first, last)
+        else:
+            self._commit_edit(res, target, ed, text, first, last)
 
     def action_copy_result(self):
         from codar.studio.clipboard import copy_text
