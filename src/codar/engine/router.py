@@ -93,10 +93,10 @@ def is_pseudocode(intent: str) -> bool:
     words = [w.strip(".,:;!?") for w in fold(intent).split()]
     if not words or len(words) > 14 or any(w in _TASK_WORDS for w in words):
         return False
+    if _EXTERNAL_CAPABILITY.search(fold(intent)):
+        return False  # URLs têm barras: não devem ser interpretadas como operadores de pseudocódigo
     if _CODE_TOKEN.search(intent):
         return True
-    if _EXTERNAL_CAPABILITY.search(fold(intent)):
-        return False
     # "uma playlist do youtube, variável" precisa do gerador com orçamento de
     # função/bloco; o tradutor literal de UMA linha não consegue criar a solução.
     if words[0] in {"um", "uma", "o", "a", "meu", "minha", "meus", "minhas", "the", "my"}:
