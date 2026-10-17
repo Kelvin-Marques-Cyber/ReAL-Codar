@@ -244,7 +244,7 @@ CONCEITOS: list[Conceito] = [
         "Crie dois objetos da sua classe, mude um atributo de um deles e imprima os dois para ver a diferença.",
         linha={"py": (r"\bself\.\w+\s*(?:[+\-*/]?=)(?!=)",), "js": (r"\bthis\.\w+\s*=(?!=)",)},
         palavras=("atributo", "propriedade", "self", "this", "característica"),
-        exemplos={"py": "ana = Pessoa(\"Ana\", 20)\nbruno = Pessoa(\"Bruno\", 31)\nana.idade = 21\nprint(ana.idade, bruno.idade)  # 21 31"},
+        exemplos={"py": "class Pessoa:\n    def __init__(self, nome, idade):\n        self.nome = nome\n        self.idade = idade\n\nana = Pessoa(\"Ana\", 20)\nbruno = Pessoa(\"Bruno\", 31)\nana.idade = 21\nprint(ana.idade, bruno.idade)  # 21 31"},
         relacionados=("construtor", "encapsulamento")),
     Conceito(
         "metodo", "Métodos", "poo",
@@ -265,8 +265,8 @@ CONCEITOS: list[Conceito] = [
         linha={"py": (r"\b\w+\s*=\s*[A-Z]\w*\(", r"\b[a-z_]\w*\.[a-z_]\w*\("), "js": (r"\bnew\s+[A-Z]\w*\(",),
                "*": (r"\bnew\s+[A-Z]\w*",)},
         palavras=("objeto", "instância", "instancia", "instanciar"),
-        exemplos={"py": "contas = [Conta(\"Ana\", 100), Conta(\"Bia\", 50)]\nfor conta in contas:\n    conta.depositar(10)\n    print(conta.titular, conta.saldo)",
-                  "js": "const contas = [new Conta(\"Ana\", 100), new Conta(\"Bia\", 50)];\nfor (const conta of contas) conta.depositar(10);"},
+        exemplos={"py": "class Conta:\n    def __init__(self, titular, saldo=0):\n        self.titular = titular\n        self.saldo = saldo\n\n    def depositar(self, valor):\n        self.saldo += valor\n\ncontas = [Conta(\"Ana\", 100), Conta(\"Bia\", 50)]\nfor conta in contas:\n    conta.depositar(10)\n    print(conta.titular, conta.saldo)",
+                  "js": "class Conta {\n  constructor(titular, saldo = 0) { this.titular = titular; this.saldo = saldo; }\n  depositar(valor) { this.saldo += valor; }\n}\nconst contas = [new Conta(\"Ana\", 100), new Conta(\"Bia\", 50)];\nfor (const conta of contas) conta.depositar(10);"},
         relacionados=("classe", "metodo")),
     Conceito(
         "str", "Mostrar o objeto (__str__)", "poo",
@@ -296,8 +296,8 @@ CONCEITOS: list[Conceito] = [
         linha={"py": (r"^\s*class\s+\w+\s*\(\s*(?!object\b)[A-Z]\w*",), "js": (r"\bclass\s+\w+\s+extends\s+\w+",),
                "*": (r"\b(?:extends|implements)\b|class\s+\w+\s*:\s*\w+",)},
         palavras=("herança", "heranca", "herda", "herdar", "subclasse", "classe filha", "extends"),
-        exemplos={"py": "class Poupanca(Conta):\n    def __init__(self, titular, saldo=0, taxa=0.005):\n        super().__init__(titular, saldo)\n        self.taxa = taxa\n\n    def render(self):\n        self.saldo += self.saldo * self.taxa",
-                  "js": "class Poupanca extends Conta {\n  constructor(titular, saldo = 0, taxa = 0.005) {\n    super(titular, saldo);\n    this.taxa = taxa;\n  }\n}"},
+        exemplos={"py": "class Conta:\n    def __init__(self, titular, saldo=0):\n        self.titular = titular\n        self.saldo = saldo\n\nclass Poupanca(Conta):\n    def __init__(self, titular, saldo=0, taxa=0.005):\n        super().__init__(titular, saldo)\n        self.taxa = taxa\n\n    def render(self):\n        self.saldo += self.saldo * self.taxa\n\nconta = Poupanca(\"Ana\", 100)\nconta.render()\nprint(conta.saldo)",
+                  "js": "class Conta {\n  constructor(titular, saldo = 0) { this.titular = titular; this.saldo = saldo; }\n}\nclass Poupanca extends Conta {\n  constructor(titular, saldo = 0, taxa = 0.005) {\n    super(titular, saldo);\n    this.taxa = taxa;\n  }\n}\nconsole.log(new Poupanca(\"Ana\", 100).saldo);"},
         relacionados=("super", "polimorfismo")),
     Conceito(
         "super", "super()", "poo",
@@ -306,7 +306,7 @@ CONCEITOS: list[Conceito] = [
         "No construtor da sua classe filha, chame super().__init__ antes de criar o atributo novo.",
         linha={"py": (r"\bsuper\(\)",), "js": (r"\bsuper\s*[(.]",)},
         palavras=("super", "classe mãe", "construtor da mãe"),
-        exemplos={"py": "class Gerente(Funcionario):\n    def __init__(self, nome, salario, equipe):\n        super().__init__(nome, salario)\n        self.equipe = equipe"},
+        exemplos={"py": "class Funcionario:\n    def __init__(self, nome, salario):\n        self.nome = nome\n        self.salario = salario\n\nclass Gerente(Funcionario):\n    def __init__(self, nome, salario, equipe):\n        super().__init__(nome, salario)\n        self.equipe = equipe\n\ngerente = Gerente(\"Ana\", 3500, [\"Bia\"])\nprint(gerente.nome, gerente.equipe)"},
         relacionados=("heranca", "construtor")),
     Conceito(
         "polimorfismo", "Polimorfismo", "poo",
