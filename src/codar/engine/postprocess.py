@@ -8,10 +8,10 @@ import textwrap
 
 from codar.textutil import fold
 
-_FENCE = re.compile(r"^\s*```[\w+#-]*\s*$")
+_FENCE = re.compile(r"^[ \t]*(?P<mark>`{3,}|~{3,})(?P<label>[\w+#.-]*)[ \t]*$")
 
 
-def clean_generation(text: str, lang: str, *, repair: bool = True) -> str:
+def clean_generation(text: str, lang: str, *, repair: bool = False) -> str:
     """Extrai codigo puro OU um bloco Markdown inteiro sem descartar seu conteudo.
 
     Respostas pequenas podem começar com ```python (nao devem ser
@@ -19,29 +19,39 @@ def clean_generation(text: str, lang: str, *, repair: bool = True) -> str:
     nao entra no editor. Se nao houver bloco, mantem o texto para validar.
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    # Alguns modelos incluem a cadeia de pensamento antes do codigo.
-    text = re.sub(r"(?s)<think>.*?</think>\s*", "", text)
-    opener = re.search(r"(?m)^[ \t]*```[\w+#.-]*[ \t]*\n", text)
-    if opener:
-        text = text[opener.end():]
+    # Só remove metadados na borda: <think> pode ser conteúdo de uma string.
+    text = re.sub(r"\A\s*<think>.*?</think>\s*", "", text, flags=re.S)
+    text = re.sub(r"(?:<\|im_end\|>|<\|endoftext\|>)\s*\Z", "", text)
     lines = text.split("\n")
-    while lines and not lines[0].strip():
-        lines.pop(0)
-    if lines and lines[0].strip().lower() in (lang, "python", "py", "go", "rust", "bash", "powershell"):
-        lines.pop(0)
-    out: list[str] = []
-    repeat = 0
-    for ln in lines:
-        if _FENCE.match(ln):
-            break
-        if out and ln.strip() and ln == out[-1]:
-            repeat += 1
-            if repair and repeat >= 3:
-                continue
-        else:
-            repeat = 0
-        out.append(ln.rstrip())
-    code = textwrap.dedent("\n".join(out)).strip("\n")
+    first = next((i for i, line in enumerate(lines) if _FENCE.fullmatch(line)), None)
+    if first is not None:
+        prefix = "\n".join(lines[:first])
+        # Uma cerca dentro de uma string/expressão é código, não Markdown.
+        prefix_is_code = bool(re.search(r"[=(){};]|^\s*(?:def|class|import|from|const|let|var)\b", prefix, re.M))
+        if not prefix_is_code:
+            from codar import langs
+
+            blocks: list[str] = []
+            i = first
+            while i < len(lines):
+                opener = _FENCE.fullmatch(lines[i])
+                if not opener:
+                    i += 1
+                    continue
+                mark, label = opener['mark'], opener['label']
+                j = i + 1
+                while j < len(lines) and not re.fullmatch(r"[ \t]*" + re.escape(mark[0]) +
+                                                         "{" + str(len(mark)) + r",}[ \t]*", lines[j]):
+                    j += 1
+                resolved = langs.try_resolve(label)
+                if not label or (resolved and resolved.id == lang):
+                    blocks.append(textwrap.dedent("\n".join(lines[i + 1:j])).strip("\n"))
+                i = j + 1
+            # Uma resposta cercada em outra linguagem nunca vira código da linguagem alvo.
+            text = "\n\n".join(blocks)
+    # Não poda repetições, imports, linhas em branco ou o fim de uma função.
+    # Qualquer reparo que descarte código exige opt-in explícito fora do pipeline.
+    code = textwrap.dedent(text).strip("\n")
     if repair and lang == "python":
         code = repair_python(code)
     return code
@@ -127,6 +137,25 @@ def split_imports(code: str, lang: str) -> tuple[list[str], str]:
     i = 0
     if lang == "go" and lines and lines[0].startswith("package "):
         return [], code
+    if lang == "python":
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return [], code
+        end = 0
+        for node in tree.body:
+            if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                break
+            if any(line.strip() for line in lines[end:node.lineno - 1]):
+                break  # comentários/documentação não desaparecem ao içar imports
+            # Separar só metade de uma linha apagaria a instrução após `;`.
+            last = node.end_lineno or node.lineno
+            trailing = lines[last - 1][node.end_col_offset:]
+            if trailing.strip() and not trailing.lstrip().startswith('#'):
+                break
+            imports.append("\n".join(lines[node.lineno - 1:last]))
+            end = last
+        return imports, "\n".join(lines[end:]).strip("\n")
     while i < len(lines):
         ln = lines[i]
         if not ln.strip():
@@ -135,14 +164,32 @@ def split_imports(code: str, lang: str) -> tuple[list[str], str]:
         if lang == "go" and ln.strip() == "import (":
             j = i + 1
             while j < len(lines) and lines[j].strip() != ")":
-                if lines[j].strip():
-                    imports.append(f"import {lines[j].strip()}")
                 j += 1
+            if j == len(lines):
+                break  # um grupo aberto continua no corpo para validação, sem perder linhas
+            from codar.engine.imports import import_prefix
+
+            group = import_prefix('\n'.join(lines[i:j + 1]), lang)
+            if not group:
+                break
+            imports.extend(group)
             i = j + 1
             continue
-        if rx.match(ln) and not ln.startswith((" ", "\t")):
-            imports.append(ln.rstrip())
-            i += 1
+        if (rx.match(ln) or lang in ('javascript', 'typescript') and re.match(r'^import\b', ln)) and not ln.startswith((" ", "\t")):
+            from codar.engine.imports import import_prefix, is_native_import
+
+            # O recognizer comum aceita declarações multilinha e aliases, e
+            # impede içar código que compartilha a linha com uma importação.
+            j = i + 1
+            while j <= len(lines):
+                chunk = "\n".join(lines[i:j])
+                if is_native_import(chunk, lang):
+                    imports.extend(import_prefix(chunk, lang))
+                    i = j
+                    break
+                j += 1
+            else:
+                break
             continue
         break
     body = "\n".join(lines[i:]).strip("\n")

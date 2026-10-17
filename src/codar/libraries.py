@@ -199,13 +199,17 @@ def _relative_module(module: str, current: str | Path | None, root: Path) -> str
 
 def local_python_import(intent: str, root: Path | None, current: str | None = None) -> str | None:
     """Resolve pedidos por função/arquivo usando o projeto como fonte de verdade."""
+    from codar.engine.imports import import_instruction, library_references
+
     if root is None:
         return None
+    intent = import_instruction(intent)
     text = fold(intent)
     paths_in_text = re.findall(r'[\w./\\-]+\.py\b', intent)
     asks_symbol = bool(re.search(r'\b(?:funcao|funcoes|function|functions|classe|class|classes)\b', text))
     asks_local = bool(re.search(r'\b(?:minha|minhas|meu|meus|propri[oa]s?)\b', text))
-    if not paths_in_text and not asks_symbol and not asks_local:
+    modules = library_references(intent, 'python')
+    if not paths_in_text and not asks_symbol and not asks_local and not modules:
         return None
     files = []
     for relative in Project.load(root).files():
@@ -228,6 +232,12 @@ def local_python_import(intent: str, root: Path | None, current: str | None = No
         files = sorted(matches)
         if not files:
             raise ValueError('Arquivo Python não encontrado no projeto: ' + ', '.join(paths_in_text))
+    elif modules:
+        named_files = [file for file in files if _module_for(file, root) in modules or file.stem in modules]
+        if named_files:
+            files, explicit = named_files, True
+        elif not asks_local:
+            return None
     words = set(re.findall(r'\w+', text))
     if asks_local and not asks_symbol and not explicit:
         files = [file for file in files if fold(file.stem) in words]
@@ -247,7 +257,9 @@ def local_python_import(intent: str, root: Path | None, current: str | None = No
             matches.append((file, requested))
     if not matches:
         if explicit or re.search(r'\b(?:minha|minhas|meu|meus|propri[oa]s?)\b', text):
-            raise ValueError('Função/classe não encontrada. Informe seu nome e o arquivo .py de origem.')
+            available = sorted({name for file in files for name in _top_names(_read(file)) if not name.startswith('_')})
+            suffix = ' Símbolos públicos disponíveis: ' + ', '.join(available[:12]) + '.' if available else ''
+            raise ValueError('Função/classe não encontrada. Informe seu nome e o arquivo .py de origem.' + suffix)
         return None
     if len(matches) != 1:
         choices = ', '.join(file.relative_to(root).as_posix() for file, _ in matches[:8])

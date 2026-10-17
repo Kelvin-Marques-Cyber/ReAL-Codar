@@ -64,15 +64,16 @@ def test_padrao_parcial_nao_sequestra_pseudocodigo(translate):
     assert "soma_digitos" not in res.code
 
 
-def test_ia_literal_corta_o_que_vem_depois_do_primeiro_bloco(translate, router):
+def test_ia_literal_preserva_toda_a_resposta_sem_corte_por_linha_em_branco(translate, router):
     router.stage2.answer = "x *= 2\n\nprint(x)\n\ndef extra():\n    pass\n"
-    assert translate("dobrar o valor de x").body == "x *= 2"
+    assert translate("dobrar o valor de x").body == router.stage2.answer.rstrip('\n')
 
 
-def test_imports_nao_usados_sao_podados(translate, router):
+def test_imports_sao_preservados_mesmo_quando_usados_fora_do_snippet(translate, router):
     router.stage2.answer = "from typing import *\nimport os\nresultado = len(itens)\n"
     res = translate("contar quantos itens existem")
-    assert res.imports == [] and "import" not in res.code
+    assert res.imports == ['from typing import *', 'import os']
+    assert 'resultado = len(itens)' in res.code
 
 
 def test_imprimir_referencia_nao_vira_texto(translate, router):

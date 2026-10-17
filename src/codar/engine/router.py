@@ -7,7 +7,7 @@ tenta *compor* ferramentas verificadas do banco antes de escrever código do zer
 from __future__ import annotations
 
 import asyncio
-import ast
+import copy
 import dataclasses
 import hashlib
 import re
@@ -24,10 +24,12 @@ from codar.engine import emmet, ir
 from codar.engine.emit import EmitError, emit, emit_else
 from functools import lru_cache
 
-from codar.engine.imports import IMPORT_LANGS, catalog_import, import_prefix, is_import_request, is_native_import
+from codar.engine.imports import (IMPORT_LANGS, catalog_import, import_prefix, is_import_request, is_native_import,
+                                 library_references)
 from codar.engine.models import STOP, build_import_prompt, build_literal_prompt, build_prompt
-from codar.engine.postprocess import (clean_generation, detect_indent_unit, join_imports, prune_imports,
+from codar.engine.postprocess import (clean_generation, detect_indent_unit, join_imports,
                                      prune_sample_data, reindent, split_imports, strip_context_echo)
+from codar.engine.validation import generation_problem, validator_name
 from codar.engine.stage0 import Stage0, clean_intent, extract_lang_hint
 from codar.engine.stage1 import Match, PatternStore, compose, extract_slots
 from codar.engine.stage2 import Cancelled, ModelUnavailable, Stage2, plan_prompt, plan_schema
@@ -65,18 +67,8 @@ _ANAPHORA = re.compile(r"\b(?:d|n)?(?:os|as)\s+(?:dois|duas|tres)\b|\b(?:ambos|a
 
 
 def generation_usable(code: str, lang: str) -> bool:
-    """Bloqueia retorno vazio ou Python quebrado, sem barrar trechos que usam o bloco pai."""
-    if not code.strip():
-        return False
-    if lang != "python":
-        return True
-    if re.match(r"^(?:return|yield|break|continue|else|elif|except|finally|case|await)\b", code.lstrip()):
-        return True  # instruções dependentes da função/if que já existe no arquivo
-    try:
-        ast.parse(textwrap.dedent(code))
-        return True
-    except SyntaxError:
-        return False
+    """Código vazio, prosa ou sintaxe quebrada nunca equivalem a geração bem-sucedida."""
+    return not generation_problem(code, lang)
 
 
 def refers_to_context(intent: str, known: set[str]) -> bool:
@@ -177,15 +169,20 @@ class Result:
     complete: bool = True
     annotated_body: str | None = None
     action: str = 'generate'
+    raw_output: str = ''
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return asdict(self)
 
 
 class TranslateError(RuntimeError):
-    def __init__(self, message: str, candidates: list[dict] | None = None):
+    def __init__(self, message: str, candidates: list[dict] | None = None, *,
+                 raw_output: str = '', diagnostics: dict | None = None):
         super().__init__(message)
         self.candidates = candidates or []
+        self.raw_output = raw_output
+        self.diagnostics = diagnostics or {}
 
 
 class Metrics:
@@ -246,11 +243,11 @@ class Router:
             res = self._cache.get(key)
             if res is not None:
                 self._cache.move_to_end(key)
-            return res
+            return copy.deepcopy(res)
 
     def cache_put(self, key: str, res: Result) -> None:
         with self._cache_lock:
-            self._cache[key] = res
+            self._cache[key] = copy.deepcopy(res)
             self._cache.move_to_end(key)
             while len(self._cache) > int(self.rcfg.get("cache_size", 256)):
                 self._cache.popitem(last=False)
@@ -307,6 +304,13 @@ class Router:
         catalog = LibraryCatalog(project_root(req.project_root, req.file), req.file)
         context = await asyncio.to_thread(catalog.context, req.before + '\n' + req.selected + '\n' + req.after,
                                           lang.id, intent + '\n' + req.selected)
+        explicit_references = []
+        for name in library_references(req.intent, lang.id):
+            reference = await asyncio.to_thread(catalog.learn, name, lang.id, query=intent)
+            if reference:
+                explicit_references.append(reference.context(intent))
+        if explicit_references:
+            context = '\n\n'.join(dict.fromkeys(explicit_references + ([context] if context else [])))[:10000]
         req = dataclasses.replace(req, library_context=context)
         import_lines = [line.strip() if is_native_import(line.strip(), lang.id) else clean_intent(line)
                         for line in intent.splitlines() if line.strip()]
@@ -330,19 +334,26 @@ class Router:
             imports = []
             notes = []
             stages = []
+            raw_parts = []
+            attempts = []
             for line in import_lines:
                 imported = await self._import_only(line, lang, req, timings, on_token, cancel)
                 imports.extend(x for x in imported.imports if x not in imports)
                 notes.extend(x for x in imported.notes if x not in notes)
                 stages.append(imported.stage)
+                if imported.raw_output:
+                    raw_parts.append(imported.raw_output)
+                attempts.extend(imported.diagnostics.get('generation_attempts', []))
             # Uma seleção de código existente é contexto, não autorização para
             # apagar funções quando a ação pedida é somente importar.
             body = req.selected if req.mode == "edit" and req.selected.strip() != intent.strip() else ""
             res = Result(code="", body=body, imports=imports, lang=lang.id, stage=max(stages),
-                         source="imports:only", notes=notes)
+                         source="imports:only", notes=notes, raw_output='\n\n'.join(raw_parts),
+                         diagnostics={'generation_attempts': attempts} if attempts else {})
         elif req.mode == "edit":
             res = await self._edit(intent, lang, req, timings, on_token, cancel)
-        elif req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip()):
+        elif req.mode == "block" or (req.mode == "auto" and "\n" in intent.strip() and all(
+                self.stage0.parse(line.strip(), known) or is_pseudocode(line) for line in intent.splitlines() if line.strip())):
             linhas = sum(1 for ln in intent.splitlines() if ln.strip())
             maximo = int(self.rcfg.get("max_block_lines", 30))
             if linhas > maximo:
@@ -401,6 +412,11 @@ class Router:
             src = detect_indent_unit(res.body)
             res.body = reindent(res.body, unit if unit is not None else src, req.indent, src)
         res.code = join_imports(res.imports, res.body.strip("\n") if not req.indent else res.body, res.lang)
+        if not res.code.strip():
+            res.complete = False
+            res.notes.append('resultado vazio após o processamento; código original preservado')
+        res.diagnostics.update(body_chars=len(res.body), import_count=len(res.imports), code_chars=len(res.code),
+                               complete=res.complete)
         if req.audit and self.cfg.get("audit", {}).get("enabled", True):
             ta = time.perf_counter()
             # audita sem a indentação da linha do editor: "    total = 0" sozinho é erro de sintaxe em Python
@@ -422,27 +438,44 @@ class Router:
         timings["total_ms"] = round((time.perf_counter() - t0) * 1000, 3)
         res.timings = timings
 
+    @staticmethod
+    def _generation_diagnostic(gen, code, lang_id):
+        extracted = clean_generation(gen.text, lang_id, repair=False)
+        reason = generation_problem(code, lang_id)
+        if gen.finish != 'stop':
+            reason = 'generation_' + gen.finish
+        return {'raw_output': gen.text, 'finish': gen.finish, 'tokens': gen.tokens,
+                'prompt_tokens': gen.prompt_tokens, 'extracted_chars': len(extracted),
+                'processed_chars': len(code), 'usable': not reason, 'reason': reason,
+                'validator': validator_name(lang_id),
+                'budget_tokens': getattr(gen, 'budget_tokens', None),
+                'prompt_level': getattr(gen, 'prompt_level', None)}
+
     async def _retry_bad_generation(self, gen, code, lang_id, builder, process, timings, on_token, cancel):
         """Uma segunda tentativa curta só quando a resposta não contém código Python utilizável.
 
         A resposta original permanece disponível no streaming do Studio, inclusive
         quando o modelo falha novamente; nunca se aceita código malformado automaticamente.
         """
-        if gen.finish == "length" or generation_usable(code, lang_id):
-            return gen, code, generation_usable(code, lang_id)
+        attempts = [self._generation_diagnostic(gen, code, lang_id)]
+        if gen.finish != 'stop' or attempts[0]['usable']:
+            return gen, code, attempts[0]['usable'], {'generation_attempts': attempts}
+        from codar.engine.models import recovery_prompt
+
         t = time.perf_counter()
         try:
             retry = await asyncio.wrap_future(self.stage2.submit(
-                self.stage2.generate, lambda _level: builder(3),
-                on_token=on_token, cancel=cancel, max_tokens=256))
-        except ModelUnavailable:
-            return gen, code, False
+                self.stage2.generate, lambda level: recovery_prompt(builder(level), attempts[0]['reason']),
+                cancel=cancel))
+        except ModelUnavailable as exc:
+            return gen, code, False, {'generation_attempts': attempts, 'recovery_error': str(exc)}
         timings["stage2_retry_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = timings.get("tokens", 0) + retry.tokens
         revised = process(retry.text)
-        if retry.finish != "length" and generation_usable(revised, lang_id):
-            return retry, revised, True
-        return gen, code, False
+        attempts.append(self._generation_diagnostic(retry, revised, lang_id))
+        if attempts[-1]['usable']:
+            return retry, revised, True, {'generation_attempts': attempts}
+        return gen, code, False, {'generation_attempts': attempts}
 
     async def _edit(self, intent, lang, req, timings, on_token, cancel) -> Result:
         """Reescrita explícita: não troca um pedido sobre código existente por um snippet do banco."""
@@ -476,10 +509,13 @@ class Router:
         # Não "conserta" Python removendo o fim do arquivo nem poda imports usados fora da seleção.
         code = clean_generation(gen.text, lang.id, repair=False)
         if not code.strip():
-            raise TranslateError("a IA devolveu uma edição vazia; seu código foi preservado")
+            raise TranslateError("a IA devolveu uma edição vazia; seu código foi preservado", raw_output=gen.text,
+                                 diagnostics={'generation_attempts': [self._generation_diagnostic(gen, code, lang.id)]})
+        diagnostic = self._generation_diagnostic(gen, code, lang.id)
         imports, body = split_imports(code, lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:edit",
-                     source=f"slm:{self.stage2.name}", confidence=0.5, complete=gen.finish != "length")
+                     source=f"slm:{self.stage2.name}", confidence=0.5, complete=diagnostic['usable'],
+                     raw_output=gen.text, diagnostics={'generation_attempts': [diagnostic]})
         if not res.complete:
             res.notes.append("edição incompleta: selecione um trecho menor ou aumente model.max_tokens; "
                              "o código original deve ser preservado")
@@ -513,6 +549,11 @@ class Router:
         if local:
             code = local
             notes.append('importação resolvida nos arquivos Python do projeto, sem executar o módulo')
+            if re.search(r'\b(?:funcao|function)\s+para\b', fold(intent)):
+                classes = re.findall(r'^class\s+(\w+)', req.library_context, re.M)
+                if classes:
+                    notes.append('a finalidade não nomeia uma função exportada; módulo importado. Classes disponíveis: ' +
+                                 ', '.join(dict.fromkeys(classes)) + '; importe a classe para usar seus métodos')
         elif chosen:
             code, package, source = chosen
             notes.append(f"biblioteca: {package}; instalação separada no ambiente do projeto; referência: {source}")
@@ -551,17 +592,23 @@ class Router:
                 raise TranslateError(str(exc)) from exc
             timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
             timings["tokens"] = gen.tokens
-            if gen.finish == "length":
-                raise TranslateError("a sugestão de importação ficou incompleta; o código original foi preservado")
+            if gen.finish != "stop":
+                diagnostic = self._generation_diagnostic(gen, clean_generation(gen.text, lang.id), lang.id)
+                raise TranslateError("a sugestão de importação ficou incompleta; o código original foi preservado",
+                                     raw_output=gen.text, diagnostics={'generation_attempts': [diagnostic]})
             imports = import_prefix(clean_generation(gen.text, lang.id, repair=False), lang.id)
             if not imports:
                 raise TranslateError("a IA não retornou uma importação válida; o código original foi preservado. "
-                                     "Informe o nome do pacote/módulo desejado")
+                                     "Informe o nome do pacote/módulo desejado", raw_output=gen.text,
+                                     diagnostics={'generation_attempts': [self._generation_diagnostic(gen, '', lang.id)]})
             stage = "2:import"
             notes.append("biblioteca sugerida pela IA local; confira a dependência no ambiente do projeto")
         if on_token:
             on_token(join_imports(imports, "", lang.id))
-        return Result(code="", body="", imports=imports, lang=lang.id, stage=stage, source="imports:only", notes=notes)
+        return Result(code="", body="", imports=imports, lang=lang.id, stage=stage, source="imports:only", notes=notes,
+                      raw_output=gen.text if stage == '2:import' else '',
+                      diagnostics={'generation_attempts': [self._generation_diagnostic(gen, join_imports(imports, '', lang.id), lang.id)]}
+                      if stage == '2:import' else {})
 
     @staticmethod
     def _emmet(intent: str, lang: langs.Lang, req: Request) -> Result | None:
@@ -611,7 +658,13 @@ class Router:
         timings["stage1_ms"] = round((time.perf_counter() - t) * 1000, 3)
         cands = [m.as_dict() for m in matches[:5]]
         accept = float(self.rcfg.get("pattern_min_score", 0.6))
-        best = next((m for m in matches if m.has_lang or m.pattern.kind == "file"), None)
+        required_libraries = library_references(intent, lang.id)
+
+        def fits_libraries(match):
+            content = fold(match.pattern.id + '\n' + '\n'.join(match.pattern.code.values()))
+            return all(fold(name) in content for name in required_libraries)
+
+        best = next((m for m in matches if (m.has_lang or m.pattern.kind == "file") and fits_libraries(m)), None)
         pseudo = is_pseudocode(intent)
         contextual = pseudo and refers_to_context(intent, known)
         if pseudo:  # instrução sobre o código: só aceita um padrão se ele explicar praticamente a frase toda
@@ -629,7 +682,7 @@ class Router:
             raise TranslateError(f"Estágio 2 indisponível: {self.stage2.load_error or 'modelo não configurado'} "
                                  "(rode `codar model pull`)", cands)
         rag_min = float(self.rcfg.get("rag_min_score", 0.25))
-        useful = [m for m in matches if m.score >= rag_min]
+        useful = [m for m in matches if m.score >= rag_min and fits_libraries(m)]
         loop = asyncio.get_running_loop()
         if pseudo:  # pseudocódigo nunca vira padrão por similaridade parcial: tradução literal
             return await self._literal(intent, lang, req, timings, on_token, cancel, cands)
@@ -680,19 +733,21 @@ class Router:
         timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = gen.tokens
         def process(text):
-            return prune_imports(strip_context_echo(clean_generation(text, lang.id), context, req.after), lang.id)
+            return strip_context_echo(clean_generation(text, lang.id, repair=False), context, req.after)
 
         code = process(gen.text)
-        gen, code, valid = await self._retry_bad_generation(gen, code, lang.id, builder, process,
-                                                            timings, on_token, cancel)
+        gen, code, valid, diagnostics = await self._retry_bad_generation(gen, code, lang.id, builder, process,
+                                                                         timings, on_token, cancel)
         imports, body = split_imports(code, lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:adapt" if reference else "2:gen",
                      source=f"slm:{self.stage2.name}" + (f"+ref:{ref_pattern.id}" if ref_pattern else ""),
-                     confidence=0.5, candidates=cands, complete=gen.finish != "length" and valid)
-        if not valid:
+                     confidence=0.5, candidates=cands, complete=valid, raw_output=gen.text, diagnostics=diagnostics)
+        if gen.finish == "length":
+            res.notes.append("geração atingiu o limite de tokens; código original preservado")
+        elif gen.finish == 'error':
+            res.notes.append('stream interrompido sem confirmação final; código original preservado')
+        elif not valid:
             res.notes.append("geração inválida: a IA não devolveu código utilizável; original preservado")
-        elif gen.finish == "length":
-            res.notes.append("geração atingiu o limite de tokens; revise o final do código")
         return res
 
     async def _literal(self, intent: str, lang: langs.Lang, req: Request, timings: dict[str, float], on_token, cancel,
@@ -720,19 +775,17 @@ class Router:
         timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = gen.tokens
         def process(text):
-            code = clean_generation(text, lang.id)
-            if n_lines == 1 and "\n\n" in code.strip("\n"):
-                code = code.strip("\n").split("\n\n", 1)[0]
+            code = clean_generation(text, lang.id, repair=False)
             code = strip_context_echo(code, context, req.after)
-            return prune_sample_data(prune_imports(code, lang.id), intent)
+            return prune_sample_data(code, intent)
 
         code = process(gen.text)
-        gen, code, valid = await self._retry_bad_generation(gen, code, lang.id, builder, process,
-                                                            timings, on_token, cancel)
+        gen, code, valid, diagnostics = await self._retry_bad_generation(gen, code, lang.id, builder, process,
+                                                                         timings, on_token, cancel)
         imports, body = split_imports(code, lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:pseudo",
                      source=f"slm:{self.stage2.name}:literal", confidence=0.6, candidates=cands,
-                     complete=gen.finish != "length" and valid)
+                     complete=valid, raw_output=gen.text, diagnostics=diagnostics)
         if not valid:
             res.notes.append("geração inválida: a IA não devolveu código utilizável; original preservado")
         res.notes.append("pseudocódigo traduzido pela IA em modo literal; ensine o compilador salvando como padrão")
@@ -828,6 +881,8 @@ class Router:
         unresolved = [n for n in _walk_all(nodes) if isinstance(n, ir.Unresolved)]
         limite_ia, com_ia = int(self.rcfg.get("max_block_ai_lines", 8)), 0
         complete = True
+        attempts = []
+        raw_parts = []
         for node in unresolved:
             # depois de max_block_ai_lines linhas pela IA, o resto só tenta o banco de padrões (rápido)
             stages = tuple(s for s in req.stages if s and (s != 2 or com_ia < limite_ia))
@@ -836,6 +891,9 @@ class Router:
                 res = await self._translate_line(node.text, lang, sub, known, {}, None, cancel)
                 stages_used.add(res.stage)
                 complete = complete and res.complete
+                attempts.extend(res.diagnostics.get('generation_attempts', []))
+                if res.raw_output:
+                    raw_parts.append(res.raw_output)
                 com_ia += res.stage.startswith("2")
                 _replace(nodes, node, ir.Raw(res.body, res.imports))
             except TranslateError:
@@ -847,9 +905,11 @@ class Router:
         stage = max(stages_used, key=lambda s: (s[0], len(s)))
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage=stage,
                      source=f"block:{len(text.splitlines())} linhas", confidence=1.0 if not misses else 0.7,
-                     complete=complete)
+                     complete=complete, raw_output='\n\n'.join(raw_parts),
+                     diagnostics={'generation_attempts': attempts} if attempts else {})
         left = sum(1 for n in _walk_all(nodes) if isinstance(n, ir.Unresolved))
         if left:
+            res.complete = False
             res.notes.append(f"{left} linha(s) não resolvida(s) viraram TODO")
         if not complete:
             res.notes.append("uma tradução do bloco atingiu o limite de tokens; preserve o código original")

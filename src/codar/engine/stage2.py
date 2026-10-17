@@ -49,7 +49,9 @@ class GenResult:
     tokens: int
     prompt_tokens: int
     ms: float
-    finish: str  # stop | length | cancel
+    finish: str  # stop | length | cancel | error (stream sem confirmação final)
+    budget_tokens: int | None = None
+    prompt_level: int | None = None
 
 
 def physical_cores() -> int:
@@ -213,7 +215,7 @@ class LlamaCppBackend(Backend):
         m = self.mcfg
         t0 = time.perf_counter()
         parts: list[str] = []
-        finish = "stop"
+        finish = "error"
         stream = self.llm(prompt, max_tokens=max_tokens, temperature=temperature, top_p=float(m.get("top_p", 0.9)),
                           top_k=int(m.get("top_k", 40)), repeat_penalty=float(m.get("repeat_penalty", 1.08)),
                           stop=stop, grammar=grammar, stream=True)
@@ -236,7 +238,11 @@ class LlamaCppBackend(Backend):
             close = getattr(stream, "close", None)
             if close:
                 close()
-        return GenResult("".join(parts), n, self.tokens(prompt), (time.perf_counter() - t0) * 1000, finish)
+        text = "".join(parts)
+        # Chunks de streaming não são tokens: um caractere UTF-8 pode chegar
+        # em vários tokens, e um chunk pode conter vários tokens.
+        n = len(self.llm.tokenize(text.encode('utf-8'), add_bos=False, special=False)) if text else 0
+        return GenResult(text, n, self.tokens(prompt), (time.perf_counter() - t0) * 1000, finish)
 
 
 class LlamaServerBackend(Backend):
@@ -314,7 +320,8 @@ class LlamaServerBackend(Backend):
 
     def tokens(self, text: str) -> int:
         try:
-            status, data = self._request("POST", "/tokenize", {"content": text}, timeout=10)
+            status, data = self._request("POST", "/tokenize", {"content": text, "add_special": False,
+                                                               "parse_special": True}, timeout=10)
             if status == 200:
                 return len(json.loads(data)["tokens"])
         except (OSError, ValueError, KeyError):
@@ -332,10 +339,13 @@ class LlamaServerBackend(Backend):
         t0 = time.perf_counter()
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=600)
         parts: list[str] = []
-        finish, n, prompt_tokens = "stop", 0, 0
+        finish, n, prompt_tokens = "error", 0, 0
         try:
             conn.request("POST", "/completion", body=json.dumps(body), headers={"Content-Type": "application/json"})
             resp = conn.getresponse()
+            if resp.status != 200:
+                detail = resp.read(4096).decode('utf-8', 'replace')
+                raise ModelUnavailable(f'llama-server HTTP {resp.status}: {detail}')
             for raw in resp:
                 if cancel is not None and cancel.is_set():
                     finish = "cancel"
@@ -343,7 +353,15 @@ class LlamaServerBackend(Backend):
                 line = raw.decode("utf-8", "replace").strip()
                 if not line.startswith("data:"):
                     continue
-                event = json.loads(line[5:])
+                payload = line[5:].strip()
+                if payload == '[DONE]':
+                    break  # só o evento stop confirma uma resposta completa
+                try:
+                    event = json.loads(payload)
+                except ValueError:
+                    break  # preserva tokens recebidos e informa stream incompleto
+                if not isinstance(event, dict):
+                    break
                 delta = event.get("content", "")
                 if delta:
                     n += 1
@@ -351,8 +369,9 @@ class LlamaServerBackend(Backend):
                     if on_token:
                         on_token(delta)
                 if event.get("stop"):
-                    finish = "length" if event.get("stop_type") == "limit" else "stop"
+                    finish = "length" if event.get("stop_type") == "limit" or event.get('stopped_limit') else "stop"
                     prompt_tokens = int(event.get("tokens_evaluated", 0))
+                    n = int(event.get('tokens_predicted') or event.get('timings', {}).get('predicted_n') or n)
                     break
         finally:
             conn.close()
@@ -369,7 +388,7 @@ def make_backend(mcfg: dict) -> tuple[Backend, ModelCard | None, Path | None, st
         return LlamaServerBackend(path, mcfg), card, path, fmt
     if kind == "auto":
         try:
-            import llama_cpp  # noqa: F401
+            __import__('llama_cpp')  # checa também as bibliotecas nativas do binding
         except ImportError:
             if shutil.which(mcfg.get("server_bin") or "llama-server"):
                 return LlamaServerBackend(path, mcfg), card, path, fmt
@@ -402,13 +421,20 @@ class Stage2:
 
     def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Future:
         self.last_used = time.monotonic()  # trabalho na fila conta como uso (o watchdog não descarrega)
-        self.pending += 1
-        fut = self.pool.submit(fn, *args, **kwargs)
+        with self._state_lock:
+            self.pending += 1
+        try:
+            fut = self.pool.submit(fn, *args, **kwargs)
+        except RuntimeError:
+            with self._state_lock:
+                self.pending -= 1
+            raise
         fut.add_done_callback(self._done)
         return fut
 
     def _done(self, _fut: Future) -> None:
-        self.pending -= 1
+        with self._state_lock:
+            self.pending -= 1
         self.last_used = time.monotonic()
 
     def ensure_loaded(self) -> None:
@@ -496,6 +522,8 @@ class Stage2:
                  max_tokens: int | None = None, stop: list[str] | None = None,
                  required_output: str | None = None) -> GenResult:
         """prompt_builder(nível) devolve prompts progressivamente menores (0 = completo) até caber no n_ctx."""
+        if cancel is not None and cancel.is_set():
+            raise Cancelled('geração cancelada antes de iniciar')
         self.ensure_loaded()
         self.last_used = time.monotonic()
         wanted = min(int(self.mcfg.get("max_tokens", 384)), max_tokens or 10**9)
@@ -514,20 +542,32 @@ class Stage2:
         if budget < minimum:
             raise ModelUnavailable(f"prompt deixa {budget} tokens de saída, mas são necessários {minimum}; "
                                    "selecione um trecho menor ou aumente [model] n_ctx. O original foi preservado")
+        if cancel is not None and cancel.is_set():
+            raise Cancelled('geração cancelada antes da inferência')
         res = self.backend.complete(prompt, max_tokens=budget, temperature=float(self.mcfg.get("temperature", 0.15)),
-                                    stop=stop or STOP, on_token=on_token, cancel=cancel)
+                                    stop=STOP if stop is None else stop, on_token=on_token, cancel=cancel)
+        res.budget_tokens, res.prompt_level = budget, level
         self.generations += 1
         self.last_used = time.monotonic()
-        if res.finish == "cancel":
+        if res.finish == "cancel" or (cancel is not None and cancel.is_set()):
             raise Cancelled("geração cancelada")
         return res
 
     def plan(self, prompt: str, schema: dict, cancel=None) -> tuple[dict, GenResult]:
+        if cancel is not None and cancel.is_set():
+            raise Cancelled('planejamento cancelado antes de iniciar')
         self.ensure_loaded()
         self.last_used = time.monotonic()
-        res = self.backend.complete(prompt, max_tokens=160, temperature=0.0, stop=["<|im_end|>", "<|endoftext|>"],
+        budget = self._budget(prompt, 160)
+        if budget < 32:
+            return {'steps': []}, GenResult('', 0, self.backend.tokens(prompt), 0, 'length', budget)
+        res = self.backend.complete(prompt, max_tokens=budget, temperature=0.0, stop=STOP,
                                     schema=schema, cancel=cancel)
         self.last_used = time.monotonic()
+        if res.finish == 'cancel' or (cancel is not None and cancel.is_set()):
+            raise Cancelled('planejamento cancelado')
+        if res.finish != 'stop':
+            return {'steps': []}, res
         try:
             return json.loads(res.text), res
         except ValueError:
@@ -535,6 +575,7 @@ class Stage2:
 
 
 def plan_prompt(fmt: str, intent: str, lang_name: str, tools: list[dict]) -> str:
+    from codar.engine.models import chatml_data
     lines = []
     for i, t in enumerate(tools, 1):
         params = ", ".join(t["params"]) or "nenhum"
@@ -544,7 +585,7 @@ def plan_prompt(fmt: str, intent: str, lang_name: str, tools: list[dict]) -> str
             'written in the task. If no pattern fits the task, answer {"steps": []}.')
     prompt = ("<|im_start|>system\nYou route programming tasks to reusable, verified code patterns. "
               "Answer with JSON only.<|im_end|>\n"
-              f"<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n")
+              f"<|im_start|>user\n{chatml_data(user)}<|im_end|>\n<|im_start|>assistant\n")
     if fmt == "chatml-nothink":
         prompt += "<think>\n\n</think>\n\n"
     return prompt

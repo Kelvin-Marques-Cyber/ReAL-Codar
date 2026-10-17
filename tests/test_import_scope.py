@@ -161,7 +161,7 @@ def test_modulo_explicitamente_nomeado_nao_e_trocado(translate):
 
 def test_implementacao_explicita_ainda_chega_ao_gerador(translate, router):
     router.stage2.answer = "def ler_playlist(url):\n    return api.playlist(url)\n"
-    result = translate("crie uma função para ler uma playlist de youtube usando uma biblioteca")
+    result = translate("crie uma função para ler uma playlist de youtube usando uma biblioteca", stages=(2,))
     assert result.body.startswith("def ler_playlist(url):")
     assert result.stage != "2:import"
 

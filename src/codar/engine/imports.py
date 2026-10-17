@@ -29,6 +29,38 @@ _ALSO = re.compile(
     r"baixe|baixar|execute|executar|imprima|imprimir|create|build|generate|implement|write|read|"
     r"list|download|run|print)\b"
 )
+_CREATE_ACTION = re.compile(r'\b(?:crie|criar|gere|gerar|implemente|implementar|escreva|escrever|'
+                            r'construa|construir|create|build|generate|implement|write)\b')
+
+
+def import_instruction(intent: str) -> str:
+    """A cláusula de ação pode vir depois de contexto: `da lib X, importe X`."""
+    text = intent.strip()
+    if _PREFIX.match(fold(text)):
+        return text
+    pieces = list(re.finditer(r'(?:^|[,;])\s*([^,;]+)', text))
+    requests = [piece for piece in pieces if _PREFIX.match(fold(piece[1]))]
+    if len(requests) != 1:
+        return text
+    request = requests[0]
+    context = text[:request.start()] + text[request.end():]
+    if not _LIBRARY.search(fold(context)) or _CREATE_ACTION.search(fold(context)):
+        return text
+    return request[1].strip()
+
+
+def library_references(intent: str, lang: str) -> list[str]:
+    """Nomes explícitos para descoberta de API, sem importar/executar bibliotecas."""
+    names = [name for name, _, _ in _named_requests(intent)] if is_import_request(intent, lang) else []
+    for match in re.finditer(r'\b(?:biblioteca|library|modulo|module|pacote|package)\s+'
+                            r'(?:(?:de|do|da|of|called|chamada|chamado)\s+)?'
+                            r'([@A-Za-z_][\w./@-]*)', intent, re.I):
+        name = match[1]
+        if fold(name) not in _NOT_NAMES | {'a', 'o', 'um', 'uma', 'the', 'an'}:
+            names.append(name)
+    if lang == 'python':
+        names = [name[:-3].replace('/', '.').replace('\\', '.') if name.endswith('.py') else name for name in names]
+    return list(dict.fromkeys(names))[:6]
 
 
 def is_import_request(intent: str, lang: str | None = None) -> bool:
@@ -37,7 +69,7 @@ def is_import_request(intent: str, lang: str | None = None) -> bool:
         return True
     if "\n" in intent.strip():
         return False
-    text = fold(intent.strip())
+    text = fold(import_instruction(intent))
     match = _PREFIX.match(text)
     if not match:
         return False
@@ -92,6 +124,7 @@ _NOT_NAMES = set("para pra que to for function functions funcao funcoes classe c
 
 def _named_requests(intent: str) -> list[tuple[str, str, str]]:
     """(módulo, símbolo opcional, alias opcional); aceita apenas nomes explícitos."""
+    intent = import_instruction(intent)
     text = fold_keep_len(intent.strip())
     prefix = _PREFIX.match(text)
     if not prefix:
