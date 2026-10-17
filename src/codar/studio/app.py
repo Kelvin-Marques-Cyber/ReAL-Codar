@@ -44,7 +44,7 @@ from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen, TerminalOutputScreen
 from codar.studio.review import ChoiceScreen, ReviewScreen
-from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, aplicar_paleta,
+from codar.studio.widgets import (C, SENTRY, STAGE_COLORS, TITLE, Botao, CodeEditor, OrbitRadar, OutputLog, aplicar_paleta,
                                   gauge, paleta, tema_ansi, tema_editor)
 from codar.textutil import looks_like_intent
 from codar.vocab import EXAMPLES
@@ -199,6 +199,7 @@ class Studio(App):
         self.audit_on = True
         self.hints = False
         self.last: dict | None = None
+        self._output_text = ''  # tokens originais disponíveis mesmo quando o código final é vazio
         self.tab_seq = 0
         self.mem: dict = {}
         self.intents: list[str] = []
@@ -249,7 +250,8 @@ class Studio(App):
                         with Horizontal(id='output-actions'):
                             yield Botao(tr('ABRIR CÓDIGO'), acao='open_result', id='output-open', disabled=True)
                             yield Botao(tr('COPIAR'), acao='copy_result', id='output-copy', disabled=True)
-                        yield RichLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
+                            yield Botao(tr('SELECIONAR'), acao='select_result', id='output-select', disabled=True)
+                        yield OutputLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
                     with TabPane(tr("CONSULTOR"), id="tab-advisor"):
                         yield ListView(id="advice-list")
                     with TabPane(tr("ESTUDO"), id="tab-estudo"):
@@ -930,6 +932,9 @@ class Studio(App):
                 self.feed(f"EDIT · substituindo {target.selected.count(chr(10)) + 1} linha(s)", "orange")
         self.feed(f"TX · {intent[:70]}", "text")
         out = self.query_one("#output", RichLog)
+        self._output_text = ''
+        self.last = None  # resultados de pedidos anteriores não podem ser copiados por engano
+        self._output_status('Gerando código…')
         out.write(f"[{C['red']}]▸ INTENÇÃO[/] [{C['text']}]{_esc(intent)}[/]")
         if self._generation_cancel is not None:
             self._generation_cancel.set()
@@ -1006,6 +1011,10 @@ class Studio(App):
             self.streaming = True
             self.query_one("#panel", TabbedContent).active = "tab-output"
             out.write(f"[{C['orange']}]▸ SLM gerando…[/]")
+        self._output_text += d
+        if self._output_text.strip():
+            self.query_one('#output-copy', Botao).disabled = False
+            self.query_one('#output-select', Botao).disabled = False
         out.write(Text(d, style=C["dim"]), scroll_end=True)
 
     def _failed(self, intent: str, message: str, cands: list[dict]) -> None:
@@ -1014,6 +1023,7 @@ class Studio(App):
         out.write(f"[b {C['error']}]✖ {_esc(message)}[/]")
         for c in cands[:3]:
             out.write(f"[{C['dim']}]  candidato {c['id']} ({c['score']:.2f}) {c['title']}[/]")
+        self._output_status('Falha na geração; copie ou selecione a resposta parcial, se houver.')
         self.notify(message[:120], severity="error", title="não resolvido")
 
     def _apply(self, res: dict, target: EditTarget | None, editor_id: str | None, indent: str) -> None:
@@ -1025,7 +1035,9 @@ class Studio(App):
         hist = self.query_one("#history", ListView)
         hist.insert(0, [ListItem(Static(f"[{STAGE_COLORS.get(res['stage'], C['orange'])}]●[/] "
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
-        self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
+        if res.get('code', '').strip():
+            self._output_text = res['code']
+        self.query_one("#output", RichLog).write(Text(res.get('code') or self._output_text, style=C["moon"]))
         if res.get('action') in ('query', 'install', 'execute', 'study'):
             self._output_status('Consulta concluída; arquivo preservado.')
             self.query_one('#panel', TabbedContent).display = True
@@ -1060,8 +1072,10 @@ class Studio(App):
     def _output_status(self, message, *, warning=False):
         self.query_one('#output-status', Static).update(Text(tr(message)))
         ready = bool(self.last and self.last.get('code', '').strip())
-        self.query_one('#output-copy').disabled = not ready
-        self.query_one('#output-open').disabled = not ready or self.last.get('action') in ('query', 'install', 'execute', 'study')
+        selectable = bool(self._output_text.strip() or ready)
+        self.query_one('#output-copy').disabled = not selectable
+        self.query_one('#output-select').disabled = not selectable
+        self.query_one('#output-open').disabled = not ready or self.last.get('action') in ('query', 'install', 'execute', 'study') if self.last else True
         if warning:
             self.query_one('#panel', TabbedContent).display = True
             self.query_one('#panel', TabbedContent).active = 'tab-output'
@@ -1074,9 +1088,18 @@ class Studio(App):
         await self._new_buffer_with(res)
 
     def action_copy_result(self):
-        if self.last and self.last.get('code'):
-            self.copy_to_clipboard(self.last['code'])
+        from codar.studio.clipboard import copy_text
+
+        text = self._output_text or (self.last or {}).get('code', '')
+        if text.strip():
+            copy_text(self, text)
             self.notify(tr('Resposta copiada.'))
+
+    def action_select_result(self):
+        """Clicar na SAÍDA abre seleção por mouse/teclado, inclusive para respostas malformadas."""
+        text = self._output_text or (self.last or {}).get('code', '')
+        if text.strip():
+            self.push_screen(TerminalOutputScreen(text, 'CODAR · geração'))
 
     @work(thread=True, group="review")
     def review_worker(self, res, target, editor_id, text, start_row, end_row):
