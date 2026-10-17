@@ -133,3 +133,51 @@ def test_consulta_nao_e_aberta_como_codigo_e_exclusao_nao_e_contornada(tmp_path,
             await app.action_open_result()
             assert app.current_editor() is editor and editor.text == original
     asyncio.run(scenario())
+
+def test_saida_vazia_mantem_tokens_para_copiar_e_selecionar(tmp_path, monkeypatch):
+    from codar.studio.screens import TerminalOutputScreen
+
+    app = setup_app(tmp_path, monkeypatch)
+    path = app.root / 'main.py'
+    path.write_text('print("original")\n')
+    raw = 'dt lp\n.Y\noutube\nDL\n()\n'
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)) as pilot:
+            await app.open_file(path)
+            editor = app.current_editor()
+            target = EditTarget.capture(editor.text, 'insert', (0, 0), ((0, 0), (0, 0)))
+            app._output_text = raw
+            app._apply(result(''), target, editor.id, '')
+            assert editor.text == 'print("original")\n'
+            assert not app.query_one('#output-copy').disabled
+            assert not app.query_one('#output-select').disabled
+            assert app.query_one('#output-open').disabled
+            app.action_copy_result()
+            assert app.clipboard == raw
+            await pilot.click('#output')
+            await pilot.pause()
+            assert isinstance(app.screen, TerminalOutputScreen)
+            assert app.screen.query_one('#terminal-output-text').text == raw
+
+    asyncio.run(scenario())
+
+
+def test_importacao_pura_enviada_pelo_motor_e_inserida_no_editor(tmp_path, monkeypatch):
+    app = setup_app(tmp_path, monkeypatch)
+    path = app.root / 'main.py'
+    path.write_text('print("original")\n')
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)):
+            await app.open_file(path)
+            editor = app.current_editor()
+            target = EditTarget.capture(editor.text, 'insert', (0, 0), ((0, 0), (0, 0)))
+            code = 'from yt_dlp import YoutubeDL'
+            res = {**result(code), 'body': '', 'imports': [code]}
+            app._apply(res, target, editor.id, '')
+            assert editor.text.startswith(code + '\n')
+            assert 'print("original")' in editor.text
+            assert 'Código aplicado' in str(app.query_one('#output-status').content)
+
+    asyncio.run(scenario())
