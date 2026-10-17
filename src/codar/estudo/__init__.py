@@ -282,6 +282,56 @@ def _poo_python(arvore: ast.AST) -> EstadoPoo:
     return estado
 
 
+def _corpo_classe_js(codigo: str, fim_cabecalho: int) -> str:
+    """Isola o corpo real de uma classe, ignorando chaves em strings/comentários.
+
+    Não inclui código executado fora da classe nem métodos da classe seguinte.
+    Não executa JavaScript ou TypeScript; é análise estática conservadora.
+    """
+    inicio = codigo.find("{", fim_cabecalho)
+    if inicio < 0:
+        return ""
+    quote = None
+    block_comment = False
+    line_comment = False
+    escaped = False
+    depth = 1
+    i = inicio + 1
+    while i < len(codigo):
+        c = codigo[i]
+        n = codigo[i + 1] if i + 1 < len(codigo) else ""
+        if line_comment:
+            if c == "\n":
+                line_comment = False
+        elif block_comment:
+            if c == "*" and n == "/":
+                block_comment = False
+                i += 1
+        elif quote:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == quote:
+                quote = None
+        elif c == "/" and n == "/":
+            line_comment = True
+            i += 1
+        elif c == "/" and n == "*":
+            block_comment = True
+            i += 1
+        elif c in ("'", '"', "`"):
+            quote = c
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return codigo[inicio + 1:i]
+        i += 1
+    return ""  # classe incompleta enquanto o usuário digita
+
+
 _JS_CLASSE = re.compile(r"^\s*(export\s+(?:default\s+)?)?class\s+(\w+)(?:\s+extends\s+(\w+))?", re.M)
 
 
@@ -290,9 +340,11 @@ def _poo_js(codigo: str) -> EstadoPoo:
     estado = EstadoPoo(feitos)
     classes = list(_JS_CLASSE.finditer(codigo))
     metodos_de: dict[str, set[str]] = {}
-    for i, m in enumerate(classes):
+    for m in classes:
         exportada, nome, mae = m.group(1), m.group(2), m.group(3)
-        corpo = codigo[m.end(): classes[i + 1].start() if i + 1 < len(classes) else len(codigo)]
+        corpo = _corpo_classe_js(codigo, m.end())
+        if not corpo:
+            continue  # não apresentar um estado inventado durante uma edição incompleta
         feitos["classe"] = True
         feitos["heranca"] |= bool(mae)
         metodos = {x for x in re.findall(r"^\s+(?:async\s+|static\s+)?(\w+)\s*\([^)]*\)\s*\{", corpo, re.M)
@@ -317,7 +369,8 @@ def _poo_js(codigo: str) -> EstadoPoo:
     for m in classes:
         if m.group(3) and metodos_de.get(m.group(2), set()) & metodos_de.get(m.group(3), set()):
             feitos["polimorfismo"] = True
-    feitos["objeto"] = bool(re.search(r"\bnew\s+[A-Z]\w*\(", codigo))
+    feitos["objeto"] = any(re.search(r"\bnew\s+" + re.escape(nome) + r"\s*\(", codigo)
+                          for nome in metodos_de)
     return estado
 
 
