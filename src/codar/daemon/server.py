@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from codar import __version__, config, langs, paths
+from codar import __version__, ENGINE_REVISION, config, langs, paths
 from codar.daemon.memguard import MemGuard, apply_job_limit
 from codar.engine.gguf import GGUFError, estimate, read_gguf
 from codar.engine.router import Request, Router, TranslateError
@@ -294,7 +294,8 @@ class Daemon:
 
     # ------------------------------------------------------------------ métodos
     async def m_ping(self, conn, p, rid):
-        return {"pong": True, "version": __version__, "pid": os.getpid(), "installation": self.installation}
+        return {"pong": True, "version": __version__, "engine_revision": ENGINE_REVISION,
+                "pid": os.getpid(), "installation": self.installation}
 
     async def m_auth(self, conn, p, rid):
         if self.endpoint and secrets.compare_digest(str(p.get("token", "")), self.endpoint.token):
@@ -333,7 +334,7 @@ class Daemon:
         return self.router.audit(code, lang.id, bool(p.get("hints")))
 
     async def m_stats(self, conn, p, rid):
-        return {"version": __version__, "installation": self.installation,
+        return {"version": __version__, "engine_revision": ENGINE_REVISION, "installation": self.installation,
                 "pid": os.getpid(), "uptime_s": round(time.time() - self.started),
                 "endpoint": self.endpoint.uri() if self.endpoint else None, "requests": self.requests,
                 "connections": len(self.conns), "memory": self.memguard.as_dict(), "model": self.stage2.info(),
