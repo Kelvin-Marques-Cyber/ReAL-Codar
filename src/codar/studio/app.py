@@ -257,6 +257,7 @@ class Studio(App):
                     with TabPane(tr("ESTUDO"), id="tab-estudo"):
                         with Horizontal(id='study-tools'):
                             yield Botao(tr('Catálogo'), acao='estudo_catalogo')
+                            yield Botao(tr('Continuar'), acao='estudo_continuar', id='study-resume')
                             yield Botao(tr('Exercícios'), acao='estudo_exercicios')
                             yield Botao(tr('Marcar praticado'), acao='estudo_praticado')
                             yield Botao(tr('Fontes'), acao='estudo_fontes')
@@ -735,34 +736,50 @@ class Studio(App):
                 self.run_command(' && '.join(join(argv) for argv in action['commands']), cwd=self.root)
         self.push_screen(LibrariesScreen(self.root, self.current_lang() or 'python'), chosen)
 
-    def action_estudo_catalogo(self):
+    def _mostrar_aula(self, identity):
+        """Abre uma aula sem exigir que o aluno tenha criado um arquivo."""
         from codar import estudo
-        from codar.estudo.progresso import ler
 
-        lang = self.current_editor().lang_id if self.current_editor() else self.current_lang()
-        done = ler(self.root, lang)
-        choices = [(c.id, f"{'✓ ' if c.id in done else ''}{c.titulo} · {estudo.TRILHAS[c.trilha]}")
-                   for c in estudo.catalogo(lang)]
+        if not identity or identity not in estudo.POR_ID:
+            return
+        self._estudo_forcado = identity
+        self.estudo = True
+        panel = self.query_one('#panel', TabbedContent)
+        panel.display, panel.active = True, 'tab-estudo'
+        self.atualizar_estudo()
+        self.render_pills()
 
-        def show(identity):
-            if identity:
-                self._estudo_forcado = identity
-                self.estudo = True
-                panel = self.query_one('#panel', TabbedContent)
-                panel.display, panel.active = True, 'tab-estudo'
-                self.atualizar_estudo()
-                self.render_pills()
-        self.push_screen(ChoiceScreen('ESTUDO · ' + str(lang).upper(), choices, searchable=True), show)
+    def action_estudo_catalogo(self):
+        from codar.estudo.curriculo import percurso
+
+        lang = self.current_lang()
+        path = percurso(lang, self.root)
+        choices = [(lesson['id'],
+                    f"{'✓ ' if lesson['practiced'] else ''}{lesson['level'].upper()} · "
+                    f"{lesson['module']} · {lesson['title']}")
+                   for lesson in path['lessons']]
+        title = f"ESTUDO · {lang.upper()} · {path['practiced']}/{path['total']} práticas"
+        self.push_screen(ChoiceScreen(title, choices, searchable=True), self._mostrar_aula)
+
+    def action_estudo_continuar(self):
+        from codar.estudo.curriculo import percurso
+
+        lang = self.current_lang()
+        path = percurso(lang, self.root)
+        if not path['next']:
+            self.notify('Todas as práticas disponíveis foram registradas; revise os projetos e exercícios.')
+            return
+        self._mostrar_aula(path['next'])
 
     def action_estudo_praticado(self):
         from codar.estudo.progresso import marcar
 
         ed, concept = self.current_editor(), self._estudo_conceito
-        if not ed or not concept:
-            self.notify(tr('Abra um arquivo e escolha um conceito no Catálogo.'))
+        if not concept:
+            self.notify(tr('Escolha um conceito no Catálogo antes de registrar a prática.'))
             return
         try:
-            marcar(self.root, ed.lang_id, concept.id)
+            marcar(self.root, ed.lang_id if ed else self.current_lang(), concept.id)
             self.notify(tr('Prática registrada para este projeto e linguagem; o registro é manual.'))
         except (OSError, ValueError, TypeError) as exc:
             self.notify(str(exc), severity='error')
@@ -772,8 +789,8 @@ class Studio(App):
         import webbrowser
 
         ed, concept = self.current_editor(), self._estudo_conceito
-        if concept and ed:
-            choices = [(url, url) for url in estudo.fontes(concept, ed.lang_id)]
+        if concept:
+            choices = [(url, url) for url in estudo.fontes(concept, ed.lang_id if ed else self.current_lang())]
             self.push_screen(ChoiceScreen(tr('DOCUMENTAÇÃO OFICIAL'), choices), lambda url: webbrowser.open(url) if url else None)
 
     def agendar_estudo(self) -> None:
@@ -792,13 +809,13 @@ class Studio(App):
         corpo = self.query_one("#estudo-corpo", Static)
         botao = self.query_one("#estudo-acao", Botao)
         ed = self.current_editor()
-        if ed is None:
+        if ed is None and not self._estudo_forcado and self._estudo_conceito is None:
             corpo.update(self.estudo_vazio())
             botao.display = False
             return
-        lang = ed.lang_id
-        linha = ed.document.get_line(ed.cursor_location[0])
-        achados = estudo.conceitos_da_linha(linha, lang)
+        lang = ed.lang_id if ed else self.current_lang()
+        linha = ed.document.get_line(ed.cursor_location[0]) if ed else ''
+        achados = estudo.conceitos_da_linha(linha, lang) if ed else []
         if self._estudo_forcado:
             conceito = estudo.POR_ID.get(self._estudo_forcado)
             self._estudo_forcado = None
@@ -808,10 +825,10 @@ class Studio(App):
             conceito = estudo.POR_ID.get('guia_' + str(lang))
         self._estudo_conceito = conceito
         partes: list = []
-        estado = estudo.trilha_poo(ed.text, lang, uso_externo=self._usado_fora(ed))
+        estado = estudo.trilha_poo(ed.text, lang, uso_externo=self._usado_fora(ed)) if ed else None
         if estado is not None:
             self._estudo_poo = (ed, estado)
-        elif self._estudo_poo and self._estudo_poo[0] is ed:  # no meio da digitação: mantém o último estado
+        elif ed and self._estudo_poo and self._estudo_poo[0] is ed:  # último estado do editor
             estado = self._estudo_poo[1]
         if estado is not None and (estado.feitos["classe"] or (conceito and conceito.trilha == "poo")):
             feitos = [k for k in estudo.TRILHA_POO if estado.feitos[k]]
@@ -823,7 +840,7 @@ class Studio(App):
                                         (f" · próximo: {estudo.POR_ID[prox].titulo.split(' (')[0].lower()}" if prox
                                          else " · completa", C["dim"])))
             partes.append(Text.assemble(("▶ próximo passo: ", f"bold {C['mint']}"), (estado.passo(lang), C["text"])))
-        self.sugestao_estudo = estudo.sugestao_main(self.root, Path(ed.path), ed.text, lang) if ed.path else None
+        self.sugestao_estudo = estudo.sugestao_main(self.root, Path(ed.path), ed.text, lang) if ed and ed.path else None
         if self.sugestao_estudo is not None:
             s = self.sugestao_estudo
             partes.append(Text.assemble(("▶ sugestão: ", f"bold {C['orange']}"), (s.motivo + " ", C["text"]),
