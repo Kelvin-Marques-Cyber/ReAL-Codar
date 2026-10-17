@@ -935,6 +935,7 @@ class Studio(App):
         self._output_text = ''
         self.last = None  # resultados de pedidos anteriores não podem ser copiados por engano
         self._output_status('Gerando código…')
+        out.clear()  # seleção/cópia correspondem somente à requisição atual
         out.write(f"[{C['red']}]▸ INTENÇÃO[/] [{C['text']}]{_esc(intent)}[/]")
         if self._generation_cancel is not None:
             self._generation_cancel.set()
@@ -1037,17 +1038,22 @@ class Studio(App):
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
         if res.get('code', '').strip():
             self._output_text = res['code']
-        self.query_one("#output", RichLog).write(Text(res.get('code') or self._output_text, style=C["moon"]))
+        output = self.query_one("#output", RichLog)
+        output.clear()  # remove os pedaços do streaming e exibe a versão final sem duplicações
+        output.write(Text(res.get('code') or self._output_text, style=C["moon"]))
         if res.get('action') in ('query', 'install', 'execute', 'study'):
             self._output_status('Consulta concluída; arquivo preservado.')
             self.query_one('#panel', TabbedContent).display = True
             self.query_one('#panel', TabbedContent).active = 'tab-output'
             return
         if not res.get("complete", True):
-            self._output_status('Resposta incompleta; abra o código recebido para revisar.', warning=True)
+            if any("geração inválida" in note for note in res.get("notes", [])):
+                self._output_status('A IA gerou código inválido; editor preservado. Clique em SAÍDA para selecionar e copiar.', warning=True)
+            else:
+                self._output_status('Resposta incompleta; abra o código recebido para revisar.', warning=True)
             return
         if not res.get('code', '').strip():
-            self._output_status('A resposta não contém código para inserir.', warning=True)
+            self._output_status('A resposta não contém código para inserir. Clique em SAÍDA para copiar o texto recebido.', warning=True)
             return
         body = (res.get("annotated_body") if self.hints else None) or res["body"]
         matches = list(self.query(f"#{editor_id}")) if editor_id else []
@@ -1075,7 +1081,8 @@ class Studio(App):
         selectable = bool(self._output_text.strip() or ready)
         self.query_one('#output-copy').disabled = not selectable
         self.query_one('#output-select').disabled = not selectable
-        self.query_one('#output-open').disabled = not ready or self.last.get('action') in ('query', 'install', 'execute', 'study') if self.last else True
+        can_open = ready and self.last is not None and self.last.get('action') not in ('query', 'install', 'execute', 'study')
+        self.query_one('#output-open').disabled = not can_open
         if warning:
             self.query_one('#panel', TabbedContent).display = True
             self.query_one('#panel', TabbedContent).active = 'tab-output'
