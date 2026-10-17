@@ -335,8 +335,9 @@ class Daemon:
         if (p.get("options") or {}).get("stream"):
             loop = asyncio.get_running_loop()
 
-            def on_token(delta: str) -> None:
+            def stream_token(delta: str) -> None:
                 loop.call_soon_threadsafe(conn.notify_nowait, "$/progress", {"id": rid, "delta": delta})
+            on_token = stream_token
         try:
             res = await self.router.translate(req, on_token=on_token, cancel=p["_cancel"])
         except langs.UnknownLanguage as exc:

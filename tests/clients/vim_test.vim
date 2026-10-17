@@ -29,6 +29,14 @@ function! WaitChange(before) abort
   endwhile
 endfunction
 
+function! WaitLines(expected) abort
+  let l:n = 0
+  while getline(1, '$') != a:expected && l:n < 600
+    sleep 50m
+    let l:n += 1
+  endwhile
+endfunction
+
 " mesma tabela de tests/test_routing.py
 for s:l in ['x é igual a 10', 'x é igual a y mais 1', 'total += preco', 'imprimir o tamanho de pedidos',
       \ 'some os dois números e imprima', "se total maior que 100 imprimir 'caro'", '# calcular a média das notas',
@@ -68,7 +76,8 @@ call Buf('python', ['def soma(itens):', '    total é igual a 0 ', '    '])
 let b:codar_lines = 2
 call cursor(3, 5)
 let s:b = getline(1, '$')
-call codar#after_enter() | call WaitChange(s:b) | sleep 300m
+" Apagar a linha criada por Enter é só uma etapa intermediária, não a resposta do CLI.
+call codar#after_enter() | call WaitLines(['def soma(itens):', '    total = 0'])
 call Check('espaço + Enter (indentado)', getline(1, '$') == ['def soma(itens):', '    total = 0'], string(getline(1, '$')))
 
 call Buf('python', ['for i in range(10): ', '    '])
