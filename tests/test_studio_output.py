@@ -181,3 +181,49 @@ def test_importacao_pura_enviada_pelo_motor_e_inserida_no_editor(tmp_path, monke
             assert 'Código aplicado' in str(app.query_one('#output-status').content)
 
     asyncio.run(scenario())
+
+
+def test_saida_bruta_sem_streaming_fica_visivel_e_copiavel(tmp_path, monkeypatch):
+    """Recebemos raw_output mesmo quando nenhum callback on_delta foi emitido."""
+    from textual.widgets import Static
+    app = setup_app(tmp_path, monkeypatch)
+    path = app.root / 'main.py'
+    path.write_text('print("preservado")\n')
+    raw = 'Resposta parcial: import yt_dlp\n'
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)):
+            await app.open_file(path)
+            editor = app.current_editor()
+            target = EditTarget.capture(editor.text, 'insert', (0, 0), ((0, 0), (0, 0)))
+            response = {**result(''), 'raw_output': raw, 'complete': False,
+                        'diagnostics': {'generation_attempts': [{'reason': 'python_syntax'}]}}
+            app._apply(response, target, editor.id, '')
+            assert editor.text == 'print("preservado")\n'
+            assert 'python_syntax' in str(app.query_one('#output-status', Static).content)
+            assert not app.query_one('#output-copy').disabled
+            app.action_copy_result()
+            assert app.clipboard == raw
+            assert path.read_text() == 'print("preservado")\n'
+
+    asyncio.run(scenario())
+
+
+def test_ausencia_de_saida_nao_oferece_copia_vazia(tmp_path, monkeypatch):
+    from textual.widgets import Static
+    app = setup_app(tmp_path, monkeypatch)
+    path = app.root / 'main.py'
+    path.write_text('pass\n')
+
+    async def scenario():
+        async with app.run_test(size=(150, 42)):
+            await app.open_file(path)
+            editor = app.current_editor()
+            target = EditTarget.capture(editor.text, 'insert', (0, 0), ((0, 0), (0, 0)))
+            app._apply({**result(''), 'complete': False, 'raw_output': ''}, target, editor.id, '')
+            assert app.query_one('#output-copy').disabled
+            assert app.query_one('#output-select').disabled
+            assert 'Nenhum texto' in str(app.query_one('#output-status', Static).content)
+            assert editor.text == 'pass\n'
+
+    asyncio.run(scenario())
