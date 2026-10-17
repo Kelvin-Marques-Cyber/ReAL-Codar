@@ -168,6 +168,54 @@ def _top_names(text: str) -> set[str]:
     return {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
 
 
+def _local_python_missing_symbol_hint(files: list[Path], root: Path, intent: str,
+                                      current: str | None = None) -> str:
+    """Sugere importação correta para métodos reais, inspecionando somente AST.
+
+    Nunca trata método como função exportada, nunca executa receiver.py e não
+    inventa construtor, chamadas ou nomes inexistentes.
+    """
+    from difflib import get_close_matches
+
+    found = re.search(
+        r'\b(?:funcao|funcoes|function|functions|metodo|method|classe|class)\s+'
+        r'(?:chamad[ao]\s+)?(?P<name>[A-Za-z_]\w*)\b', fold(intent))
+    if not found:
+        return ''
+    name = found.group('name')
+    is_method_request = bool(re.search(r'\b(?:metodo|method)\b', fold(intent)))
+    candidates: list[tuple[str, str, str]] = []
+    for file in files[:100]:
+        try:
+            tree = ast.parse(_read(file))
+        except (SyntaxError, ValueError, RecursionError):
+            continue
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef) or node.name.startswith('_'):
+                continue
+            for member in node.body:
+                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) and not member.name.startswith('_'):
+                    candidates.append((member.name, node.name, _relative_module(_module_for(file, root), current, root)))
+    exact = [(method, cls, module) for method, cls, module in candidates if fold(method) == name]
+    if exact:
+        details = ', '.join(f'{cls}.{method}' for method, cls, _ in exact[:6])
+        if len(exact) == 1:
+            method, cls, module = exact[0]
+            return (f" '{name}' é método de {details}, não função exportada pelo módulo. "
+                    f"Importe a classe com 'from {module} import {cls}' e use o método "
+                    "num objeto dessa classe, respeitando seu construtor e a assinatura real.")
+        return (f" '{name}' é método de mais de uma classe ({details}); "
+                "informe a classe de origem antes de escolher uma importação.")
+    similar_names = get_close_matches(name, list(dict.fromkeys(method for method, _, _ in candidates)),
+                                      n=4, cutoff=0.52)
+    similar = [(method, cls) for method, cls, _ in candidates if method in similar_names][:6]
+    if similar:
+        return ' Métodos semelhantes no projeto: ' + ', '.join(f'{cls}.{method}' for method, cls in similar) + '.'
+    if is_method_request and candidates:
+        return ' Métodos encontrados: ' + ', '.join(f'{cls}.{method}' for method, cls, _ in candidates[:8]) + '.'
+    return ''
+
+
 def _module_for(file: Path, root: Path) -> str:
     base = root / 'src' if (root / 'src').is_dir() and file.is_relative_to(root / 'src') else root
     relative = file.relative_to(base).with_suffix('')
@@ -206,7 +254,7 @@ def local_python_import(intent: str, root: Path | None, current: str | None = No
     intent = import_instruction(intent)
     text = fold(intent)
     paths_in_text = re.findall(r'[\w./\\-]+\.py\b', intent)
-    asks_symbol = bool(re.search(r'\b(?:funcao|funcoes|function|functions|classe|class|classes)\b', text))
+    asks_symbol = bool(re.search(r'\b(?:funcao|funcoes|function|functions|metodo|method|classe|class|classes)\b', text))
     asks_local = bool(re.search(r'\b(?:minha|minhas|meu|meus|propri[oa]s?)\b', text))
     modules = library_references(intent, 'python')
     if not paths_in_text and not asks_symbol and not asks_local and not modules:
@@ -259,7 +307,9 @@ def local_python_import(intent: str, root: Path | None, current: str | None = No
         if explicit or re.search(r'\b(?:minha|minhas|meu|meus|propri[oa]s?)\b', text):
             available = sorted({name for file in files for name in _top_names(_read(file)) if not name.startswith('_')})
             suffix = ' Símbolos públicos disponíveis: ' + ', '.join(available[:12]) + '.' if available else ''
-            raise ValueError('Função/classe não encontrada. Informe seu nome e o arquivo .py de origem.' + suffix)
+            hint = _local_python_missing_symbol_hint(files, root, intent, current)
+            raise ValueError('Função/classe não encontrada como exportação direta.' + hint + suffix +
+                             (' Informe o nome real e o arquivo .py de origem.' if not hint else ''))
         return None
     if len(matches) != 1:
         choices = ', '.join(file.relative_to(root).as_posix() for file, _ in matches[:8])
