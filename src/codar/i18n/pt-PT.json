@@ -99,6 +99,11 @@
     "Declarações extraídas estaticamente das fontes. Elas são referências, não um programa executável.": "Declarações extraídas estaticamente das fontes. Elas são referências, não um programa executável.",
     "Nenhuma assinatura foi encontrada. Forneça fontes ou declarações de tipos antes de escolher uma API.": "Nenhuma assinatura foi encontrada. Forneça fontes ou declarações de tipos antes de escolher uma API.",
     "Arquivo": "Ficheiro",
-    "Gerenciar": "Gerir"
+    "Gerenciar": "Gerir",
+    "Completar símbolo": "Completar símbolo",
+    "Codar: Completar símbolo": "Codar: Completar símbolo",
+    "COMPLETAR · assinatura e origem": "COMPLETAR · assinatura e origem",
+    "Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.": "Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.",
+    "O editor mudou durante a escolha; nenhum texto foi alterado.": "O editor mudou durante a escolha; nenhum texto foi alterado."
   }
 }

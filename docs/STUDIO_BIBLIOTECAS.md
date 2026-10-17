@@ -55,3 +55,9 @@ O comando `check` executa o código que você forneceu em subprocessos; não é 
 Pedidos como `explique esta função`, `consulte API de util` e `instale requests` usam respostas informativas: explicação, referência local ou plano, sem trocar o código por texto. A execução/instalação efetiva continua nos controles próprios. A resposta JSON identifica essa distinção no campo `action`; clientes que aplicam edições devem tratar `query`, `install`, `execute` e `study` como informativos.
 
 **F2** e **Cancelar geração** na paleta interrompem o pedido atual. O SDK aceita `cancel=threading.Event()` tanto com daemon quanto com motor local. O Studio preserva o editor e ignora tokens/respostas que cheguem depois do cancelamento ou de um novo pedido.
+
+## Completar símbolos
+
+O autocompletar prioriza palavras do arquivo, depois símbolos estáticos do projeto e APIs das bibliotecas disponíveis, antes do vocabulário geral. **F10** abre a seleção com assinatura e origem; Enter insere somente o identificador e Ctrl+Z desfaz. Se o documento ou cursor mudar durante a escolha, a inserção é recusada.
+
+O índice é atualizado ao abrir e ao salvar explicitamente o arquivo, em segundo plano. A digitação não varre o disco. A varredura respeita exclusões e links, até 300 arquivos, 2 MB de fontes do projeto e 1.200 símbolos. É um complemento estático, sem inferência de tipos ou resolução completa de escopo de um servidor LSP. LSP/DAP continuam integrações futuras, sem funcionalidade simulada nesta versão.

@@ -97,6 +97,11 @@
     "não declarado": "no declarado",
     "Nenhuma assinatura legível.": "Ninguna firma legible.",
     "Declarações extraídas estaticamente das fontes. Elas são referências, não um programa executável.": "Declaraciones extraídas estáticamente de las fuentes. Son referencias, no un programa ejecutable.",
-    "Nenhuma assinatura foi encontrada. Forneça fontes ou declarações de tipos antes de escolher uma API.": "No se encontraron firmas. Proporcione fuentes o declaraciones de tipos antes de elegir una API."
+    "Nenhuma assinatura foi encontrada. Forneça fontes ou declarações de tipos antes de escolher uma API.": "No se encontraron firmas. Proporcione fuentes o declaraciones de tipos antes de elegir una API.",
+    "Completar símbolo": "Completar símbolo",
+    "Codar: Completar símbolo": "Codar: Completar símbolo",
+    "COMPLETAR · assinatura e origem": "COMPLETAR · firma y origen",
+    "Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.": "Ningún símbolo indexado coincide. Vuelva a abrir o guarde el archivo para actualizar.",
+    "O editor mudou durante a escolha; nenhum texto foi alterado.": "El editor cambió durante la selección; no se modificó el texto."
   }
 }

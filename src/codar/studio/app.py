@@ -178,6 +178,7 @@ class Studio(App):
         Binding('ctrl+shift+f7', 'estudo_catalogo', tr('Catálogo de estudo'), show=False, priority=True),
         Binding('ctrl+shift+l', 'libraries', tr('Bibliotecas'), show=False, priority=True),
         Binding('f2', 'cancel_generation', tr('Cancelar geração'), show=False, priority=True),
+        Binding('f10', 'complete_symbol', tr('Completar símbolo'), show=False, priority=True),
         Binding("ctrl+q", "quit", tr("Sair"), priority=True),
         Binding("f1", "help", tr("Ajuda"), priority=True),
     ]
@@ -548,7 +549,48 @@ class Studio(App):
         tabs.active = pane.id or ""
         ed.focus()
         self.render_pills()
+        if ed.lang_id:
+            self.symbols_worker(ed.id, ed.path, ed.text, ed.lang_id)
         return ed
+
+    @work(thread=True, group='completion-index', exclusive=True, exit_on_error=False)
+    def symbols_worker(self, editor_id, path, text, lang):
+        from codar.studio.symbols import index
+
+        try:
+            entries = index(self.root, path, text, lang)
+        except (OSError, ValueError):
+            return
+        def apply():
+            editors = list(self.query(f'#{editor_id}'))
+            if editors and editors[0].text == text:
+                editors[0].symbol_completions = entries
+                editors[0].update_suggestion()
+        self.call_from_thread(apply)
+
+    def action_complete_symbol(self):
+        ed = self.current_editor()
+        if not ed or len(self.screen_stack) > 1:
+            return
+        row, col = ed.cursor_location
+        match = re.search(r'[A-Za-z_$][\w$]*$', ed.document.get_line(row)[:col])
+        prefix = match[0] if match else ''
+        choices = [item for item in ed.symbol_completions if item.name.startswith(prefix)]
+        if not choices:
+            self.notify(tr('Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.'))
+            return
+        original, cursor = ed.text, ed.cursor_location
+        def chosen(identity):
+            if identity is None:
+                return
+            if ed.text != original or ed.cursor_location != cursor:
+                self.notify(tr('O editor mudou durante a escolha; nenhum texto foi alterado.'), severity='warning')
+                return
+            item = choices[int(identity)]
+            ed.replace(item.name, (row, col-len(prefix)), (row, col))
+            ed.focus()
+        self.push_screen(ChoiceScreen(tr('COMPLETAR · assinatura e origem'),
+                                     [(str(i), item.signature + ' · ' + item.source) for i, item in enumerate(choices)], searchable=True), chosen)
 
     @on(DirectoryTree.FileSelected)
     async def _file_selected(self, event: DirectoryTree.FileSelected) -> None:
@@ -1658,6 +1700,8 @@ class Studio(App):
             self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
         if not automatic:
             self.verificar_pacotes(ed)
+            if ed.lang_id:
+                self.symbols_worker(ed.id, ed.path, ed.text, ed.lang_id)
         if self.audit_on and not automatic:
             self.action_audit_file()
 
@@ -2112,6 +2156,7 @@ class Studio(App):
 
     def _palette_base(self) -> list[tuple[str, str, object]]:
         return [
+            ('Codar: Completar símbolo', 'F10 — funções do projeto e APIs locais', self.action_complete_symbol),
             ('Codar: Idioma da interface', 'pt-BR · English · Español · Português (Portugal)', self.action_ui_language),
             ('Codar: Cancelar geração', 'F2 — interrompe o pedido e preserva seu código', self.action_cancel_generation),
             ('Codar: Exercícios verificáveis', 'testes de comportamento na sua linguagem', self.action_estudo_exercicios),
