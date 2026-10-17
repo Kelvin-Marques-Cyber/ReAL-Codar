@@ -494,6 +494,35 @@ def _chamadas_python(codigo: str, classe: str, variavel: str) -> tuple[str, list
             calls.append(f"{variavel}.{method.name}()")
     return args, calls
 
+def _chamadas_js(codigo: str, classe: str, variavel: str) -> list[str]:
+    """Evita main.js com chamadas inválidas de método obrigatório/async/static."""
+    match = next((m for m in _JS_CLASSE.finditer(codigo) if m.group(2) == classe), None)
+    corpo = _corpo_classe_js(codigo, match.end()) if match else None
+    if corpo is None:
+        return []
+    calls = []
+    expr = re.compile(r"^\s+(?P<flags>(?:(?:async|static)\s+)*)"
+                      r"(?P<name>[A-Za-z_]\w*)\s*\((?P<args>[^)]*)\)"
+                      r"\s*(?::\s*[^{}]+)?\s*\{", re.M)
+    for item in expr.finditer(corpo):
+        name = item.group('name')
+        if name == 'constructor' or name == 'toString' or name.startswith('_'):
+            continue
+        flags = item.group('flags').split()
+        params = [part.strip() for part in item.group('args').split(',') if part.strip()]
+        required = [part.split(':')[0].strip().removeprefix('...') for part in params
+                    if '=' not in part and not part.startswith('...')]
+        if required:
+            calls.append(f"// {variavel}.{name}(...) requer {', '.join(required)}; informe argumentos")
+        elif 'static' in flags:
+            calls.append(f"// {name} é estático: chame {classe}.{name}() se fizer sentido")
+        elif 'async' in flags:
+            calls.append(f"// {variavel}.{name}() é assíncrono; use await em uma função async")
+        else:
+            calls.append(f"{variavel}.{name}();")
+    return calls
+
+
 def sugestao_main(raiz: Path, arquivo: Path, codigo: str, lang: str | None) -> Sugestao | None:
     """Arquivo que só define classes e ninguém usa: sugere um main.py (main.js) comentado que cria e usa um objeto."""
     estado = trilha_poo(codigo, lang)
@@ -548,7 +577,7 @@ if __name__ == "__main__":  # só roda quando este arquivo é executado (F5), n�
             return None
         imp = "./" + rel.with_suffix(".js" if ext == ".js" else "").as_posix()
         aviso = "" if estado.exportada else f"// atenção: em {rel.name}, escreva export class {C} para poder importar\n"
-        chamadas = "\n".join(f"{var}.{m}(); // confira os parâmetros de {m}" for m in estado.metodos[:2]) or \
+        chamadas = "\n".join(_chamadas_js(codigo, C, var)[:4]) or \
             f"// {C} ainda não tem métodos: crie um (próximo passo da trilha) e chame aqui"
         conteudo = (f"// Ponto de entrada: aqui você USA a classe {C} definida em {rel.as_posix()}.\n{aviso}"
                     f"import {{ {C} }} from \"{imp}\";\n\n// 1. crie um objeto com new (chama o constructor)\n"
