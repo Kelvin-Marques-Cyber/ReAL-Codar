@@ -42,6 +42,18 @@ def cmd_libraries(args):
             return 0
         if not args.name:
             raise ValueError('Informe o nome da biblioteca/módulo.')
+        if args.action == 'tutorial':
+            from codar.estudo.bibliotecas import track
+
+            value = track(root, args.name, lang, source=Path(args.source) if args.source else None)
+            if args.json:
+                print(json.dumps(asdict(value), ensure_ascii=False, indent=2))
+            else:
+                for lesson in value.lessons:
+                    print(f'\n{lesson.title}\n{lesson.text}\n\n{lesson.example}\n\nPratique: {lesson.practice}')
+                    if lesson.sources:
+                        print('Fontes: ' + ', '.join(lesson.sources))
+            return 0
         if args.action == 'install':
             from codar.library_packages import installation_plan, install
 

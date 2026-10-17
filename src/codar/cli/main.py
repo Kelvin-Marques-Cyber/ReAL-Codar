@@ -727,7 +727,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=lambda a: __import__('codar.cli.studycmd', fromlist=['x']).cmd_study(a))
 
     p = sub.add_parser('libraries', aliases=['bibliotecas'], help='bibliotecas: list | show | learn | install | verify | forget')
-    p.add_argument('action', choices=['list', 'inventory', 'show', 'learn', 'install', 'verify', 'forget'])
+    p.add_argument('action', choices=['list', 'inventory', 'show', 'learn', 'tutorial', 'install', 'verify', 'forget'])
     p.add_argument('name', nargs='?')
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--root', default='.', help='projeto ao qual pertence a referência')

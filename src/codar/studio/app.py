@@ -174,6 +174,7 @@ class Studio(App):
         Binding("f7", "estudo", "Estudo", priority=True),
         Binding("shift+f7", "estudo_aplicar", "Aplicar sugestão do estudo", show=False, priority=True),
         Binding('ctrl+shift+f7', 'estudo_catalogo', 'Catálogo de estudo', show=False, priority=True),
+        Binding('ctrl+shift+l', 'libraries', 'Bibliotecas', show=False, priority=True),
         Binding("ctrl+q", "quit", "Sair", priority=True),
         Binding("f1", "help", "Ajuda", priority=True),
     ]
@@ -226,6 +227,7 @@ class Studio(App):
                 with Horizontal(id='tools-bar'):
                     yield Botao('⌕ BUSCAR', acao='find_project', id='search-button')
                     yield Botao('SDKs', acao='runtimes', id='runtimes-button')
+                    yield Botao('BIBLIOTECAS', acao='libraries', id='libraries-button')
                     yield Botao('AUTO OFF', acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
@@ -613,6 +615,15 @@ class Studio(App):
         elif panel.active == "tab-estudo":
             panel.active = "tab-terminal"
         self.render_pills()
+
+    def action_libraries(self):
+        from codar.studio.libraries import LibrariesScreen
+
+        def chosen(action):
+            if action:
+                join = subprocess.list2cmdline if os.name == 'nt' else shlex.join
+                self.run_command(' && '.join(join(argv) for argv in action['commands']), cwd=self.root)
+        self.push_screen(LibrariesScreen(self.root, self.current_lang() or 'python'), chosen)
 
     def action_estudo_catalogo(self):
         from codar import estudo
@@ -2014,6 +2025,7 @@ class Studio(App):
 
     def palette(self) -> list[tuple[str, str, object]]:
         return [
+            ('Codar: Bibliotecas do projeto', 'Ctrl+Shift+L — instaladas, APIs, trilhas e instalação', self.action_libraries),
             ('Codar: Alternar salvamento automático', 'AUTO ON/OFF — salva após uma pausa na digitação', self.action_toggle_autosave),
             ('Codar: Escolher versão Python do projeto', 'múltiplas instalações e ambientes separados', self.action_runtimes),
             ('Codar: Catálogo de estudo', 'Ctrl+Shift+F7 — tópicos e exemplos na linguagem do arquivo', self.action_estudo_catalogo),
