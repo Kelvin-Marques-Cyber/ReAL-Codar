@@ -143,3 +143,96 @@ def test_painel_estudo_no_studio(tmp_path, monkeypatch):
             assert not app.estudo
 
     asyncio.run(cenario())
+
+@pytest.mark.parametrize("identificador", ["atributo", "objeto", "heranca", "super"])
+def test_exemplos_poo_python_sao_programas_independentes(identificador, tmp_path):
+    """Aulas não podem usar Conta, Pessoa ou Funcionario sem defini-las."""
+    codigo, idioma = estudo.exemplo(estudo.POR_ID[identificador], "python")
+    assert idioma == "python"
+    arquivo = tmp_path / "exemplo.py"
+    arquivo.write_text(codigo, encoding="utf-8")
+    result = subprocess.run([sys.executable, str(arquivo)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=6)
+    assert result.returncode == 0, (identificador, result.stderr)
+
+
+@pytest.mark.parametrize("identificador", ["objeto", "heranca"])
+def test_exemplos_poo_js_sao_independentes(identificador, tmp_path):
+    import shutil
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js não disponível")
+    codigo, idioma = estudo.exemplo(estudo.POR_ID[identificador], "javascript")
+    assert idioma == "javascript"
+    arquivo = tmp_path / "exemplo.mjs"
+    arquivo.write_text(codigo, encoding="utf-8")
+    result = subprocess.run([node, str(arquivo)], cwd=tmp_path, capture_output=True, text=True, timeout=6)
+    assert result.returncode == 0, (identificador, result.stderr)
+
+
+def test_main_python_nao_invoca_metodo_com_argumento_obrigatorio(tmp_path):
+    source = (
+        "class PlaylistExtract:\n"
+        "    def __init__(self, nome, *, idade):\n"
+        "        self.nome = nome\n"
+        "        self.idade = idade\n"
+        "    def extract(self, url):\n"
+        "        return [url]\n"
+        "    def apresentar(self):\n"
+        "        return self.nome\n"
+        "    @property\n"
+        "    def descricao(self):\n"
+        "        return self.nome\n"
+        "    async def atualizar(self):\n"
+        "        return True\n"
+    )
+    target = tmp_path / "receiver.py"
+    target.write_text(source, encoding="utf-8")
+    suggestion = estudo.sugestao_main(tmp_path, target, source, "python")
+    assert suggestion is not None
+    assert 'PlaylistExtract("Ana", idade=20)' in suggestion.conteudo or 'PlaylistExtract("?", idade=20)' in suggestion.conteudo
+    assert "# playlistextract.extract(...) requer url" in suggestion.conteudo
+    assert "# playlistextract.descricao é propriedade" in suggestion.conteudo
+    assert "# playlistextract.atualizar() é assíncrono" in suggestion.conteudo
+    assert "playlistextract.apresentar()" in suggestion.conteudo
+    (tmp_path / suggestion.caminho).write_text(suggestion.conteudo, encoding="utf-8")
+    result = subprocess.run([sys.executable, "main.py"], cwd=tmp_path, capture_output=True, text=True, timeout=6)
+    assert result.returncode == 0, result.stderr
+
+
+def test_main_py_dataclass_s0_exige_atributos_na_instanciacao(tmp_path):
+    codigo = ("from dataclasses import dataclass\n"
+              "@dataclass\nclass Pessoa:\n    nome: str\n    idade: int\n")
+    target = tmp_path / "pessoa.py"
+    target.write_text(codigo, encoding="utf-8")
+    suggestion = estudo.sugestao_main(tmp_path, target, codigo, "python")
+    assert suggestion and 'Pessoa("Ana", 20)' in suggestion.conteudo
+    (tmp_path / "main.py").write_text(suggestion.conteudo, encoding="utf-8")
+    result = subprocess.run([sys.executable, "main.py"], cwd=tmp_path, capture_output=True, text=True, timeout=6)
+    assert result.returncode == 0, result.stderr
+
+
+def test_js_trilha_nao_confunde_metodos_de_outra_classe_e_codigo_externo():
+    codigo = (
+        'class Conta {\n  constructor(nome) { this.nome = nome; }\n'
+        '  descrever() { return "}" + this.nome; }\n}\n'
+        'const fora = new ExternalClass();\n'
+        'class Outra {\n  constructor() { this.saldo = 20; }\n  retirar() { return this.saldo; }\n}\n'
+    )
+    estado = estudo.trilha_poo(codigo, "javascript")
+    assert estado and estado.classe == "Conta"
+    assert estado.metodos == ["descrever"]
+    assert "retirar" not in estado.metodos
+    assert not estado.feitos["objeto"]
+
+
+def test_js_trilha_ignora_chaves_em_strings_e_comentarios():
+    code = (
+        "class Pessoa {\n  constructor(nome) { this.nome = nome; }\n"
+        "  mostrar() { const texto = '}'; /* } */ return this.nome + texto; }\n"
+        "}\nconst x = new Pessoa('Ana');"
+    )
+    estado = estudo.trilha_poo(code, "typescript")
+    assert estado and estado.classe == "Pessoa"
+    assert estado.feitos["metodo"] and estado.feitos["objeto"]
