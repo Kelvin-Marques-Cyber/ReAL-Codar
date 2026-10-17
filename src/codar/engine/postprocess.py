@@ -12,8 +12,20 @@ _FENCE = re.compile(r"^\s*```[\w+#-]*\s*$")
 
 
 def clean_generation(text: str, lang: str, *, repair: bool = True) -> str:
-    lines = text.replace("\r\n", "\n").split("\n")
-    while lines and (not lines[0].strip() or _FENCE.match(lines[0])):
+    """Extrai codigo puro OU um bloco Markdown inteiro sem descartar seu conteudo.
+
+    Respostas pequenas podem começar com ```python (nao devem ser
+    interrompidas pelo marcador). Se houver prosa antes do bloco, a prosa
+    nao entra no editor. Se nao houver bloco, mantem o texto para validar.
+    """
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    # Alguns modelos incluem a cadeia de pensamento antes do codigo.
+    text = re.sub(r"(?s)<think>.*?</think>\s*", "", text)
+    opener = re.search(r"(?m)^[ \t]*```[\w+#.-]*[ \t]*\n", text)
+    if opener:
+        text = text[opener.end():]
+    lines = text.split("\n")
+    while lines and not lines[0].strip():
         lines.pop(0)
     if lines and lines[0].strip().lower() in (lang, "python", "py", "go", "rust", "bash", "powershell"):
         lines.pop(0)
