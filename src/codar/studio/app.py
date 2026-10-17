@@ -1036,24 +1036,32 @@ class Studio(App):
         hist = self.query_one("#history", ListView)
         hist.insert(0, [ListItem(Static(f"[{STAGE_COLORS.get(res['stage'], C['orange'])}]●[/] "
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
-        if res.get('code', '').strip():
-            self._output_text = res['code']
+        # O daemon devolve também a saída bruta. Em chamadas sem streaming
+        # (ou após uma limpeza que descartou o trecho) ela não pode desaparecer.
+        # Quando o código validado existe, é ele que COPIAR deve devolver.
+        code = res.get('code') or ''
+        raw = res.get('raw_output') or ''
+        self._output_text = code if code.strip() else raw or self._output_text
         output = self.query_one("#output", RichLog)
-        output.clear()  # remove os pedaços do streaming e exibe a versão final sem duplicações
-        output.write(Text(res.get('code') or self._output_text, style=C["moon"]))
+        output.clear()  # substitui tokens parciais pela resposta final sem duplicações
+        if self._output_text:
+            output.write(Text(self._output_text, style=C["moon"]))
+        else:
+            output.write(Text("Nenhum texto foi retornado pelo motor.", style=C["dim"]))
         if res.get('action') in ('query', 'install', 'execute', 'study'):
             self._output_status('Consulta concluída; arquivo preservado.')
             self.query_one('#panel', TabbedContent).display = True
             self.query_one('#panel', TabbedContent).active = 'tab-output'
             return
         if not res.get("complete", True):
-            if any("geração inválida" in note for note in res.get("notes", [])):
-                self._output_status('A IA gerou código inválido; editor preservado. Clique em SAÍDA para selecionar e copiar.', warning=True)
-            else:
-                self._output_status('Resposta incompleta; abra o código recebido para revisar.', warning=True)
+            attempts = (res.get('diagnostics') or {}).get('generation_attempts') or []
+            reason = (attempts[-1].get('reason') if attempts else None) or 'resposta incompleta'
+            suffix = ' Clique em SAÍDA para copiar a resposta.' if self._output_text.strip() else ' Nenhum texto foi recebido.'
+            self._output_status(f'Geração não aplicada ({reason}); original preservado.' + suffix, warning=True)
             return
-        if not res.get('code', '').strip():
-            self._output_status('A resposta não contém código para inserir. Clique em SAÍDA para copiar o texto recebido.', warning=True)
+        if not code.strip():
+            suffix = ' Clique em SAÍDA para copiar a resposta.' if self._output_text.strip() else ' O motor não retornou nenhum texto.'
+            self._output_status('A resposta não contém código para inserir.' + suffix, warning=True)
             return
         body = (res.get("annotated_body") if self.hints else None) or res["body"]
         matches = list(self.query(f"#{editor_id}")) if editor_id else []
