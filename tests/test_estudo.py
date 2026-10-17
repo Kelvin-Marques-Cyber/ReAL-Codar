@@ -252,3 +252,34 @@ def test_classe_js_vazia_ainda_conta_na_trilha_e_classe_incompleta_nao():
     assert empty and empty.feitos["classe"] and empty.proximo == "construtor"
     incomplete = estudo.trilha_poo("class Produto { constructor(", "javascript")
     assert incomplete and not incomplete.feitos["classe"]
+
+def test_main_js_nao_chama_metodos_com_parametros_obrigatorios(tmp_path):
+    source = ("export class PlaylistExtract {\n"
+              "  constructor(nome) { this.nome = nome; }\n"
+              "  extract(url) { return url; }\n"
+              "  apresentar() { return this.nome; }\n"
+              "  async atualizar() { return true; }\n"
+              "}\n")
+    file = tmp_path / "receiver.js"
+    file.write_text(source, encoding="utf-8")
+    suggested = estudo.sugestao_main(tmp_path, file, source, "javascript")
+    assert suggested is not None
+    assert "new PlaylistExtract(" in suggested.conteudo
+    assert "// playlistextract.extract(...) requer url" in suggested.conteudo
+    assert "playlistextract.apresentar();" in suggested.conteudo
+    assert "// playlistextract.atualizar() é assíncrono" in suggested.conteudo
+    assert "\nplaylistextract.extract();" not in suggested.conteudo
+
+
+def test_main_ts_nao_chama_metodos_com_parametros_obrigatorios(tmp_path):
+    source = ("export class Pessoa {\n"
+              "  constructor(nome: string) { this.nome = nome; }\n"
+              "  nome: string;\n"
+              "  atualizar(idade: number): void { console.log(idade); }\n"
+              "}\n")
+    file = tmp_path / "pessoa.ts"
+    file.write_text(source, encoding="utf-8")
+    suggested = estudo.sugestao_main(tmp_path, file, source, "typescript")
+    assert suggested is not None
+    assert "// pessoa.atualizar(...) requer idade" in suggested.conteudo
+    assert "pessoa.atualizar();" not in suggested.conteudo
