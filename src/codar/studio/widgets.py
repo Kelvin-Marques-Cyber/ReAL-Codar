@@ -22,7 +22,7 @@ from codar.engine import emmet
 from codar.textutil import looks_like_intent
 from codar.vocab import KEYWORDS, PSEUDO_WORDS
 from textual.widget import Widget
-from textual.widgets import Static, TextArea
+from textual.widgets import RichLog, Static, TextArea
 from textual.widgets.text_area import Selection, TextAreaTheme
 
 # Paleta do SENTRY. O Studio inteiro lê as cores de C, que acompanha o tema ativo (Ctrl+P → tema): aplicar_paleta()
@@ -632,6 +632,14 @@ class Botao(Static):
 
     async def action_activate(self) -> None:
         await self.app.run_action(self.acao)
+
+
+class OutputLog(RichLog):
+    """Um clique abre a saída real em um editor de texto selecionável, sem truncar linhas."""
+
+    async def on_click(self, event: events.Click) -> None:
+        event.stop()
+        await self.app.run_action('select_result')
 
 
 @dataclass
