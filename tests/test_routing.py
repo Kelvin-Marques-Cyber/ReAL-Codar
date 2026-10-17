@@ -189,10 +189,11 @@ def test_senao_sozinho_em_go_explica_em_vez_de_chamar_a_ia(translate, router):
         translate("senão imprimir 'oi'", "go")
     assert router.stage2.prompts == []  # antes, a IA inventava um if inteiro ("if not pedidos")
 
-def test_frase_nominal_youtube_usa_gerador_e_preserva_import(translate, router):
+def test_frase_nominal_youtube_usa_gerador_e_preserva_import(translate, router, monkeypatch):
     from codar.engine.router import is_pseudocode
 
     assert not is_pseudocode("uma playlist do youtube, variável")
+    monkeypatch.setattr(router.store, "search", lambda *args, **kwargs: [])
     router.stage2.answer = "from yt_dlp import YoutubeDL\n"
     res = translate("uma playlist do youtube, variável")
     assert res.complete
@@ -211,15 +212,29 @@ def test_saida_python_invalida_tenta_uma_vez_e_recupera(translate, router, monke
         return GenResult(next(answers), 25, 50, 1.0, "stop")
 
     monkeypatch.setattr(router.stage2, "generate", generate)
+    monkeypatch.setattr(router.store, "search", lambda *args, **kwargs: [])
     res = translate("uma playlist do youtube, variável")
     assert len(prompts) == 2
     assert res.complete and res.imports == ["from yt_dlp import YoutubeDL"]
     assert res.code.strip() == "from yt_dlp import YoutubeDL"
 
 
-def test_saida_python_invalida_duas_vezes_nao_autoinserida(translate, router):
+def test_saida_python_invalida_duas_vezes_nao_autoinserida(translate, router, monkeypatch):
+    monkeypatch.setattr(router.store, "search", lambda *args, **kwargs: [])
     router.stage2.answer = "dt lp\n.Y\noutube\nDL\n()\n"
     res = translate("uma playlist do youtube, variável")
     assert not res.complete
     assert any("geração inválida" in note for note in res.notes)
     assert len(router.stage2.prompts) == 2
+
+
+def test_playlist_youtube_usa_padrao_verificado_sem_chamar_modelo(translate, router, monkeypatch):
+    def nao_chamar_modelo(*args, **kwargs):
+        raise AssertionError("padrão determinístico não deve gerar com IA")
+
+    monkeypatch.setattr(router.stage2, "generate", nao_chamar_modelo)
+    res = translate("ler uma playlist do youtube, variável", stages=(0, 1))
+    assert res.source == "pattern:io.youtube_playlist"
+    assert "def ler_playlist_youtube" in res.code
+    assert "download=False" in res.code
+    assert "from yt_dlp import YoutubeDL" in res.code
