@@ -7,6 +7,7 @@ tenta *compor* ferramentas verificadas do banco antes de escrever código do zer
 from __future__ import annotations
 
 import asyncio
+import ast
 import dataclasses
 import hashlib
 import re
@@ -54,6 +55,21 @@ _ANAPHORA = re.compile(r"\b(?:d|n)?(?:os|as)\s+(?:dois|duas|tres)\b|\b(?:ambos|a
                        r"(?:resultado|lista|valor|valores|variavel|texto|numero|numeros|soma|total|media|produto|item|"
                        r"itens|nome|nomes|anterior|atual)\b|\b(?:the two|both|it|them|these|those|the result|the list|"
                        r"the value|the total)\b")
+
+
+def generation_usable(code: str, lang: str) -> bool:
+    """Bloqueia retorno vazio ou Python quebrado, sem barrar trechos que usam o bloco pai."""
+    if not code.strip():
+        return False
+    if lang != "python":
+        return True
+    if re.match(r"^(?:return|yield|break|continue|else|elif|except|finally|case|await)\b", code.lstrip()):
+        return True  # instruções dependentes da função/if que já existe no arquivo
+    try:
+        ast.parse(textwrap.dedent(code))
+        return True
+    except SyntaxError:
+        return False
 
 
 def refers_to_context(intent: str, known: set[str]) -> bool:
@@ -397,6 +413,28 @@ class Router:
         timings["total_ms"] = round((time.perf_counter() - t0) * 1000, 3)
         res.timings = timings
 
+    async def _retry_bad_generation(self, gen, code, lang_id, builder, process, timings, on_token, cancel):
+        """Uma segunda tentativa curta só quando a resposta não contém código Python utilizável.
+
+        A resposta original permanece disponível no streaming do Studio, inclusive
+        quando o modelo falha novamente; nunca se aceita código malformado automaticamente.
+        """
+        if gen.finish == "length" or generation_usable(code, lang_id):
+            return gen, code, generation_usable(code, lang_id)
+        t = time.perf_counter()
+        try:
+            retry = await asyncio.wrap_future(self.stage2.submit(
+                self.stage2.generate, lambda _level: builder(3),
+                on_token=on_token, cancel=cancel, max_tokens=256))
+        except ModelUnavailable:
+            return gen, code, False
+        timings["stage2_retry_ms"] = round((time.perf_counter() - t) * 1000, 1)
+        timings["tokens"] = timings.get("tokens", 0) + retry.tokens
+        revised = process(retry.text)
+        if retry.finish != "length" and generation_usable(revised, lang_id):
+            return retry, revised, True
+        return gen, code, False
+
     async def _edit(self, intent, lang, req, timings, on_token, cancel) -> Result:
         """Reescrita explícita: não troca um pedido sobre código existente por um snippet do banco."""
         if not req.selected.strip():
@@ -632,13 +670,19 @@ class Router:
             raise TranslateError(str(exc), cands) from exc
         timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = gen.tokens
-        code = strip_context_echo(clean_generation(gen.text, lang.id), context, req.after)
-        code = prune_imports(code, lang.id)
+        def process(text):
+            return prune_imports(strip_context_echo(clean_generation(text, lang.id), context, req.after), lang.id)
+
+        code = process(gen.text)
+        gen, code, valid = await self._retry_bad_generation(gen, code, lang.id, builder, process,
+                                                            timings, on_token, cancel)
         imports, body = split_imports(code, lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:adapt" if reference else "2:gen",
                      source=f"slm:{self.stage2.name}" + (f"+ref:{ref_pattern.id}" if ref_pattern else ""),
-                     confidence=0.5, candidates=cands, complete=gen.finish != "length")
-        if gen.finish == "length":
+                     confidence=0.5, candidates=cands, complete=gen.finish != "length" and valid)
+        if not valid:
+            res.notes.append("geração inválida: a IA não devolveu código utilizável; original preservado")
+        elif gen.finish == "length":
             res.notes.append("geração atingiu o limite de tokens; revise o final do código")
         return res
 
@@ -666,14 +710,22 @@ class Router:
             raise TranslateError(str(exc), cands) from exc
         timings["stage2_ms"] = round((time.perf_counter() - t) * 1000, 1)
         timings["tokens"] = gen.tokens
-        code = clean_generation(gen.text, lang.id)
-        if n_lines == 1 and "\n\n" in code.strip("\n"):
-            code = code.strip("\n").split("\n\n", 1)[0]  # uma linha de pseudocódigo -> um bloco de código
-        code = strip_context_echo(code, context, req.after)
-        imports, body = split_imports(prune_sample_data(prune_imports(code, lang.id), intent), lang.id)
+        def process(text):
+            code = clean_generation(text, lang.id)
+            if n_lines == 1 and "\n\n" in code.strip("\n"):
+                code = code.strip("\n").split("\n\n", 1)[0]
+            code = strip_context_echo(code, context, req.after)
+            return prune_sample_data(prune_imports(code, lang.id), intent)
+
+        code = process(gen.text)
+        gen, code, valid = await self._retry_bad_generation(gen, code, lang.id, builder, process,
+                                                            timings, on_token, cancel)
+        imports, body = split_imports(code, lang.id)
         res = Result(code="", body=body, imports=imports, lang=lang.id, stage="2:pseudo",
                      source=f"slm:{self.stage2.name}:literal", confidence=0.6, candidates=cands,
-                     complete=gen.finish != "length")
+                     complete=gen.finish != "length" and valid)
+        if not valid:
+            res.notes.append("geração inválida: a IA não devolveu código utilizável; original preservado")
         res.notes.append("pseudocódigo traduzido pela IA em modo literal; ensine o compilador salvando como padrão")
         return res
 
