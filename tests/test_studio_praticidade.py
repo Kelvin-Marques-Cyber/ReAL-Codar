@@ -206,3 +206,59 @@ def test_ctrl_enter_na_intencao_usa_arquivo_citado_e_substitui(tmp_path, monkeyp
             editor.action_undo()
             assert editor.text == original
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("key", ["ctrl+enter", "ctrl+g", "f3"])
+def test_atalhos_do_editor_chegam_ao_motor_sem_inserir_enter(tmp_path, monkeypatch, key):
+    """Key events distinguidos pelo Textual disparam o mesmo código de Ctrl+G."""
+    pytest.importorskip("textual")
+    from codar.studio.app import Studio
+
+    monkeypatch.setenv("CODAR_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CODAR_NO_AUTOSTART", "1")
+    monkeypatch.setenv("CODAR_SHELL_ENV", "0")
+    original = "import receiver\nimporte a função extract do receiver\n"
+    file = tmp_path / "teste.py"
+    file.write_text(original)
+    called = []
+
+    async def scenario():
+        app = Studio(tmp_path, local=True)
+        app.request = lambda intent, mode, ed=None, row=None, **kw: called.append((intent, mode, ed, row))
+        async with app.run_test(size=(150, 42)) as pilot:
+            await app.open_file(file)
+            editor = app.current_editor()
+            editor.move_cursor((1, len("importe a função extract do receiver")))
+            editor.focus()
+            await pilot.press(key)
+            await pilot.pause()
+            assert called == [("importe a função extract do receiver", "line", editor, 1)]
+            assert editor.text == original
+
+    asyncio.run(scenario())
+
+
+def test_botao_traduzir_funciona_quando_terminal_nao_emite_ctrl_enter(tmp_path, monkeypatch):
+    pytest.importorskip("textual")
+    from codar.studio.app import Studio
+
+    monkeypatch.setenv("CODAR_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CODAR_NO_AUTOSTART", "1")
+    monkeypatch.setenv("CODAR_SHELL_ENV", "0")
+    file = tmp_path / "teste.py"
+    file.write_text("x é igual a 10\n")
+    called = []
+
+    async def scenario():
+        app = Studio(tmp_path, local=True)
+        app.request = lambda intent, mode, ed=None, row=None, **kw: called.append((intent, mode, ed, row))
+        async with app.run_test(size=(150, 42)) as pilot:
+            await app.open_file(file)
+            editor = app.current_editor()
+            editor.move_cursor((0, len("x é igual a 10")))
+            await pilot.click("#translate-button")
+            await pilot.pause()
+            assert called == [("x é igual a 10", "line", editor, 0)]
+            assert editor.text == "x é igual a 10\n"
+
+    asyncio.run(scenario())
