@@ -21,9 +21,37 @@ class StudioBackend:
 
                     self._local = LocalClient()
             return _NoClose(self._local)
+        from codar import ENGINE_REVISION
         from codar.client import Client
 
-        return Client.connect()
+        client = Client.connect()
+        try:
+            if client.ping().get("engine_revision") == ENGINE_REVISION:
+                return client
+            client.close()
+            # O Studio pode ser novo enquanto o daemon continua carregando o
+            # código Python antigo em memória. Reinicia-o apenas uma vez, com
+            # exclusão mútua, antes de gerar/aplicar qualquer resultado.
+            with self._lock:
+                probe = Client.connect(autostart=False, timeout=3.0)
+                try:
+                    stale = probe.ping().get("engine_revision") != ENGINE_REVISION
+                finally:
+                    probe.close()
+                if stale:
+                    from codar.daemonctl import start_daemon, stop_daemon
+
+                    if not stop_daemon():
+                        raise RuntimeError("Motor antigo em execução; feche outras sessões e rode `codar restart`.")
+                    start_daemon()
+            updated = Client.connect(autostart=False)
+            if updated.ping().get("engine_revision") != ENGINE_REVISION:
+                updated.close()
+                raise RuntimeError("Motor desatualizado: rode `codar restart` antes de gerar código.")
+            return updated
+        except Exception:
+            client.close()
+            raise
 
     def translate(self, intent: str, lang: str | None, *, file: str | None, before: str, indent: str,
                   indent_unit: str | None, stages: tuple[int, ...], hints: bool,
