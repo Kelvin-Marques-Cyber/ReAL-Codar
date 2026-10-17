@@ -236,3 +236,19 @@ def test_js_trilha_ignora_chaves_em_strings_e_comentarios():
     estado = estudo.trilha_poo(code, "typescript")
     assert estado and estado.classe == "Pessoa"
     assert estado.feitos["metodo"] and estado.feitos["objeto"]
+
+def test_trilha_poo_reconhece_dataclass_gerada_pelo_codar():
+    codigo = ("from dataclasses import dataclass\n"
+              "@dataclass\nclass Pessoa:\n    nome: str\n    idade: int\n")
+    e = estudo.trilha_poo(codigo, "python")
+    assert e and e.classe == "Pessoa"
+    assert e.feitos["classe"] and e.feitos["construtor"] and e.feitos["atributo"]
+    assert e.params == ["nome", "idade"]
+    assert e.proximo == "metodo"
+
+
+def test_classe_js_vazia_ainda_conta_na_trilha_e_classe_incompleta_nao():
+    empty = estudo.trilha_poo("class Produto {}", "javascript")
+    assert empty and empty.feitos["classe"] and empty.proximo == "construtor"
+    incomplete = estudo.trilha_poo("class Produto { constructor(", "javascript")
+    assert incomplete and not incomplete.feitos["classe"]
