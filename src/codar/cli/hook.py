@@ -139,6 +139,11 @@ def trigger(lang: str | None) -> int:
     except (RpcError, OSError) as exc:
         _notify(f"codar: {exc}")
         return 3
+    if res.get('action') in ('query', 'install', 'execute', 'study'):
+        _notify(res['code'][:500])
+        if saved is not None:
+            be.set_clip(saved)
+        return 0
     be.set_clip(res["code"])
     time.sleep(0.05)
     be.paste()

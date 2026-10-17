@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import time
+import threading
 import urllib.parse
 from functools import partial
 from pathlib import Path
@@ -175,6 +176,7 @@ class Studio(App):
         Binding("shift+f7", "estudo_aplicar", "Aplicar sugestão do estudo", show=False, priority=True),
         Binding('ctrl+shift+f7', 'estudo_catalogo', 'Catálogo de estudo', show=False, priority=True),
         Binding('ctrl+shift+l', 'libraries', 'Bibliotecas', show=False, priority=True),
+        Binding('f2', 'cancel_generation', 'Cancelar geração', show=False, priority=True),
         Binding("ctrl+q", "quit", "Sair", priority=True),
         Binding("f1", "help", "Ajuda", priority=True),
     ]
@@ -200,6 +202,8 @@ class Studio(App):
         self.intents: list[str] = []
         self.online = False
         self.streaming = False
+        self._translation_serial = 0
+        self._generation_cancel = None
         self.rede_srv = None  # prévia na rede ou repasse de servidor (F4: ver no celular)
         self.estudo = False  # modo estudo (F7): o painel ESTUDO acompanha o cursor
         self._estudo_timer = None
@@ -244,6 +248,7 @@ class Studio(App):
                     with TabPane("ESTUDO", id="tab-estudo"):
                         with Horizontal(id='study-tools'):
                             yield Botao('Catálogo', acao='estudo_catalogo')
+                            yield Botao('Exercícios', acao='estudo_exercicios')
                             yield Botao('Marcar praticado', acao='estudo_praticado')
                             yield Botao('Fontes', acao='estudo_fontes')
                         with VerticalScroll(id="estudo"):
@@ -616,6 +621,25 @@ class Studio(App):
             panel.active = "tab-terminal"
         self.render_pills()
 
+    def action_estudo_exercicios(self):
+        from codar.estudo.exercicios import EXERCISES
+
+        def choose(identity):
+            if identity:
+                editor = self.current_editor()
+                if editor and editor.dirty:
+                    self.notify('Salve sua solução com Ctrl+S antes de executar o exercício.', severity='warning')
+                    return
+                def run(file):
+                    if file:
+                        command = [sys.executable, '-m', 'codar', 'study', 'check', identity,
+                                   '--root', str(self.root), '--file', file]
+                        self.run_command(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command))
+                self.push_screen(PromptScreen('ARQUIVO DA SOLUÇÃO · Enter executa os testes',
+                                              editor.path if editor and editor.path else ''), run)
+        self.push_screen(ChoiceScreen('EXERCÍCIOS · verificação por entradas e saídas',
+                                     [(key, item.title + ' · ' + item.task) for key, item in EXERCISES.items()]), choose)
+
     def action_libraries(self):
         from codar.studio.libraries import LibrariesScreen
 
@@ -823,9 +847,23 @@ class Studio(App):
         self.feed(f"TX · {intent[:70]}", "text")
         out = self.query_one("#output", RichLog)
         out.write(f"[{C['red']}]▸ INTENÇÃO[/] [{C['text']}]{_esc(intent)}[/]")
+        if self._generation_cancel is not None:
+            self._generation_cancel.set()
+        self._translation_serial += 1
+        serial = self._translation_serial
+        cancel = self._generation_cancel = threading.Event()
         self.streaming = False
         self.translate_worker(intent, self.current_lang(), mode, ed.path if ed else None, before, indent, unit,
-                              target, ed.id if ed else None)
+                              target, ed.id if ed else None, request_id=serial, cancel=cancel)
+
+    def action_cancel_generation(self):
+        if self._generation_cancel is not None:
+            self._generation_cancel.set()
+            self._translation_serial += 1
+            self._generation_cancel = None
+            self.streaming = False
+            self.feed('CANCELADO · geração interrompida; editor preservado', 'orange')
+            self.notify('Geração cancelada. Seu código foi preservado.')
 
     def max_linhas_bloco(self) -> int:
         from codar import config
@@ -833,11 +871,20 @@ class Studio(App):
         return int(config.load()["router"].get("max_block_lines", 30))
 
     @work(thread=True, group="translate")
-    def translate_worker(self, intent, lang, mode, path, before, indent, unit, target, editor_id) -> None:
+    def translate_worker(self, intent, lang, mode, path, before, indent, unit, target, editor_id,
+                         *, request_id=None, cancel=None) -> None:
         from codar.client import RpcError
 
+        cancel = cancel or threading.Event()
+        request_id = self._translation_serial if request_id is None else request_id
+
         def on_delta(d: str) -> None:
-            self.call_from_thread(self._delta, d)
+            if cancel.is_set():
+                return
+            def show_delta():
+                if request_id == self._translation_serial and not cancel.is_set():
+                    self._delta(d)
+            self.call_from_thread(show_delta)
 
         try:
             res = self.backend.translate(intent, lang, file=path, before=before,
@@ -846,14 +893,28 @@ class Studio(App):
                                          project_root=str(self.root),
                                          indent=indent if mode in ("line", "block", "edit") else "",
                                          indent_unit=unit, stages=tuple(sorted(self.stages)), hints=self.hints,
-                                         on_delta=on_delta)
+                                         on_delta=on_delta, cancel=cancel)
         except RpcError as exc:
-            self.call_from_thread(self._failed, intent, exc.message, (exc.data or {}).get("candidates") or [])
+            if not cancel.is_set():
+                self.call_from_thread(self._translation_failed, request_id, intent, exc.message,
+                                      (exc.data or {}).get('candidates') or [])
             return
         except Exception as exc:
-            self.call_from_thread(self._failed, intent, f"{type(exc).__name__}: {exc}", [])
+            if not cancel.is_set():
+                self.call_from_thread(self._translation_failed, request_id, intent, f'{type(exc).__name__}: {exc}', [])
             return
-        self.call_from_thread(self._apply, res, target, editor_id, indent)
+        if cancel.is_set():
+            return
+        def finish():
+            if request_id == self._translation_serial and not cancel.is_set():
+                self._generation_cancel = None
+                self._apply(res, target, editor_id, indent)
+        self.call_from_thread(finish)
+
+    def _translation_failed(self, request_id, intent, message, candidates):
+        if request_id == self._translation_serial:
+            self._generation_cancel = None
+            self._failed(intent, message, candidates)
 
     def _delta(self, d: str) -> None:
         out = self.query_one("#output", RichLog)
@@ -881,6 +942,10 @@ class Studio(App):
         hist.insert(0, [ListItem(Static(f"[{STAGE_COLORS.get(res['stage'], C['orange'])}]●[/] "
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
         self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
+        if res.get('action') in ('query', 'install', 'execute', 'study'):
+            self.query_one('#panel', TabbedContent).display = True
+            self.query_one('#panel', TabbedContent).active = 'tab-output'
+            return
         if not res.get("complete", True):
             self.notify("resposta incompleta: seu código foi preservado. Selecione um trecho menor ou aumente "
                         "model.max_tokens", severity="warning", timeout=8)
@@ -1235,6 +1300,12 @@ class Studio(App):
 
     async def submit_intent(self, text: str, resolved: list[str] | None = None) -> None:
         if not text.strip():
+            return
+        from codar.engine.actions import INFORMATIONAL, classify
+
+        if classify(text, self.current_lang()) in INFORMATIONAL:
+            self.query_one('#intent', Input).value = ''
+            self.request(text, 'insert', self.current_editor())
             return
         pedido = comandos.interpretar(text)
         if pedido is not None:  # "crie o arquivo main.py", "crie a pasta src", "abra conta.py"
@@ -2025,6 +2096,8 @@ class Studio(App):
 
     def palette(self) -> list[tuple[str, str, object]]:
         return [
+            ('Codar: Cancelar geração', 'F2 — interrompe o pedido e preserva seu código', self.action_cancel_generation),
+            ('Codar: Exercícios verificáveis', 'testes de comportamento na sua linguagem', self.action_estudo_exercicios),
             ('Codar: Bibliotecas do projeto', 'Ctrl+Shift+L — instaladas, APIs, trilhas e instalação', self.action_libraries),
             ('Codar: Alternar salvamento automático', 'AUTO ON/OFF — salva após uma pausa na digitação', self.action_toggle_autosave),
             ('Codar: Escolher versão Python do projeto', 'múltiplas instalações e ambientes separados', self.action_runtimes),
@@ -2061,6 +2134,8 @@ class Studio(App):
         ]
 
     def on_unmount(self) -> None:
+        if self._generation_cancel is not None:
+            self._generation_cancel.set()
         self._parar_rede()
         self.terminal.parar_tudo()
         self.backend.close()

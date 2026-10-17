@@ -11,6 +11,38 @@ def cmd_study(args):
     try:
         lang = langs.resolve(args.lang).id
         topics = estudo.catalogo(lang)
+        if args.action in ('exercises', 'exercise', 'check'):
+            from codar.estudo.exercicios import EXERCISES, catalog, check
+
+            if args.action == 'exercises':
+                values = catalog()
+                print(json.dumps(values, ensure_ascii=False, indent=2) if args.json else
+                      '\n'.join(f"{item['id']}: {item['title']} — {item['task']}" for item in values))
+                return 0
+            if args.name not in EXERCISES:
+                raise ValueError('Exercício desconhecido. Use codar study exercises.')
+            exercise = EXERCISES[args.name]
+            if args.action == 'exercise':
+                from dataclasses import asdict
+
+                print(json.dumps(asdict(exercise), ensure_ascii=False, indent=2) if args.json else
+                      f'{exercise.title}\n{exercise.task}\n\nDicas:\n' + '\n'.join(exercise.hints))
+                return 0
+            if not args.file:
+                raise ValueError('Informe --file ARQUIVO com sua solução; o comando executa este código.')
+            root = Path(args.root).resolve()
+            file = Path(args.file).expanduser()
+            relative = file.relative_to(root).as_posix() if file.is_absolute() else file.as_posix()
+            result = check(root, relative, args.name)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(result['message'])
+                for case in result['cases']:
+                    print(f"{'OK' if case['ok'] else 'FALHOU'} · entrada {case['input']!r} · esperado {case['expected']!r} · saída {case['actual']!r}")
+                    if case['error']:
+                        print(case['error'])
+            return 0 if result['status'] == 'ok' else 2 if result['status'] == 'skipped' else 1
         if args.action == 'progress':
             value = progresso.ler(args.root, lang)
             print(json.dumps(value, ensure_ascii=False, indent=2) if args.json else

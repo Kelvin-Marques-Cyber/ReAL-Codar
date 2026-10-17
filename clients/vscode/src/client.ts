@@ -23,6 +23,7 @@ export interface Finding {
 }
 
 export interface TranslateResult {
+  action?: string;
   code: string;
   body: string;
   imports: string[];

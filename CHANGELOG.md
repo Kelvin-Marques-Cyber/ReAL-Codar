@@ -4,6 +4,9 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+- Perguntas, consultas, estudo e planos de instalação são respostas informativas. Studio, VS Code, Vim, Neovim e hooks preservam o código/seleção, em vez de substituir texto por explicações.
+- F2 cancela gerações no Studio; SDK local e JSON-RPC propagam cancelamento. Respostas e tokens de pedidos cancelados/substituídos não são aplicados.
+- Exercícios de dobro, soma e ordenação verificam comportamento por entradas/saídas em runtimes instalados, com snapshot, hash, limites de tempo/saída e término dos processos. CLI `study exercises`, `exercise ID` e `check ID --file`; acesso pelo painel Estudo e paleta. Nenhuma solução é sobrescrita.
 - Studio oferece botão BIBLIOTECAS e Ctrl+Shift+L: busca por linguagem/estado, APIs e fontes reais, documentação manual e plano de instalação confirmado no terminal do projeto.
 - Trilhas de bibliotecas têm seis etapas, dicas progressivas e progresso por linguagem/projeto. CLI `libraries tutorial NOME --json`; fontes ausentes são informadas sem inventar métodos. Consulta e estudo preservam o editor.
 - Inventário offline une dependências declaradas, instaladas, importadas e documentadas, com estados separados e indicação de não resolvidas. Adaptadores para Python, Node/TypeScript, Dart, Rust, Go e .NET; CLI `libraries inventory --query TEXTO --json`.

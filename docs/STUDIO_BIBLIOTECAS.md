@@ -37,3 +37,21 @@ A implementação preserva o sistema visual existente: `studio/review.py` (modal
 | Fontes e assinaturas como texto sem markup | Contrato de referências locais | Conteúdo externo permanece dado |
 
 A validação usa o piloto headless do Textual em 150×42 e 80×24, além de inspeção dos SVGs renderizados. Não depende de modelo de IA.
+
+## Exercícios com testes de comportamento
+
+O botão **Exercícios** do painel Estudo e a paleta abrem problemas de entrada/saída. Salve a solução antes de executar. O arquivo é copiado para um snapshot temporário e testado com entradas normais, zero, negativos e outros limites pertinentes. Uma implementação diferente também passa quando produz os resultados esperados.
+
+```sh
+codar study exercises
+codar study exercise dobro
+codar study check dobro --file solucao.py --root . --json
+```
+
+O comando `check` executa o código que você forneceu em subprocessos; não é uma sandbox de segurança. Usa runtimes já instalados, limita tempo e saída e encerra o grupo de processos ao exceder os limites. Não baixa SDKs nem instala pacotes. Há adaptadores de execução/compilação para os runtimes do registro de linguagens e para C, C++, Rust, Go e Kotlin. Formatos sem executor e SDKs ausentes não recebem aprovação fictícia. O resultado inclui hash do snapshot e casos individuais, separados do progresso manual. A conclusão vale para os casos executados, não para qualquer entrada possível.
+
+## Consultas e cancelamento
+
+Pedidos como `explique esta função`, `consulte API de util` e `instale requests` usam respostas informativas: explicação, referência local ou plano, sem trocar o código por texto. A execução/instalação efetiva continua nos controles próprios. A resposta JSON identifica essa distinção no campo `action`; clientes que aplicam edições devem tratar `query`, `install`, `execute` e `study` como informativos.
+
+**F2** e **Cancelar geração** na paleta interrompem o pedido atual. O SDK aceita `cancel=threading.Event()` tanto com daemon quanto com motor local. O Studio preserva o editor e ignora tokens/respostas que cheguem depois do cancelamento ou de um novo pedido.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any, Callable
 
 from codar import config, langs, paths
@@ -37,13 +38,16 @@ class LocalClient:
                   after: str = "", selected: str = "", project_root: str | None = None,
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
-                  on_delta: Callable[[str], None] | None = None) -> dict:
+                  on_delta: Callable[[str], None] | None = None,
+                  cancel: threading.Event | None = None) -> dict:
         req = Request(intent=intent, lang=lang, lang_explicit=bool(lang), file=file, before=before, indent=indent,
                       after=after, selected=selected, project_root=project_root,
                       indent_unit=indent_unit, stages=tuple(stages), audit=audit, hints=hints, mode=mode)
         try:
-            return asyncio.run(self.router.translate(req, on_token=on_delta)).as_dict()
+            return asyncio.run(self.router.translate(req, on_token=on_delta, cancel=cancel)).as_dict()
         except TranslateError as exc:
+            if cancel is not None and cancel.is_set():
+                raise RpcError(-32800, 'requisição cancelada') from exc
             raise RpcError(-32004, str(exc), {"candidates": exc.candidates}) from exc
         except ModelUnavailable as exc:
             raise RpcError(-32003, str(exc)) from exc

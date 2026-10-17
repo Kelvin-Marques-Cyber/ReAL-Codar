@@ -144,6 +144,7 @@ class Result:
     notes: list[str] = field(default_factory=list)
     complete: bool = True
     annotated_body: str | None = None
+    action: str = 'generate'
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -231,11 +232,28 @@ class Router:
     # ------------------------------------------------------------------ API principal
     async def translate(self, req: Request, on_token: Callable[[str], None] | None = None,
                         cancel: threading.Event | None = None) -> Result:
+        if cancel is not None and cancel.is_set():
+            raise TranslateError('requisição cancelada')
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         intent = clean_intent(req.intent) if "\n" not in req.intent.strip() else req.intent.strip("\n")
         intent, hinted = extract_lang_hint(intent)
         lang = self._resolve_lang(req, hinted)
+        from codar.engine.actions import INFORMATIONAL, classify, information
+
+        action = classify(req.intent, lang.id)
+        if action in INFORMATIONAL:
+            from codar.libraries import project_root
+
+            message = await asyncio.to_thread(information, action, req.intent, lang.id,
+                                              project_root(req.project_root, req.file), req.file,
+                                              req.selected or req.before + '\n' + req.after)
+            if cancel is not None and cancel.is_set():
+                raise TranslateError('requisição cancelada')
+            res = Result(code=message, body='', imports=[], lang=lang.id, stage='0', source='action:' + action,
+                         action=action, timings={'total_ms': round((time.perf_counter() - t0) * 1000, 3)})
+            self.metrics.record(res, req.intent)
+            return res
         native_import = is_native_import(req.intent.strip(), lang.id)
         if native_import:
             intent = req.intent.strip()
@@ -295,6 +313,8 @@ class Router:
             elif only_imports:
                 res.notes.append('fontes/tipos/documentação local indisponíveis; use codar libraries learn NOME '
                                  '--source ARQUIVO ou instale a dependência no ambiente do projeto')
+        if cancel is not None and cancel.is_set():
+            raise TranslateError('requisição cancelada')
         self._finish(res, req, timings, t0)
         if not only_imports and res.complete and (res.stage != "2:gen" or not res.notes):
             self.cache_put(key, res)

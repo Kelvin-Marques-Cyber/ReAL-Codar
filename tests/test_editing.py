@@ -97,7 +97,7 @@ def test_studio_substitui_selecao_e_desfaz_corpo_e_imports_juntos(tmp_path, monk
     text = "def f():\n    valor = 1\n    return valor\n"
     app = _studio(tmp_path, monkeypatch, {"a.py": text})
     calls = []
-    app.translate_worker = lambda *args: calls.append(args)
+    app.translate_worker = lambda *args, **kw: calls.append(args)
 
     async def scenario():
         async with app.run_test(size=(150, 42)) as pilot:
@@ -129,7 +129,7 @@ def test_studio_preserva_edicao_nova_e_resposta_incompleta(tmp_path, monkeypatch
 
     app = _studio(tmp_path, monkeypatch, {"a.ps1": "$x = 1\n", "b.dart": "void main() {}\n"})
     calls = []
-    app.translate_worker = lambda *args: calls.append(args)
+    app.translate_worker = lambda *args, **kw: calls.append(args)
 
     async def scenario():
         async with app.run_test(size=(150, 42)) as pilot:

@@ -14,6 +14,7 @@ import itertools
 import json
 import os
 import socket
+import threading
 import time
 from typing import Any, Callable
 
@@ -138,22 +139,44 @@ class Client:
         self.t.close()
 
     def call(self, method: str, params: dict | None = None,
-             on_notify: Callable[[str, dict], None] | None = None) -> Any:
+             on_notify: Callable[[str, dict], None] | None = None,
+             cancel: threading.Event | None = None) -> Any:
+        if cancel is not None and cancel.is_set():
+            raise RpcError(-32800, 'requisição cancelada')
         rid = next(self._ids)
         msg = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
         self.t.send((json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8"))
-        while True:
-            reply = json.loads(self.t.readline())
-            if "id" not in reply and "method" in reply:
-                if on_notify:
-                    on_notify(reply["method"], reply.get("params") or {})
-                continue
-            if reply.get("id") != rid:
-                continue
-            if "error" in reply:
-                e = reply["error"]
-                raise RpcError(e.get("code", -32603), e.get("message", "erro"), e.get("data"))
-            return reply.get("result")
+        done = threading.Event()
+        def watch_cancel():
+            while not done.wait(.02):
+                if cancel.is_set():
+                    try:
+                        self.notify('$/cancelRequest', {'id': rid})
+                    except (OSError, ConnectionError):
+                        pass
+                    return
+        watcher = threading.Thread(target=watch_cancel, daemon=True) if cancel is not None else None
+        if watcher:
+            watcher.start()
+        try:
+            while True:
+                reply = json.loads(self.t.readline())
+                if cancel is not None and cancel.is_set():
+                    raise RpcError(-32800, 'requisição cancelada')
+                if "id" not in reply and "method" in reply:
+                    if on_notify:
+                        on_notify(reply["method"], reply.get("params") or {})
+                    continue
+                if reply.get("id") != rid:
+                    continue
+                if "error" in reply:
+                    e = reply["error"]
+                    raise RpcError(e.get("code", -32603), e.get("message", "erro"), e.get("data"))
+                return reply.get("result")
+        finally:
+            done.set()
+            if watcher:
+                watcher.join(timeout=.1)
 
     def notify(self, method: str, params: dict | None = None) -> None:
         msg = {"jsonrpc": "2.0", "method": method, "params": params or {}}
@@ -167,7 +190,8 @@ class Client:
                   after: str = "", selected: str = "", project_root: str | None = None,
                   indent: str = "", indent_unit: str | None = None, stages: tuple[int, ...] = (0, 1, 2),
                   audit: bool = True, hints: bool = False, mode: str = "auto",
-                  on_delta: Callable[[str], None] | None = None) -> dict:
+                  on_delta: Callable[[str], None] | None = None,
+                  cancel: threading.Event | None = None) -> dict:
         params = {"intent": intent, "lang": lang,
                   "context": {"file": file, "before": before, "after": after, "selected": selected,
                               "root": project_root, "indent": indent, "indent_unit": indent_unit},
@@ -178,7 +202,7 @@ class Client:
             if method == "$/progress" and on_delta:
                 on_delta(p.get("delta", ""))
 
-        return self.call("translate", params, on_notify=notify)
+        return self.call("translate", params, on_notify=notify, cancel=cancel)
 
     def audit(self, code: str, lang: str, hints: bool = False) -> dict:
         return self.call("audit", {"code": code, "lang": lang, "hints": hints})

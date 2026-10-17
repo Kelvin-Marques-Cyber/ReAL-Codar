@@ -75,7 +75,7 @@ class LibraryStudyScreen(ModalScreen[None]):
         with Vertical(id='library-study'):
             yield Label(Text(f'TRILHA · {self.value.name} · {self.value.lang} · {self.value.version}'))
             yield Static('', id='library-study-progress')
-            yield RichLog(id='library-lesson', wrap=True, markup=False)
+            yield RichLog(id='library-lesson', wrap=True, markup=False, auto_scroll=False, min_width=1)
             with Grid(id='library-study-buttons'):
                 yield Button('Anterior', id='lesson-prev')
                 yield Button('Próxima', id='lesson-next')
@@ -170,7 +170,7 @@ class LibrariesScreen(ModalScreen[dict | None]):
                 yield Input(placeholder='Buscar nome ou estado (instalada, importada…)…', id='libraries-query')
             with Horizontal(id='libraries-content'):
                 yield OptionList(id='libraries-list')
-                yield RichLog(id='libraries-details', markup=False, wrap=True)
+                yield RichLog(id='libraries-details', markup=False, wrap=True, auto_scroll=False, min_width=1)
             yield Static('Carregando o ambiente…', id='libraries-status')
             with Grid(id='libraries-actions'):
                 yield Button('Consultar API', id='libraries-api')

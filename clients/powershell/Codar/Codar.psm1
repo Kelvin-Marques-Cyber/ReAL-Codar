@@ -311,6 +311,10 @@ function ConvertTo-CodarLine {
         $res = Send-CodarRequest -Connection $conn -Method 'translate' -Params @{
             intent = $Line; lang = $Language; options = @{ audit = $false }
         }
+        if ($res.action -in @('query', 'install', 'execute', 'study')) {
+            Write-Host $res.code
+            return $null
+        }
         return $res.code
     }
     finally { Close-Codar $conn }
@@ -418,8 +422,10 @@ function Start-CodarHotkey {
             if ([string]::IsNullOrWhiteSpace($intent)) { continue }
             try {
                 $code = ConvertTo-CodarLine -Line $intent.Trim() -Language $lang
-                Set-Clipboard -Value $code
-                [System.Windows.Forms.SendKeys]::SendWait('^v')
+                if ($code) {
+                    Set-Clipboard -Value $code
+                    [System.Windows.Forms.SendKeys]::SendWait('^v')
+                }
             }
             catch {
                 [System.Media.SystemSounds]::Beep.Play()
