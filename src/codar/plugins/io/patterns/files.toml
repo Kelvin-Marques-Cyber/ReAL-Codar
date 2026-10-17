@@ -543,3 +543,35 @@ foreach ($c in 'a.py', 'sub/b.PY', 'sub/c.md', 'node_modules/d.py', '.git/e.py')
 $achados = @(Find-Arquivo -Path $raiz -Extensao py | ForEach-Object { $_.Substring($raiz.Length + 1).Replace('\', '/') } | Sort-Object)
 if (($achados -join ',') -ne 'a.py,sub/b.PY') { throw "falhou: $($achados -join ',')" }
 '''
+
+
+# Leitura de metadados de playlists sem baixar arquivos. Uma solicitação para
+# "importar biblioteca" continua tratada pelo fluxo exclusivo de importações.
+[[pattern]]
+id = "io.youtube_playlist"
+title = "Ler playlist do YouTube com yt-dlp sem baixar vídeos"
+keywords = "ler consultar listar extrair playlist youtube videos titulos metadados url variavel yt_dlp yt-dlp"
+require = ["youtube", "playlist"]
+tags = ["io", "youtube", "playlist", "python"]
+
+[pattern.code]
+python = '''
+from yt_dlp import YoutubeDL
+
+
+def ler_playlist_youtube(playlist_url: str) -> list[dict[str, str]]:
+    """Consulta os itens de uma playlist sem baixar os vídeos."""
+    if not isinstance(playlist_url, str) or not playlist_url.strip():
+        raise ValueError("Informe a URL da playlist.")
+    options = {"extract_flat": True, "skip_download": True, "quiet": True, "no_warnings": True}
+    with YoutubeDL(options) as youtube:
+        info = youtube.extract_info(playlist_url, download=False)
+    if not isinstance(info, dict):
+        raise ValueError("A URL não retornou metadados de playlist.")
+    entries = info.get("entries") or ()
+    return [
+        {"titulo": str(item.get("title") or ""), "url": str(item.get("url") or "")}
+        for item in entries
+        if isinstance(item, dict)
+    ]
+'''
