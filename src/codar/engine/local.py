@@ -49,7 +49,9 @@ class LocalClient:
         except TranslateError as exc:
             if cancel is not None and cancel.is_set():
                 raise RpcError(-32800, 'requisição cancelada') from exc
-            raise RpcError(-32004, str(exc), {"candidates": exc.candidates}) from exc
+            raise RpcError(-32004, str(exc), {
+                "candidates": exc.candidates, "raw_output": getattr(exc, "raw_output", ""),
+                "diagnostics": getattr(exc, "diagnostics", {})}) from exc
         except ModelUnavailable as exc:
             raise RpcError(-32003, str(exc)) from exc
         except langs.UnknownLanguage as exc:
@@ -66,7 +68,9 @@ class LocalClient:
             try:
                 return asyncio.run(workspace_call(self.router, method, p))
             except TranslateError as exc:
-                raise RpcError(-32004, str(exc), {"candidates": exc.candidates}) from exc
+                raise RpcError(-32004, str(exc), {
+                    "candidates": exc.candidates, "raw_output": getattr(exc, "raw_output", ""),
+                    "diagnostics": getattr(exc, "diagnostics", {})}) from exc
             except ModelUnavailable as exc:
                 raise RpcError(-32003, str(exc)) from exc
             except (OSError, ValueError, KeyError, TypeError) as exc:

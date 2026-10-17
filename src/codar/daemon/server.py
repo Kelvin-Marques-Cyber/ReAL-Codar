@@ -13,6 +13,7 @@ import gc
 import json
 import logging
 import logging.handlers
+import math
 import os
 import secrets
 import signal
@@ -242,21 +243,37 @@ class Daemon:
                 self._dispatch(conn, item)
 
     def _dispatch(self, conn: Conn, msg: Any) -> None:
-        if not isinstance(msg, dict) or not isinstance(msg.get("method"), str):
+        if (not isinstance(msg, dict) or not isinstance(msg.get("method"), str)
+                or msg.get("jsonrpc") != "2.0"):
             asyncio.ensure_future(conn.send(_err(msg.get("id") if isinstance(msg, dict) else None, INVALID_REQUEST,
                                                  "requisição JSON-RPC inválida")))
             return
         method, rid = msg["method"], msg.get("id")
+        if (isinstance(rid, bool) or not isinstance(rid, (str, int, float, type(None)))
+                or isinstance(rid, float) and not math.isfinite(rid)):
+            asyncio.ensure_future(conn.send(_err(None, INVALID_REQUEST, "id JSON-RPC inválido")))
+            return
+        params = msg.get("params", {})
+        if not isinstance(params, dict):
+            if rid is not None:
+                asyncio.ensure_future(conn.send(_err(rid, INVALID_PARAMS, "params deve ser um objeto")))
+            return
         if method == "$/cancelRequest":
-            entry = conn.tasks.get((msg.get("params") or {}).get("id"))
+            cancel_id = params.get("id")
+            if not isinstance(cancel_id, (str, int, float)) or isinstance(cancel_id, bool):
+                return
+            entry = conn.tasks.get(cancel_id)
             if entry:
                 entry[1].set()
+            return
+        if rid is not None and rid in conn.tasks:
+            asyncio.ensure_future(conn.send(_err(rid, INVALID_REQUEST, "id já está em execução")))
             return
         if len(conn.tasks) >= int(self.dcfg.get("max_inflight_per_conn", 8)):
             asyncio.ensure_future(conn.send(_err(rid, BUSY, "muitas requisições simultâneas nesta conexão")))
             return
         cancel = threading.Event()
-        task = asyncio.ensure_future(self._run(conn, method, msg.get("params") or {}, rid, cancel))
+        task = asyncio.ensure_future(self._run(conn, method, params, rid, cancel))
         key = rid if rid is not None else object()
         conn.tasks[key] = (task, cancel)
         task.add_done_callback(lambda _t, k=key: conn.tasks.pop(k, None))
@@ -273,6 +290,8 @@ class Daemon:
                 raise RpcError(INVALID_PARAMS, "params deve ser um objeto")
             params["_cancel"] = cancel
             result = await handler(conn, params, rid)
+            if cancel.is_set():
+                raise Cancelled("requisição cancelada")
             if rid is not None:
                 await conn.send({"jsonrpc": "2.0", "id": rid, "result": result})
         except RpcError as exc:
@@ -280,7 +299,9 @@ class Daemon:
                 await conn.send(_err(rid, exc.code, exc.message, exc.data))
         except TranslateError as exc:
             if rid is not None:
-                await conn.send(_err(rid, NOT_RESOLVED, str(exc), {"candidates": exc.candidates}))
+                await conn.send(_err(rid, NOT_RESOLVED, str(exc), {
+                    "candidates": exc.candidates, "raw_output": getattr(exc, "raw_output", ""),
+                    "diagnostics": getattr(exc, "diagnostics", {})}))
         except ModelUnavailable as exc:
             if rid is not None:
                 await conn.send(_err(rid, MODEL_UNAVAILABLE, str(exc)))
@@ -385,7 +406,10 @@ class Daemon:
         return {"ok": True, "id": pat.id}
 
     async def m_pat_remove(self, conn, p, rid):
-        return {"removed": self.store.remove(str(p.get("id", "")))}
+        removed = self.store.remove(str(p.get("id", "")))
+        if removed:
+            self.router.clear_cache()
+        return {"removed": removed}
 
     async def m_model_load(self, conn, p, rid):
         self._preflight()

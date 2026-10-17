@@ -10,7 +10,7 @@ from importlib import metadata
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from codar import __version__
+from codar import ENGINE_REVISION, __version__
 
 
 def _git(root: Path, *args: str) -> str | None:
@@ -29,7 +29,8 @@ def _public_url(url: str) -> str:
 
 def installation_info() -> dict:
     module = Path(__file__).resolve().with_name("__init__.py")
-    info = {"version": __version__, "python": sys.version.split()[0], "platform": sys.platform,
+    info = {"version": __version__, "engine_revision": ENGINE_REVISION,
+            "python": sys.version.split()[0], "platform": sys.platform,
             "executable": sys.executable, "module": str(module), "source": None, "commit": None,
             "ref": None, "dirty": False}
     # Só considera o checkout que contém este módulo; nunca o repositório do diretório de trabalho.
@@ -60,6 +61,9 @@ def daemon_mismatch(remote: dict, local: dict | None = None) -> str | None:
     local = local or installation_info()
     if remote.get("version") != local["version"]:
         return f"daemon {remote.get('version', '?')}, CLI {local['version']}"
+    if (local.get("engine_revision") is not None
+            and remote.get("engine_revision") != local["engine_revision"]):
+        return "daemon e CLI usam revisões diferentes do motor; execute codar restart"
     installed = remote.get("installation") or {}
     if installed.get("commit") and local["commit"] and installed["commit"] != local["commit"]:
         return "daemon e CLI usam commits diferentes"

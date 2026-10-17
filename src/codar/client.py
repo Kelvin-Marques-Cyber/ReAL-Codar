@@ -100,6 +100,11 @@ class Client:
     def __init__(self, transport: _Transport) -> None:
         self.t = transport
         self._ids = itertools.count(1)
+        # A conexão síncrona tem um único leitor. Dois leitores simultâneos
+        # consumiam (e descartavam) a resposta um do outro, bloqueando ambos.
+        self._calls = threading.Lock()
+        # O vigia de cancelamento também escreve; cada frame deve ser atômico.
+        self._writes = threading.Lock()
 
     @classmethod
     def connect(cls, autostart: bool = True, timeout: float = 600.0, endpoint: paths.Endpoint | None = None,
@@ -126,7 +131,11 @@ class Client:
                 raise
             client = cls(_Transport(ep, timeout))
         if ep.transport == "tcp" and ep.token:
-            client.call("auth", {"token": ep.token})
+            try:
+                client.call("auth", {"token": ep.token})
+            except Exception:
+                client.close()
+                raise
         return client
 
     def __enter__(self) -> Client:
@@ -141,11 +150,22 @@ class Client:
     def call(self, method: str, params: dict | None = None,
              on_notify: Callable[[str, dict], None] | None = None,
              cancel: threading.Event | None = None) -> Any:
+        with self._calls:
+            return self._call(method, params, on_notify, cancel)
+
+    def _send(self, msg: dict) -> None:
+        data = (json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8")
+        with self._writes:
+            self.t.send(data)
+
+    def _call(self, method: str, params: dict | None,
+              on_notify: Callable[[str, dict], None] | None,
+              cancel: threading.Event | None) -> Any:
         if cancel is not None and cancel.is_set():
             raise RpcError(-32800, 'requisição cancelada')
         rid = next(self._ids)
         msg = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
-        self.t.send((json.dumps(msg, ensure_ascii=False) + "\n").encode("utf-8"))
+        self._send(msg)
         done = threading.Event()
         def watch_cancel():
             while not done.wait(.02):
@@ -160,12 +180,20 @@ class Client:
             watcher.start()
         try:
             while True:
-                reply = json.loads(self.t.readline())
+                try:
+                    reply = json.loads(self.t.readline())
+                except (ValueError, UnicodeError) as exc:
+                    raise ConnectionError("resposta JSON inválida do daemon") from exc
+                if not isinstance(reply, dict):
+                    raise ConnectionError("resposta JSON-RPC inválida do daemon")
                 if cancel is not None and cancel.is_set():
                     raise RpcError(-32800, 'requisição cancelada')
                 if "id" not in reply and "method" in reply:
+                    progress = reply.get("params") or {}
+                    if reply["method"] == "$/progress" and progress.get("id", rid) != rid:
+                        continue  # fragmento atrasado de um pedido já cancelado
                     if on_notify:
-                        on_notify(reply["method"], reply.get("params") or {})
+                        on_notify(reply["method"], progress)
                     continue
                 if reply.get("id") != rid:
                     continue
@@ -180,7 +208,7 @@ class Client:
 
     def notify(self, method: str, params: dict | None = None) -> None:
         msg = {"jsonrpc": "2.0", "method": method, "params": params or {}}
-        self.t.send((json.dumps(msg) + "\n").encode("utf-8"))
+        self._send(msg)
 
     # ------------------------------------------------------------------ atalhos
     def ping(self) -> dict:
