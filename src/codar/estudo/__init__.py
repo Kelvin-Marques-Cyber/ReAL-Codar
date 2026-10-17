@@ -429,6 +429,27 @@ def _chamadas_python(codigo: str, classe: str, variavel: str) -> tuple[str, list
     ctor = next((n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                  and n.name == "__init__"), None)
     required = _argumentos_obrigatorios(ctor.args, pular_primeiro=True) if ctor else []
+    if ctor is None:
+        # O compilador S0 gera @dataclass com campos obrigatórios, mas sem
+        # __init__ explícito: instanciar Classe() quebra imediatamente.
+        decorators = cls.decorator_list
+        dataclass_decorator = next((d for d in decorators
+                                    if isinstance(d, ast.Name) and d.id == 'dataclass'
+                                    or isinstance(d, ast.Call) and isinstance(d.func, ast.Name)
+                                    and d.func.id == 'dataclass'), None)
+        if dataclass_decorator:
+            kw_only = isinstance(dataclass_decorator, ast.Call) and any(
+                k.arg == 'kw_only' and isinstance(k.value, ast.Constant) and k.value.value is True
+                for k in dataclass_decorator.keywords)
+            for field_node in cls.body:
+                if not isinstance(field_node, ast.AnnAssign) or not isinstance(field_node.target, ast.Name):
+                    continue
+                # ClassVar é um atributo de classe e não parâmetro de __init__.
+                annotation = ast.unparse(field_node.annotation)
+                if annotation.startswith(('ClassVar', 'typing.ClassVar')):
+                    continue
+                if field_node.value is None:
+                    required.append((field_node.target.id, kw_only))
     args = ", ".join(f"{name}={_valor(name)}" if keyword else _valor(name) for name, keyword in required)
     calls = []
     for method in cls.body:
