@@ -261,3 +261,61 @@ def test_catalogo_corrompido_e_grande_nao_bloqueia_consulta(tmp_path):
     file.write_text('x' * 512001)
     assert not catalog.list()
     assert catalog.learn('minhalib', 'python').fingerprint == ref.fingerprint
+
+def test_metodo_em_classe_sugere_import_real_sem_inventar_funcao(translate, router, tmp_path):
+    marker = tmp_path / "executou"
+    write(tmp_path, "receiver.py",
+          "from pathlib import Path\n"
+          f"Path({str(marker)!r}).touch()\n"
+          "class PlaylistExtract:\n"
+          "    def extract(self, url):\n"
+          "        return url\n")
+    with pytest.raises(TranslateError) as exc:
+        translate("importe a função extract do receiver", project_root=str(tmp_path))
+    message = str(exc.value)
+    assert "Função/classe não encontrada" in message
+    assert "PlaylistExtract.extract" in message
+    assert "from receiver import PlaylistExtract" in message
+    assert not marker.exists()
+    assert not router.stage2.prompts
+    result = translate("importe a classe PlaylistExtract do receiver", project_root=str(tmp_path))
+    assert result.code == "from receiver import PlaylistExtract"
+    assert not marker.exists()
+
+
+def test_metodo_aproximado_informa_nome_real_sem_importar_simbolo_falso(translate, router, tmp_path):
+    write(tmp_path, "receiver.py",
+          "class PlaylistExtract:\n"
+          "    def extract_video_ids(self, url):\n"
+          "        return []\n")
+    with pytest.raises(TranslateError) as exc:
+        translate("importe a função extract do receiver", project_root=str(tmp_path))
+    assert "PlaylistExtract.extract_video_ids" in str(exc.value)
+    assert not router.stage2.prompts
+
+
+def test_metodo_com_multiplas_classes_nao_escolhe_classe_arbitraria(translate, router, tmp_path):
+    write(tmp_path, "receiver.py",
+          "class PlaylistExtract:\n"
+          "    def extract(self, url):\n"
+          "        return []\n"
+          "class VideoExtract:\n"
+          "    def extract(self, url):\n"
+          "        return []\n")
+    with pytest.raises(TranslateError) as exc:
+        translate("importe a função extract do receiver", project_root=str(tmp_path))
+    assert "mais de uma classe" in str(exc.value)
+    assert "PlaylistExtract.extract" in str(exc.value)
+    assert "VideoExtract.extract" in str(exc.value)
+    assert not router.stage2.prompts
+
+
+def test_funcao_de_modulo_continua_importada_sem_transformacao(translate, tmp_path):
+    write(tmp_path, "receiver.py",
+          "def extract(url):\n"
+          "    return url\n"
+          "class PlaylistExtract:\n"
+          "    def extract(self, url):\n"
+          "        return url\n")
+    result = translate("importe a função extract do receiver", project_root=str(tmp_path))
+    assert result.code == "from receiver import extract"
