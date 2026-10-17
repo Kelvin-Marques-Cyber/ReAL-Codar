@@ -66,11 +66,17 @@ def refers_to_context(intent: str, known: set[str]) -> bool:
 
 
 def is_pseudocode(intent: str) -> bool:
-    """Pseudocódigo = uma instrução a traduzir (não um pedido de funcionalidade nova)."""
-    words = fold(intent).split()
-    if not words or len(words) > 14 or any(w.strip(".,:;!?") in _TASK_WORDS for w in words):
+    """Pseudocódigo é uma instrução, não um assunto/frase nominal de até oito palavras."""
+    words = [w.strip(".,:;!?") for w in fold(intent).split()]
+    if not words or len(words) > 14 or any(w in _TASK_WORDS for w in words):
         return False
-    return bool(_CODE_TOKEN.search(intent)) or len(words) <= 8
+    if _CODE_TOKEN.search(intent):
+        return True
+    # "uma playlist do youtube, variável" precisa do gerador com orçamento de
+    # função/bloco; o tradutor literal de UMA linha não consegue criar a solução.
+    if words[0] in {"um", "uma", "o", "a", "meu", "minha", "meus", "minhas", "the", "my"}:
+        return False
+    return len(words) <= 8
 
 
 @lru_cache(maxsize=32)
@@ -654,7 +660,7 @@ class Router:
         t = time.perf_counter()
         try:
             gen = await asyncio.wrap_future(self.stage2.submit(
-                self.stage2.generate, builder, on_token=on_token, cancel=cancel, max_tokens=48 + 40 * n_lines,
+                self.stage2.generate, builder, on_token=on_token, cancel=cancel, max_tokens=max(256, 48 + 80 * n_lines),
                 stop=STOP + ["<|im_start|>"]), loop=asyncio.get_running_loop())
         except ModelUnavailable as exc:
             raise TranslateError(str(exc), cands) from exc
