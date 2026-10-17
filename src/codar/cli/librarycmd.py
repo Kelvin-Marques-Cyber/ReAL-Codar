@@ -37,6 +37,14 @@ def cmd_libraries(args):
                 print(json.dumps({'root': str(root), 'commands': commands}, ensure_ascii=False, indent=2) if args.json
                       else '\n'.join(shlex.join(command) for command in commands))
                 return 0
+            print('Projeto: ' + str(root))
+            print('\n'.join(shlex.join(command) for command in commands))
+            if not args.yes:
+                if not sys.stdin.isatty():
+                    raise ValueError('Instalação não confirmada. Confira --dry-run e use --yes para autorizar.')
+                if input('Executar este plano? [s/N] ').strip().casefold() not in ('s', 'sim', 'y', 'yes'):
+                    print('Instalação cancelada; nenhum comando foi executado.')
+                    return 0
             install(root, commands)
             name = args.module or (python_module(args.name) if lang == 'python' else args.name)
             reference = catalog.learn(name, lang)

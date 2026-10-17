@@ -4,6 +4,9 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+- Instalação de bibliotecas mostra o plano e exige confirmação; scripts usam `--yes` após a prévia.
+- Progresso do Estudo usa bloqueio entre processos e gravação atômica. CLI oferece `mark`, `progress`, `export` e `import`, com mesclagem por projeto/linguagem e validação de arquivos; um arquivo de progresso corrompido é preservado.
+
 ## [0.3.2] - 2026-10-10
 
 - Pedidos como `importar bibliotecas numpy e pandas` usam um fluxo limitado às importações. A finalidade da biblioteca não vira uma implementação; padrões, compositor e RAG não participam desse fluxo.

@@ -2,13 +2,35 @@
 
 import json
 import sys
+from pathlib import Path
 from codar import estudo, langs
+from codar.estudo import progresso
 
 
 def cmd_study(args):
     try:
         lang = langs.resolve(args.lang).id
         topics = estudo.catalogo(lang)
+        if args.action == 'progress':
+            value = progresso.ler(args.root, lang)
+            print(json.dumps(value, ensure_ascii=False, indent=2) if args.json else
+                  '\n'.join(f'{name} · {date}' for name, date in value.items()) or 'Nenhuma prática registrada.')
+            return 0
+        if args.action in ('export', 'import'):
+            if not args.file:
+                raise ValueError('Informe --file ARQUIVO.json.')
+            file = Path(args.file).expanduser()
+            if args.action == 'export':
+                payload = progresso.exportar(args.root)
+                with file.open('x', encoding='utf-8') as handle:
+                    json.dump(payload, handle, ensure_ascii=False, indent=2)
+                print('Progresso exportado: ' + str(file))
+            else:
+                if file.stat().st_size > 1_000_000:
+                    raise ValueError('Arquivo de progresso excede 1 MB.')
+                total = progresso.importar(args.root, json.loads(file.read_text(encoding='utf-8')))
+                print(f'{total} registro(s) de prática importados para este projeto.')
+            return 0
         if args.action == 'list':
             values = [{'id': c.id, 'title': c.titulo, 'track': estudo.TRILHAS[c.trilha]} for c in topics]
             if args.json:
@@ -20,6 +42,10 @@ def cmd_study(args):
         concept = estudo.POR_ID.get(args.name)
         if concept not in topics:
             raise ValueError('Tópico ausente nesta linguagem. Use codar study list --lang ' + lang)
+        if args.action == 'mark':
+            progresso.marcar(args.root, lang, concept.id)
+            print('Prática registrada: ' + concept.titulo)
+            return 0
         code, _ = estudo.exemplo(concept, lang)
         value = dict(id=concept.id, title=concept.titulo, language=lang, text=estudo.explicacao(concept, lang),
                      example=code, practice=concept.pratique, common_errors=concept.erros_comuns,
@@ -34,6 +60,6 @@ def cmd_study(args):
                 print('Confira: ' + concept.verifique)
             print('Fontes: ' + '\n'.join(value['sources']))
         return 0
-    except (ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError) as exc:
         print('codar: ' + str(exc), file=sys.stderr)
         return 1

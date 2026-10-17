@@ -718,10 +718,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=lambda a: __import__("codar.cli.toolchaincmd", fromlist=["x"]).cmd_toolchains(a))
 
     p = sub.add_parser('study', aliases=['estudar'], help='estudo offline: list | show ID, na linguagem escolhida')
-    p.add_argument('action', nargs='?', choices=['list', 'show'], default='list')
+    p.add_argument('action', nargs='?', choices=['list', 'show', 'progress', 'mark', 'export', 'import'], default='list')
     p.add_argument('name', nargs='?')
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--json', action='store_true')
+    p.add_argument('--root', default='.', help='projeto do progresso de aprendizagem')
+    p.add_argument('--file', help='arquivo JSON para exportar/importar o progresso')
     p.set_defaults(fn=lambda a: __import__('codar.cli.studycmd', fromlist=['x']).cmd_study(a))
 
     p = sub.add_parser('libraries', aliases=['bibliotecas'], help='bibliotecas: list | show | learn | install | verify | forget')
@@ -733,6 +735,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--library-version', help='versão da documentação fornecida')
     p.add_argument('--module', help='nome usado no import quando difere do nome do pacote instalado')
     p.add_argument('--dry-run', action='store_true', help='mostra a instalação sem executar/baixar')
+    p.add_argument('-y', '--yes', action='store_true', help='confirma o plano de instalação no projeto')
     p.add_argument('--json', action='store_true')
     p.set_defaults(fn=lambda a: __import__('codar.cli.librarycmd', fromlist=['x']).cmd_libraries(a))
 

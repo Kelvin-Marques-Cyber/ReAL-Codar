@@ -144,3 +144,7 @@ Imports e tipos: [NumPy](https://numpy.org/doc/stable/user/absolute_beginners.ht
 - [.NET: adicionar pacote](https://learn.microsoft.com/dotnet/core/tools/dotnet-package-add)
 - [Composer: require](https://getcomposer.org/doc/03-cli.md#require)
 - [Bundler: add](https://bundler.io/man/bundle-add.1.html)
+
+### Confirmar uma instalação
+
+`codar libraries install` mostra o projeto e o plano antes de executar e pede confirmação no terminal. Em scripts sem terminal interativo, confira primeiro com `--dry-run` e autorize explicitamente com `--yes`. Recusar o plano não cria ambientes nem executa gerenciadores.
