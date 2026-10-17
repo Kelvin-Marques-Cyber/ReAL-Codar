@@ -232,6 +232,29 @@ def _poo_python(arvore: ast.AST) -> EstadoPoo:
         bases_de[c.name] = bases
         feitos["heranca"] |= bool(bases)
         metodos_de[c.name] = set()
+        # @dataclass gera __init__ e atributos a partir dos campos anotados.
+        # Sem esse tratamento, uma classe criada pelo próprio compilador S0
+        # aparece erradamente como "sem construtor / sem atributos" na trilha.
+        dataclass_node = next((d for d in c.decorator_list if isinstance(d, ast.Name)
+                               and d.id == 'dataclass' or isinstance(d, ast.Call)
+                               and isinstance(d.func, ast.Name) and d.func.id == 'dataclass'), None)
+        if dataclass_node:
+            creates_init = not (isinstance(dataclass_node, ast.Call) and any(
+                kw.arg == 'init' and isinstance(kw.value, ast.Constant) and kw.value.value is False
+                for kw in dataclass_node.keywords))
+            feitos["construtor"] |= creates_init
+            for field_node in c.body:
+                if not isinstance(field_node, ast.AnnAssign) or not isinstance(field_node.target, ast.Name):
+                    continue
+                if ast.unparse(field_node.annotation).startswith(('ClassVar', 'typing.ClassVar')):
+                    continue
+                field_name = field_node.target.id
+                feitos["atributo"] = True
+                if estado.classe in (None, c.name):
+                    if field_name not in estado.attrs:
+                        estado.attrs.append(field_name)
+                    if creates_init and field_node.value is None:
+                        estado.params.append(field_name)
         for item in c.body:
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
