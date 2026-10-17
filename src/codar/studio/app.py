@@ -107,7 +107,7 @@ PILULAS = [("s0", "◎ S0", "toggle_stage(0)"), ("s1", "• S1", "toggle_stage(1
 _SENAO = re.compile(r"^\s*(sen[aã]o|caso contr[aá]rio|do contr[aá]rio|else|elif)\b", re.I)
 TIPS = [
     "termine a frase com espaço e aperte Enter: a linha vira código",
-    "Ctrl+Enter ou Ctrl+G traduz a linha do cursor; com seleção, traduz o bloco",
+    "F3 ou Ctrl+G traduz a linha do cursor; Ctrl+Enter depende do protocolo do terminal",
     "num arquivo .html, escreva ul>li.item*3 e aperte Tab",
     "num arquivo .css, escreva df+jcc+aic e aperte Tab",
     "F1 mostra todos os atalhos",
@@ -147,8 +147,11 @@ class Studio(App):
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
     BINDINGS = [
         Binding("ctrl+s", "save", tr("Salvar"), priority=True),
-        # Ctrl+Enter chega como ctrl+enter (kitty, WezTerm, foot…) ou ctrl+j (terminais clássicos); Ctrl+G em qualquer um
-        Binding("ctrl+g,ctrl+enter,ctrl+j", "translate_line", tr("Traduzir"), show=False),
+        # Ctrl+Enter é indistinguível de Enter em alguns terminais, como versões do
+        # Konsole sem protocolo estendido. F3 é uma alternativa confiável.
+        # Prioridade impede TextArea/Input de consumir a combinação antes do Studio.
+        Binding("ctrl+g,ctrl+enter,ctrl+j,f3", "translate_line", tr("Traduzir (F3)"), show=True,
+                priority=True),
         # ir para cada área sem o mouse; Esc volta ao editor
         Binding("ctrl+e", "focus_explorer", tr("Explorer"), priority=True),
         Binding("ctrl+t", "focus_terminal", tr("Terminal"), priority=True),
@@ -466,13 +469,13 @@ class Studio(App):
             line = focused.document.get_line(row)
             if focused.selection.start[0] != focused.selection.end[0]:
                 r0, r1 = focused.linhas_selecionadas()
-                return f"CTRL+G TRADUZ {r1 - r0 + 1} LINHAS (MÁX {self.max_linhas_bloco()}) · TAB INDENTA · CTRL+/ COMENTA"
+                return f"F3 / CTRL+G TRADUZ {r1 - r0 + 1} LINHAS (MÁX {self.max_linhas_bloco()}) · TAB INDENTA · CTRL+/ COMENTA"
             if focused.suggestion:
                 return "TAB COMPLETA"
             if focused.emmet_kind() and emmet.extract_abbreviation(line[:col]):
                 return "TAB EXPANDE"
             if looks_like_intent(line):
-                return "CTRL+ENTER TRADUZ · ESPAÇO+ENTER"
+                return "F3 / CTRL+G TRADUZ · CTRL+ENTER SE O TERMINAL SUPORTAR · ESPAÇO+ENTER"
             return "CTRL+E EXPLORER · CTRL+T TERMINAL · CTRL+L INTENÇÃO · F1"
         return "ESC EDITOR · F1 AJUDA"
 
@@ -2324,7 +2327,7 @@ class Studio(App):
             ('Codar: Catálogo de estudo', 'Ctrl+Shift+F7 — tópicos e exemplos na linguagem do arquivo', self.action_estudo_catalogo),
             ("Codar: Buscar no arquivo", "Ctrl+F — texto, código e IA local opcional", self.action_find),
             ("Codar: Buscar no projeto", "Ctrl+Shift+F — nomes e conteúdo", self.action_find_project),
-            ("Codar: Traduzir linha atual", "Ctrl+G — a linha vira código no lugar", self.action_translate_line),
+            ("Codar: Traduzir linha atual", "F3 / Ctrl+G — linha vira código no lugar; Ctrl+Enter exige suporte do terminal", self.action_translate_line),
             ("Codar: Auditar arquivo", "F6 — segredos, segurança, desempenho, memória", self.action_audit_file),
             ("Codar: Executar arquivo", "F5 — roda no terminal integrado", self.action_run_file),
             ("Codar: Consultor de projeto", "F8 — sugestões com opções executáveis", self.action_advise),
