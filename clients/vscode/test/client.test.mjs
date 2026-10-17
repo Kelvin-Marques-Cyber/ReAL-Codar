@@ -70,6 +70,12 @@ test("daemon: ping, translate, audit, stats, erro e cancelamento", { skip: !ep &
     const r = await c.translate({ intent: "x é igual a 10", lang: "go", options: { stages: [0] } });
     assert.equal(r.stage, "0");
     assert.equal(r.code, "x := 10");
+    const information = await c.translate({ intent: "explique uma função", lang: "python" });
+    assert.equal(information.action, "query");
+    assert.equal(information.body, "");
+    assert.equal(information.complete, false);
+    const spanish = await c.translate({ intent: "x es igual a 10", locale: "es", lang: "javascript", options: { stages: [0] } });
+    assert.equal(spanish.code, "const x = 10;");
     const r2 = await c.translate({ intent: "função soma com a e b que retorna a + b", lang: "typescript",
       context: { indent: "  ", indent_unit: "  " }, options: { stages: [0] } });
     assert.match(r2.body, /^ {2}function soma\(a: number, b: number\): number \{/);

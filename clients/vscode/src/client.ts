@@ -23,6 +23,7 @@ export interface Finding {
 }
 
 export interface TranslateResult {
+  action?: string;
   code: string;
   body: string;
   imports: string[];
@@ -218,6 +219,7 @@ export class CodarClient {
   translate(
     params: {
       intent: string;
+      locale?: string;
       lang?: string;
       context?: { file?: string; before?: string; after?: string; selected?: string; indent?: string; indent_unit?: string };
       options?: { stages?: number[]; audit?: boolean; hints?: boolean; mode?: string; stream?: boolean };

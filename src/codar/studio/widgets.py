@@ -208,6 +208,7 @@ class CodeEditor(TextArea):
         self.saved_text = self.text
         self.lang_id: str | None = None
         self.autocomplete = True
+        self.symbol_completions = []
         self.guias = True  # pontinhos na indentação
         self._auto: set[tuple[int, int]] = set()  # fechamentos postos pelo editor: (linha, distância até o fim)
         self._destaque: tuple[int, int] | None = None  # linhas recém-inseridas, com fundo realçado por um instante
@@ -248,6 +249,9 @@ class CodeEditor(TextArea):
                               key=lambda w: (-counts[w], len(w)))
         if buffer_words:
             return buffer_words[0]
+        for item in self.symbol_completions:
+            if item.name.startswith(prefix) and item.name != prefix:
+                return item.name
         for pool in (KEYWORDS.get(self.lang_id or "", ()), PSEUDO_WORDS):
             hits = sorted((w for w in pool if w.startswith(prefix) and w != prefix), key=len)
             if not hits:

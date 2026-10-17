@@ -152,3 +152,21 @@ def test_import_js_relativo_nao_inspeciona_node_modules_inteiro(tmp_path):
     write(tmp_path, 'src/util.ts', 'export function minhaFuncao() {}')
     context = LibraryCatalog(tmp_path, str(current)).context("import { minhaFuncao } from './util';", 'typescript')
     assert 'minhaFuncao' in context and 'Errado' not in context
+
+
+def test_cli_instalacao_exige_confirmacao_sem_terminal(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr('sys.stdin.isatty', lambda: False)
+    calls = []
+    monkeypatch.setattr('codar.library_packages.install', lambda *args: calls.append(args))
+    assert main(['libraries', 'install', 'requests', '--root', str(tmp_path)]) == 1
+    assert not calls
+    assert '--yes' in capsys.readouterr().err
+    assert main(['libraries', 'install', 'requests', '--root', str(tmp_path), '--yes']) == 0
+    assert len(calls) == 1
+
+
+def test_cli_recusar_plano_nao_instala(tmp_path, monkeypatch):
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    monkeypatch.setattr('builtins.input', lambda _: 'n')
+    monkeypatch.setattr('codar.library_packages.install', lambda *a: pytest.fail('instalou após recusa'))
+    assert main(['libraries', 'install', 'requests', '--root', str(tmp_path)]) == 0

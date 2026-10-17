@@ -151,6 +151,10 @@ async function translate(editor: vscode.TextEditor, range: vscode.Range, intent:
   status.tooltip = `${res.source}\n${res.findings.length} achado(s) da auditoria`;
 
   output.appendLine(res.code);
+  if (["query", "install", "execute", "study"].includes(res.action ?? "")) {
+    output.show(true);
+    return;
+  }
   if (res.complete === false) {
     void vscode.window.showWarningMessage("Codar: resposta incompleta. Código preservado; selecione um trecho menor ou aumente model.max_tokens.");
     return;

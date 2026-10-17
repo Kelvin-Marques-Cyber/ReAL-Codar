@@ -110,13 +110,14 @@ class Request:
     audit: bool = True
     hints: bool = False
     mode: str = "auto"  # auto | line | block | insert | edit
+    locale: str | None = None
 
     @classmethod
     def from_params(cls, p: dict[str, Any], default_lang: str | None = None) -> Request:
         ctx = p.get("context") or {}
         opts = p.get("options") or {}
         stages = tuple(int(s) for s in opts.get("stages", (0, 1, 2)))
-        return cls(intent=str(p.get("intent", "")), lang=p.get("lang") or default_lang,
+        return cls(intent=str(p.get("intent", "")), locale=p.get('locale'), lang=p.get("lang") or default_lang,
                    lang_explicit=bool(p.get("lang")), file=ctx.get("file"), before=str(ctx.get("before", ""))[-6000:],
                    after=str(ctx.get("after", ""))[:3000], selected=str(ctx.get("selected", "")),
                    project_root=ctx.get("root"),
@@ -144,6 +145,7 @@ class Result:
     notes: list[str] = field(default_factory=list)
     complete: bool = True
     annotated_body: str | None = None
+    action: str = 'generate'
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -205,7 +207,7 @@ class Router:
         ctx = hashlib.sha256(repr((req.before, req.after, req.selected, req.project_context, req.library_context,
                                   req.file, req.project_root,
                                   req.project_guidance, req.project_skills)).encode()).hexdigest()
-        return "|".join([intent, lang, req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
+        return "|".join([intent, lang, str(req.locale), req.indent, str(req.indent_unit), ",".join(map(str, req.stages)),
                          str(req.hints), str(req.audit), req.mode, ctx])
 
     def cache_get(self, key: str) -> Result | None:
@@ -231,11 +233,39 @@ class Router:
     # ------------------------------------------------------------------ API principal
     async def translate(self, req: Request, on_token: Callable[[str], None] | None = None,
                         cancel: threading.Event | None = None) -> Result:
+        if cancel is not None and cancel.is_set():
+            raise TranslateError('requisição cancelada')
         t0 = time.perf_counter()
         timings: dict[str, float] = {}
         intent = clean_intent(req.intent) if "\n" not in req.intent.strip() else req.intent.strip("\n")
+        from codar.engine.locale_intents import normalize
+        from codar.i18n import normalize_locale
+
+        try:
+            locale = normalize_locale(req.locale or self.cfg.get('ui', {}).get('locale', 'pt-BR'))
+        except ValueError as exc:
+            raise TranslateError(str(exc)) from exc
+        req = dataclasses.replace(req, locale=locale)
+        known_locale = set(_IDENT.findall(req.before + '\n' + req.after + '\n' + req.selected))
+        intent = '\n'.join(normalize(line, locale, known_locale) for line in intent.split('\n'))
         intent, hinted = extract_lang_hint(intent)
         lang = self._resolve_lang(req, hinted)
+        from codar.engine.actions import INFORMATIONAL, classify, information
+
+        action = classify(req.intent, lang.id)
+        if action in INFORMATIONAL:
+            from codar.libraries import project_root
+
+            message = await asyncio.to_thread(information, action, req.intent, lang.id,
+                                              project_root(req.project_root, req.file), req.file,
+                                              req.selected or req.before + '\n' + req.after)
+            if cancel is not None and cancel.is_set():
+                raise TranslateError('requisição cancelada')
+            res = Result(code=message, body='', imports=[], lang=lang.id, stage='0', source='action:' + action,
+                         action=action, complete=False,
+                         timings={'total_ms': round((time.perf_counter() - t0) * 1000, 3)})
+            self.metrics.record(res, req.intent)
+            return res
         native_import = is_native_import(req.intent.strip(), lang.id)
         if native_import:
             intent = req.intent.strip()
@@ -254,6 +284,8 @@ class Router:
         only_imports = bool(import_lines and all(is_import_request(line, lang.id) for line in import_lines))
         key = self._key(req, lang.id, intent)
         if not only_imports and (hit := self.cache_get(key)) is not None:
+            if cancel is not None and cancel.is_set():
+                raise TranslateError('requisição cancelada')
             res = Result(**{**hit.as_dict(), "cached": True})
             res.timings = {**hit.timings, "total_ms": round((time.perf_counter() - t0) * 1000, 3)}
             self.metrics.record(res, intent)
@@ -295,6 +327,8 @@ class Router:
             elif only_imports:
                 res.notes.append('fontes/tipos/documentação local indisponíveis; use codar libraries learn NOME '
                                  '--source ARQUIVO ou instale a dependência no ambiente do projeto')
+        if cancel is not None and cancel.is_set():
+            raise TranslateError('requisição cancelada')
         self._finish(res, req, timings, t0)
         if not only_imports and res.complete and (res.stage != "2:gen" or not res.notes):
             self.cache_put(key, res)

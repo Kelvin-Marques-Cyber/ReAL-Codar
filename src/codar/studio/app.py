@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import time
+import threading
 import urllib.parse
 from functools import partial
 from pathlib import Path
@@ -31,6 +32,7 @@ from textual.theme import Theme
 from textual.widgets import (DataTable, DirectoryTree, Footer, Input, ListItem, ListView, RichLog, Static,
                              TabbedContent, TabPane, TextArea)
 
+from codar.i18n import tr, localize_widgets
 from codar import __version__, langs
 from codar.advisor import pacotes
 from codar.studio import comandos, estado
@@ -144,38 +146,41 @@ class Studio(App):
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
     BINDINGS = [
-        Binding("ctrl+s", "save", "Salvar", priority=True),
+        Binding("ctrl+s", "save", tr("Salvar"), priority=True),
         # Ctrl+Enter chega como ctrl+enter (kitty, WezTerm, foot…) ou ctrl+j (terminais clássicos); Ctrl+G em qualquer um
-        Binding("ctrl+g,ctrl+enter,ctrl+j", "translate_line", "Traduzir", show=False),
+        Binding("ctrl+g,ctrl+enter,ctrl+j", "translate_line", tr("Traduzir"), show=False),
         # ir para cada área sem o mouse; Esc volta ao editor
-        Binding("ctrl+e", "focus_explorer", "Explorer", priority=True),
-        Binding("ctrl+t", "focus_terminal", "Terminal", priority=True),
-        Binding("ctrl+shift+c", "copy_terminal", "Copiar saída", show=False, priority=True),
-        Binding("ctrl+shift+a", "terminal_output", "Selecionar saída", show=False, priority=True),
-        Binding("ctrl+shift+w", "close_terminal", "Fechar terminal", show=False, priority=True),
-        Binding("ctrl+l", "focus_intent", "Intenção", priority=True),
-        Binding("escape", "focus_editor", "Editor", show=False),
-        Binding("ctrl+o", "quick_open", "Abrir", priority=True),
-        Binding("ctrl+f", "find", "Buscar", priority=True),
-        Binding("ctrl+shift+f", "find_project", "Buscar projeto", show=False, priority=True),
-        Binding("ctrl+pagedown", "next_tab", "Próxima aba", show=False, priority=True),
-        Binding("ctrl+pageup", "prev_tab", "Aba anterior", show=False, priority=True),
-        Binding("f5", "run_file", "Executar", priority=True),
-        Binding("f6", "audit_file", "Auditar", show=False, priority=True),
-        Binding("ctrl+shift+h", "edit_history", "Histórico de edições", show=False, priority=True),
-        Binding("ctrl+shift+g", "project_edit", "Editar projeto", show=False, priority=True),
-        Binding("f8", "advise", "Consultor", priority=True),
-        Binding("ctrl+n", "new_file", "Novo", show=False, priority=True),
-        Binding("ctrl+w", "close_tab", "Fechar aba", show=False, priority=True),
-        Binding("ctrl+b", "toggle_left", "Mostrar explorer", show=False, priority=True),
-        Binding("f9", "toggle_panel", "Painel", show=False, priority=True),
-        Binding("f12", "shell", "Seu shell", show=False, priority=True),
-        Binding("f4", "celular", "Celular", priority=True),
-        Binding("f7", "estudo", "Estudo", priority=True),
-        Binding("shift+f7", "estudo_aplicar", "Aplicar sugestão do estudo", show=False, priority=True),
-        Binding('ctrl+shift+f7', 'estudo_catalogo', 'Catálogo de estudo', show=False, priority=True),
-        Binding("ctrl+q", "quit", "Sair", priority=True),
-        Binding("f1", "help", "Ajuda", priority=True),
+        Binding("ctrl+e", "focus_explorer", tr("Explorer"), priority=True),
+        Binding("ctrl+t", "focus_terminal", tr("Terminal"), priority=True),
+        Binding("ctrl+shift+c", "copy_terminal", tr("Copiar saída"), show=False, priority=True),
+        Binding("ctrl+shift+a", "terminal_output", tr("Selecionar saída"), show=False, priority=True),
+        Binding("ctrl+shift+w", "close_terminal", tr("Fechar terminal"), show=False, priority=True),
+        Binding("ctrl+l", "focus_intent", tr("Intenção"), priority=True),
+        Binding("escape", "focus_editor", tr("Editor"), show=False),
+        Binding("ctrl+o", "quick_open", tr("Abrir"), priority=True),
+        Binding("ctrl+f", "find", tr("Buscar"), priority=True),
+        Binding("ctrl+shift+f", "find_project", tr("Buscar projeto"), show=False, priority=True),
+        Binding("ctrl+pagedown", "next_tab", tr("Próxima aba"), show=False, priority=True),
+        Binding("ctrl+pageup", "prev_tab", tr("Aba anterior"), show=False, priority=True),
+        Binding("f5", "run_file", tr("Executar"), priority=True),
+        Binding("f6", "audit_file", tr("Auditar"), show=False, priority=True),
+        Binding("ctrl+shift+h", "edit_history", tr("Histórico de edições"), show=False, priority=True),
+        Binding("ctrl+shift+g", "project_edit", tr("Editar projeto"), show=False, priority=True),
+        Binding("f8", "advise", tr("Consultor"), priority=True),
+        Binding("ctrl+n", "new_file", tr("Novo"), show=False, priority=True),
+        Binding("ctrl+w", "close_tab", tr("Fechar aba"), show=False, priority=True),
+        Binding("ctrl+b", "toggle_left", tr("Mostrar explorer"), show=False, priority=True),
+        Binding("f9", "toggle_panel", tr("Painel"), show=False, priority=True),
+        Binding("f12", "shell", tr("Seu shell"), show=False, priority=True),
+        Binding("f4", "celular", tr("Celular"), priority=True),
+        Binding("f7", "estudo", tr("Estudo"), priority=True),
+        Binding("shift+f7", "estudo_aplicar", tr("Aplicar sugestão do estudo"), show=False, priority=True),
+        Binding('ctrl+shift+f7', 'estudo_catalogo', tr('Catálogo de estudo'), show=False, priority=True),
+        Binding('ctrl+shift+l', 'libraries', tr('Bibliotecas'), show=False, priority=True),
+        Binding('f2', 'cancel_generation', tr('Cancelar geração'), show=False, priority=True),
+        Binding('f10', 'complete_symbol', tr('Completar símbolo'), show=False, priority=True),
+        Binding("ctrl+q", "quit", tr("Sair"), priority=True),
+        Binding("f1", "help", tr("Ajuda"), priority=True),
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -199,6 +204,9 @@ class Studio(App):
         self.intents: list[str] = []
         self.online = False
         self.streaming = False
+        self._translation_serial = 0
+        self._generation_cancel = None
+        self.perspective = estado.ler().get('perspective', 'development')
         self.rede_srv = None  # prévia na rede ou repasse de servidor (F4: ver no celular)
         self.estudo = False  # modo estudo (F7): o painel ESTUDO acompanha o cursor
         self._estudo_timer = None
@@ -224,26 +232,28 @@ class Studio(App):
                             yield Botao(acao=acao, id=f"pill-{pid}")
                     yield Static(id="lang-pill")
                 with Horizontal(id='tools-bar'):
-                    yield Botao('⌕ BUSCAR', acao='find_project', id='search-button')
-                    yield Botao('SDKs', acao='runtimes', id='runtimes-button')
-                    yield Botao('AUTO OFF', acao='toggle_autosave', id='autosave-button')
+                    yield Botao(tr('⌕ BUSCAR'), acao='find_project', id='search-button')
+                    yield Botao(tr('SDKs'), acao='runtimes', id='runtimes-button')
+                    yield Botao(tr('BIBLIOTECAS'), acao='libraries', id='libraries-button')
+                    yield Botao(tr('AUTO OFF'), acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
                 with TabbedContent(id="panel", initial="tab-problems"):
-                    with TabPane("PROBLEMAS", id="tab-problems"):
+                    with TabPane(tr("PROBLEMAS"), id="tab-problems"):
                         yield DataTable(id="problems", cursor_type="row")
-                    with TabPane("TERMINAL", id="tab-terminal"):
+                    with TabPane(tr("TERMINAL"), id="tab-terminal"):
                         self._terminal = TerminalPainel(self.root, id="terminal")
                         yield self._terminal
-                    with TabPane("SAÍDA", id="tab-output"):
+                    with TabPane(tr("SAÍDA"), id="tab-output"):
                         yield RichLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
-                    with TabPane("CONSULTOR", id="tab-advisor"):
+                    with TabPane(tr("CONSULTOR"), id="tab-advisor"):
                         yield ListView(id="advice-list")
-                    with TabPane("ESTUDO", id="tab-estudo"):
+                    with TabPane(tr("ESTUDO"), id="tab-estudo"):
                         with Horizontal(id='study-tools'):
-                            yield Botao('Catálogo', acao='estudo_catalogo')
-                            yield Botao('Marcar praticado', acao='estudo_praticado')
-                            yield Botao('Fontes', acao='estudo_fontes')
+                            yield Botao(tr('Catálogo'), acao='estudo_catalogo')
+                            yield Botao(tr('Exercícios'), acao='estudo_exercicios')
+                            yield Botao(tr('Marcar praticado'), acao='estudo_praticado')
+                            yield Botao(tr('Fontes'), acao='estudo_fontes')
                         with VerticalScroll(id="estudo"):
                             yield Static(self.estudo_vazio(), id="estudo-corpo")
                             yield Botao(acao="estudo_aplicar", id="estudo-acao")
@@ -254,8 +264,8 @@ class Studio(App):
                 yield Static(id="telemetry")
                 yield ListView(id="history")
         with Horizontal(id="intent-bar"):
-            yield Static("❯ INTENÇÃO", id="intent-label")
-            yield Input(placeholder="descreva o código (Enter gera e insere · → completa · F1 ajuda)", id="intent",
+            yield Static(tr("❯ INTENÇÃO"), id="intent-label")
+            yield Input(placeholder=tr("descreva o código (Enter gera e insere · → completa · F1 ajuda)"), id="intent",
                         suggester=IntentSuggester(self))
         yield Static(id="status")
         yield Footer()
@@ -296,6 +306,38 @@ class Studio(App):
         self.render_status()
         self.sync_welcome()
         self.query_one("#intent", Input).focus()
+        self.apply_perspective(self.perspective, save=False)
+        localize_widgets(self)
+
+    def resize_workspace(self, width):
+        from textual.css.query import NoMatches
+
+        try:
+            self.query_one('#left').display = self.perspective != 'essential' and width >= 84
+            self.query_one('#right').display = self.perspective == 'development' and width >= 118
+        except NoMatches:
+            pass
+
+    def apply_perspective(self, perspective, save=True):
+        self.perspective = perspective if perspective in ('essential', 'development', 'learning') else 'development'
+        self.resize_workspace(self.size.width)
+        panel = self.query_one('#panel', TabbedContent)
+        panel.display = self.perspective != 'essential'
+        if self.perspective == 'learning':
+            self.estudo = True
+            panel.active = 'tab-estudo'
+            self.atualizar_estudo()
+        self.render_pills()
+        if save:
+            estado.salvar(perspective=self.perspective)
+
+    def action_perspective(self):
+        def chosen(value):
+            if value:
+                self.apply_perspective(value)
+        self.push_screen(ChoiceScreen(tr('PERSPECTIVA DO STUDIO'),
+                                     [('essential', tr('Essencial')), ('development', tr('Desenvolvimento')),
+                                      ('learning', tr('Aprendizagem'))]), chosen)
 
     # ------------------------------------------------------------------ tema
     def get_css_variables(self) -> dict[str, str]:
@@ -329,14 +371,7 @@ class Studio(App):
                 f"S2 SLM[/]\n[{C['dim']}]OFFLINE · TETO[/] [{C['red']}]{_budget_gb()} GB[/] [{C['dim']}]· v{__version__}[/]")
 
     def on_resize(self, event) -> None:
-        from textual.css.query import NoMatches
-
-        try:  # o primeiro resize chega antes de o layout estar montado
-            w = event.size.width
-            self.query_one("#right").display = w >= 118
-            self.query_one("#left").display = w >= 84
-        except NoMatches:
-            pass
+        self.resize_workspace(event.size.width)
 
     # ------------------------------------------------------------------ HUD
     def feed(self, text: str, color: str = "green") -> None:
@@ -539,7 +574,48 @@ class Studio(App):
         tabs.active = pane.id or ""
         ed.focus()
         self.render_pills()
+        if ed.lang_id:
+            self.symbols_worker(ed.id, ed.path, ed.text, ed.lang_id)
         return ed
+
+    @work(thread=True, group='completion-index', exclusive=True, exit_on_error=False)
+    def symbols_worker(self, editor_id, path, text, lang):
+        from codar.studio.symbols import index
+
+        try:
+            entries = index(self.root, path, text, lang)
+        except (OSError, ValueError):
+            return
+        def apply():
+            editors = list(self.query(f'#{editor_id}'))
+            if editors and editors[0].text == text:
+                editors[0].symbol_completions = entries
+                editors[0].update_suggestion()
+        self.call_from_thread(apply)
+
+    def action_complete_symbol(self):
+        ed = self.current_editor()
+        if not ed or len(self.screen_stack) > 1:
+            return
+        row, col = ed.cursor_location
+        match = re.search(r'[A-Za-z_$][\w$]*$', ed.document.get_line(row)[:col])
+        prefix = match[0] if match else ''
+        choices = [item for item in ed.symbol_completions if item.name.startswith(prefix)]
+        if not choices:
+            self.notify(tr('Nenhum símbolo indexado para este prefixo. Reabra ou salve o arquivo para atualizar.'))
+            return
+        original, cursor = ed.text, ed.cursor_location
+        def chosen(identity):
+            if identity is None:
+                return
+            if ed.text != original or ed.cursor_location != cursor:
+                self.notify(tr('O editor mudou durante a escolha; nenhum texto foi alterado.'), severity='warning')
+                return
+            item = choices[int(identity)]
+            ed.replace(item.name, (row, col-len(prefix)), (row, col))
+            ed.focus()
+        self.push_screen(ChoiceScreen(tr('COMPLETAR · assinatura e origem'),
+                                     [(str(i), item.signature + ' · ' + item.source) for i, item in enumerate(choices)], searchable=True), chosen)
 
     @on(DirectoryTree.FileSelected)
     async def _file_selected(self, event: DirectoryTree.FileSelected) -> None:
@@ -614,6 +690,45 @@ class Studio(App):
             panel.active = "tab-terminal"
         self.render_pills()
 
+    def action_ui_language(self):
+        from codar import config
+        from codar.i18n import LOCALES
+
+        def choose(locale):
+            if locale:
+                config.set_value('ui.locale', locale)
+                localize_widgets(self)
+                self.notify(tr('Idioma salvo. Reabra o Studio para aplicar em todos os controles.'))
+        self.push_screen(ChoiceScreen(tr('IDIOMA DA INTERFACE · independente da linguagem do código'), list(LOCALES.items())), choose)
+
+    def action_estudo_exercicios(self):
+        from codar.estudo.exercicios import EXERCISES
+
+        def choose(identity):
+            if identity:
+                editor = self.current_editor()
+                if editor and editor.dirty:
+                    self.notify(tr('Salve sua solução com Ctrl+S antes de executar o exercício.'), severity='warning')
+                    return
+                def run(file):
+                    if file:
+                        command = [sys.executable, '-m', 'codar', 'study', 'check', identity,
+                                   '--root', str(self.root), '--file', file]
+                        self.run_command(subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command))
+                self.push_screen(PromptScreen(tr('ARQUIVO DA SOLUÇÃO · Enter executa os testes'),
+                                              editor.path if editor and editor.path else ''), run)
+        self.push_screen(ChoiceScreen(tr('EXERCÍCIOS · verificação por entradas e saídas'),
+                                     [(key, item.title + ' · ' + item.task) for key, item in EXERCISES.items()]), choose)
+
+    def action_libraries(self):
+        from codar.studio.libraries import LibrariesScreen
+
+        def chosen(action):
+            if action:
+                join = subprocess.list2cmdline if os.name == 'nt' else shlex.join
+                self.run_command(' && '.join(join(argv) for argv in action['commands']), cwd=self.root)
+        self.push_screen(LibrariesScreen(self.root, self.current_lang() or 'python'), chosen)
+
     def action_estudo_catalogo(self):
         from codar import estudo
         from codar.estudo.progresso import ler
@@ -638,11 +753,11 @@ class Studio(App):
 
         ed, concept = self.current_editor(), self._estudo_conceito
         if not ed or not concept:
-            self.notify('Abra um arquivo e escolha um conceito no Catálogo.')
+            self.notify(tr('Abra um arquivo e escolha um conceito no Catálogo.'))
             return
         try:
             marcar(self.root, ed.lang_id, concept.id)
-            self.notify('Prática registrada para este projeto e linguagem; o registro é manual.')
+            self.notify(tr('Prática registrada para este projeto e linguagem; o registro é manual.'))
         except (OSError, ValueError, TypeError) as exc:
             self.notify(str(exc), severity='error')
 
@@ -653,7 +768,7 @@ class Studio(App):
         ed, concept = self.current_editor(), self._estudo_conceito
         if concept and ed:
             choices = [(url, url) for url in estudo.fontes(concept, ed.lang_id)]
-            self.push_screen(ChoiceScreen('DOCUMENTAÇÃO OFICIAL', choices), lambda url: webbrowser.open(url) if url else None)
+            self.push_screen(ChoiceScreen(tr('DOCUMENTAÇÃO OFICIAL'), choices), lambda url: webbrowser.open(url) if url else None)
 
     def agendar_estudo(self) -> None:
         if not self.estudo:
@@ -757,7 +872,7 @@ class Studio(App):
         """Shift+F7: cria o arquivo que o modo estudo sugeriu (main.py comentado) e abre para você completar."""
         s = self.sugestao_estudo
         if s is None:
-            self.notify("nenhuma sugestão agora: com o modo estudo (F7) ligado, abra um arquivo com uma classe",
+            self.notify(tr("nenhuma sugestão agora: com o modo estudo (F7) ligado, abra um arquivo com uma classe"),
                         severity="warning")
             return
         destino = (self.root / s.caminho).resolve()
@@ -812,9 +927,23 @@ class Studio(App):
         self.feed(f"TX · {intent[:70]}", "text")
         out = self.query_one("#output", RichLog)
         out.write(f"[{C['red']}]▸ INTENÇÃO[/] [{C['text']}]{_esc(intent)}[/]")
+        if self._generation_cancel is not None:
+            self._generation_cancel.set()
+        self._translation_serial += 1
+        serial = self._translation_serial
+        cancel = self._generation_cancel = threading.Event()
         self.streaming = False
         self.translate_worker(intent, self.current_lang(), mode, ed.path if ed else None, before, indent, unit,
-                              target, ed.id if ed else None)
+                              target, ed.id if ed else None, request_id=serial, cancel=cancel)
+
+    def action_cancel_generation(self):
+        if self._generation_cancel is not None:
+            self._generation_cancel.set()
+            self._translation_serial += 1
+            self._generation_cancel = None
+            self.streaming = False
+            self.feed('CANCELADO · geração interrompida; editor preservado', 'orange')
+            self.notify(tr('Geração cancelada. Seu código foi preservado.'))
 
     def max_linhas_bloco(self) -> int:
         from codar import config
@@ -822,11 +951,20 @@ class Studio(App):
         return int(config.load()["router"].get("max_block_lines", 30))
 
     @work(thread=True, group="translate")
-    def translate_worker(self, intent, lang, mode, path, before, indent, unit, target, editor_id) -> None:
+    def translate_worker(self, intent, lang, mode, path, before, indent, unit, target, editor_id,
+                         *, request_id=None, cancel=None) -> None:
         from codar.client import RpcError
 
+        cancel = cancel or threading.Event()
+        request_id = self._translation_serial if request_id is None else request_id
+
         def on_delta(d: str) -> None:
-            self.call_from_thread(self._delta, d)
+            if cancel.is_set():
+                return
+            def show_delta():
+                if request_id == self._translation_serial and not cancel.is_set():
+                    self._delta(d)
+            self.call_from_thread(show_delta)
 
         try:
             res = self.backend.translate(intent, lang, file=path, before=before,
@@ -835,14 +973,28 @@ class Studio(App):
                                          project_root=str(self.root),
                                          indent=indent if mode in ("line", "block", "edit") else "",
                                          indent_unit=unit, stages=tuple(sorted(self.stages)), hints=self.hints,
-                                         on_delta=on_delta)
+                                         on_delta=on_delta, cancel=cancel)
         except RpcError as exc:
-            self.call_from_thread(self._failed, intent, exc.message, (exc.data or {}).get("candidates") or [])
+            if not cancel.is_set():
+                self.call_from_thread(self._translation_failed, request_id, intent, exc.message,
+                                      (exc.data or {}).get('candidates') or [])
             return
         except Exception as exc:
-            self.call_from_thread(self._failed, intent, f"{type(exc).__name__}: {exc}", [])
+            if not cancel.is_set():
+                self.call_from_thread(self._translation_failed, request_id, intent, f'{type(exc).__name__}: {exc}', [])
             return
-        self.call_from_thread(self._apply, res, target, editor_id, indent)
+        if cancel.is_set():
+            return
+        def finish():
+            if request_id == self._translation_serial and not cancel.is_set():
+                self._generation_cancel = None
+                self._apply(res, target, editor_id, indent)
+        self.call_from_thread(finish)
+
+    def _translation_failed(self, request_id, intent, message, candidates):
+        if request_id == self._translation_serial:
+            self._generation_cancel = None
+            self._failed(intent, message, candidates)
 
     def _delta(self, d: str) -> None:
         out = self.query_one("#output", RichLog)
@@ -870,21 +1022,25 @@ class Studio(App):
         hist.insert(0, [ListItem(Static(f"[{STAGE_COLORS.get(res['stage'], C['orange'])}]●[/] "
                                         f"[{C['text']}]{_esc(res['source'][:30])}[/]"))])
         self.query_one("#output", RichLog).write(Text(res["code"], style=C["moon"]))
+        if res.get('action') in ('query', 'install', 'execute', 'study'):
+            self.query_one('#panel', TabbedContent).display = True
+            self.query_one('#panel', TabbedContent).active = 'tab-output'
+            return
         if not res.get("complete", True):
-            self.notify("resposta incompleta: seu código foi preservado. Selecione um trecho menor ou aumente "
-                        "model.max_tokens", severity="warning", timeout=8)
+            self.notify(tr("resposta incompleta: seu código foi preservado. Selecione um trecho menor ou aumente "
+                        "model.max_tokens"), severity="warning", timeout=8)
             return
         body = (res.get("annotated_body") if self.hints else None) or res["body"]
         matches = list(self.query(f"#{editor_id}")) if editor_id else []
         if editor_id and not matches:
-            self.notify("a aba foi fechada; resultado disponível em SAÍDA", severity="warning")
+            self.notify(tr("a aba foi fechada; resultado disponível em SAÍDA"), severity="warning")
             return
         ed = matches[0] if matches else None
         if ed is None:
             self.call_later(self._new_buffer_with, res)
             return
         if target is None or ed.text != target.text:
-            self.notify("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA", severity="warning")
+            self.notify(tr("o texto mudou enquanto a IA respondia; resultado mostrado em SAÍDA"), severity="warning")
             return
         text, start_row, end_row = target.apply(body, res.get("imports", []), res["lang"], indent)
         if target.mode == "edit" and self.preview_edits:
@@ -926,7 +1082,7 @@ class Studio(App):
         def apply():
             matches = list(self.query(f"#{editor_id}"))
             if not matches or matches[0].text != target.text:
-                self.notify("o arquivo mudou durante a revisão; código preservado", severity="warning")
+                self.notify(tr("o arquivo mudou durante a revisão; código preservado"), severity="warning")
                 return
             self._commit_edit(res, target, matches[0], text, start_row, end_row)
         self.call_from_thread(apply)
@@ -972,7 +1128,7 @@ class Studio(App):
 
         ed = self.current_editor()
         if not ed or not ed.path:
-            self.notify("abra um arquivo salvo para consultar suas versões")
+            self.notify(tr("abra um arquivo salvo para consultar suas versões"))
             return
         try:
             name = Path(ed.path).resolve().relative_to(self.root).as_posix()
@@ -982,7 +1138,7 @@ class Studio(App):
             self.notify(str(exc), severity="error")
             return
         if not entries:
-            self.notify("esse arquivo ainda não tem edições no histórico")
+            self.notify(tr("esse arquivo ainda não tem edições no histórico"))
             return
         target = EditTarget.capture(ed.text, "edit", ed.cursor_location, ((0, 0), (0, 0)))
         editor_id = ed.id
@@ -995,7 +1151,7 @@ class Studio(App):
             res = {"code": text, "body": text, "imports": [], "lang": (langs.from_path(ed.path) or langs.LANGS["python"]).id,
                    "stage": "history", "source": "histórico", "findings": [], "timings": {}, "notes": []}
             self._apply(res, target, editor_id, "")
-        self.push_screen(ChoiceScreen("HISTÓRICO · revisar restauração do original desta edição",
+        self.push_screen(ChoiceScreen(tr("HISTÓRICO · revisar restauração do original desta edição"),
                          [(r["id"], f"{datetime.fromtimestamp(r['created']):%d/%m %H:%M} · {r['status']} · {r['intent'][:70]}")
                           for r in entries]), restore)
 
@@ -1013,16 +1169,16 @@ class Studio(App):
                 return
             names = [name.strip() for name in value.split(",") if name.strip()]
             if not 1 <= len(names) <= 8:
-                self.notify("escolha de 1 a 8 arquivos", severity="warning")
+                self.notify(tr("escolha de 1 a 8 arquivos"), severity="warning")
                 return
             def intent_entered(intent):
                 if intent:
                     self.project_edit_worker(names, intent)
-            self.push_screen(PromptScreen("O que mudar nesses arquivos?"), intent_entered)
+            self.push_screen(PromptScreen(tr("O que mudar nesses arquivos?")), intent_entered)
         ed = self.current_editor()
         initial = Path(ed.path).resolve().relative_to(self.root).as_posix() \
             if ed and ed.path and Path(ed.path).resolve().is_relative_to(self.root) else ""
-        self.push_screen(PromptScreen("Arquivos relativos ao projeto, separados por vírgula", value=initial), files_entered)
+        self.push_screen(PromptScreen(tr("Arquivos relativos ao projeto, separados por vírgula"), value=initial), files_entered)
 
     @work(thread=True, group="project-edit", exclusive=True)
     def project_edit_worker(self, names, intent):
@@ -1070,14 +1226,14 @@ class Studio(App):
                         ed.saved_text = text
                         self._update_tab_label(ed)
             self.feed("PROJETO · alterações aplicadas e originais guardados", "green")
-            self.notify("edição de projeto aplicada; codar edits permite recuperar os originais")
+            self.notify(tr("edição de projeto aplicada; codar edits permite recuperar os originais"))
         self.call_from_thread(refresh)
 
     def action_check_project(self):
         def chosen(action):
             if action:
                 self.check_project_worker([] if action == "syntax" else [action])
-        self.push_screen(ChoiceScreen("VERIFICAR PROJETO · arquivos salvos",
+        self.push_screen(ChoiceScreen(tr("VERIFICAR PROJETO · arquivos salvos"),
                          [("syntax", "Verificar sintaxe"), ("analyze", "Executar analisador"), ("test", "Executar testes")]), chosen)
 
     @work(thread=True, group="project-check", exclusive=True)
@@ -1109,7 +1265,7 @@ class Studio(App):
                     for p in plugins]
         def selected(name):
             if name == "__install__":
-                self.push_screen(PromptScreen("Pasta do plugin ou URL Git HTTPS"),
+                self.push_screen(PromptScreen(tr("Pasta do plugin ou URL Git HTTPS")),
                                  lambda source: self._plugin_command("install", source) if source else None)
             elif name:
                 plugin = next(p for p in plugins if p.name == name)
@@ -1119,7 +1275,7 @@ class Studio(App):
                     options += [("update", "Atualizar da origem registrada"), ("restore", "Recuperar versão anterior"),
                                 ("remove", "Remover e guardar cópia")]
                 self.push_screen(ChoiceScreen(name, options), lambda action: self._plugin_command(action, name) if action else None)
-        self.push_screen(ChoiceScreen("PLUGINS", choices), selected)
+        self.push_screen(ChoiceScreen(tr("PLUGINS"), choices), selected)
 
     def action_runtimes(self):
         if len(self.screen_stack) == 1:
@@ -1144,12 +1300,12 @@ class Studio(App):
 
             def select(key):
                 if key == '__install__':
-                    self.push_screen(PromptScreen('Versão Python para instalar (ex.: 3.13)', '3.13'),
+                    self.push_screen(PromptScreen(tr('Versão Python para instalar (ex.: 3.13)'), '3.13'),
                                      lambda value: self._runtime_command('install', value) if value else None)
                 elif key == '__venv__':
-                    self.push_screen(ChoiceScreen('PYTHON BASE DO NOVO VENV',
+                    self.push_screen(ChoiceScreen(tr('PYTHON BASE DO NOVO VENV'),
                                                   [(entry['key'], entry['version']) for entry in entries]),
-                                     lambda value: self.push_screen(PromptScreen('Pasta nova do ambiente', '.venv'),
+                                     lambda value: self.push_screen(PromptScreen(tr('Pasta nova do ambiente'), '.venv'),
                                          lambda folder: self._runtime_command('venv', value, folder) if folder else None)
                                      if value else None)
                 elif key:
@@ -1160,7 +1316,7 @@ class Studio(App):
                             self.verificar_pacotes(ed)
                     except (OSError, ValueError) as exc:
                         self.notify(str(exc), severity='error')
-            self.push_screen(ChoiceScreen('VERSÕES PYTHON · ESTE PROJETO', options), select)
+            self.push_screen(ChoiceScreen(tr('VERSÕES PYTHON · ESTE PROJETO'), options), select)
         if self.is_running:
             self.call_from_thread(show)
 
@@ -1225,6 +1381,12 @@ class Studio(App):
     async def submit_intent(self, text: str, resolved: list[str] | None = None) -> None:
         if not text.strip():
             return
+        from codar.engine.actions import INFORMATIONAL, classify
+
+        if classify(text, self.current_lang()) in INFORMATIONAL:
+            self.query_one('#intent', Input).value = ''
+            self.request(text, 'insert', self.current_editor())
+            return
         pedido = comandos.interpretar(text)
         if pedido is not None:  # "crie o arquivo main.py", "crie a pasta src", "abra conta.py"
             await self.executar_pedido(pedido)
@@ -1255,10 +1417,10 @@ class Studio(App):
                 async def choose_context(name):
                     if name:
                         await self.submit_intent(text, [name])
-                self.push_screen(ChoiceScreen("ARQUIVO PARA O PEDIDO", [(c, c) for c in choices[:200]]), choose_context)
+                self.push_screen(ChoiceScreen(tr("ARQUIVO PARA O PEDIDO"), [(c, c) for c in choices[:200]]), choose_context)
                 return
             else:
-                self.notify("não achei código nesta pasta; abra o projeto correto ou use Ctrl+O", severity="warning")
+                self.notify(tr("não achei código nesta pasta; abra o projeto correto ou use Ctrl+O"), severity="warning")
                 return
         if len(names) > 1:
             self.query_one("#intent", Input).value = ""
@@ -1314,7 +1476,7 @@ class Studio(App):
             return
         ed = self.current_editor()
         if ed is None:
-            self.notify("abra um arquivo (ou use a barra de intenção)", severity="warning")
+            self.notify(tr("abra um arquivo (ou use a barra de intenção)"), severity="warning")
             return
         if ed.selection.start != ed.selection.end:
             self.traduzir_bloco(ed)
@@ -1432,7 +1594,7 @@ class Studio(App):
             try:
                 name = Path(editor.path).resolve().relative_to(self.root).as_posix() if editor.path else 'sem-titulo.py'
             except ValueError:
-                self.notify('O arquivo aberto está fora do projeto; abra sua pasta para buscar.', severity='warning')
+                self.notify(tr('O arquivo aberto está fora do projeto; abra sua pasta para buscar.'), severity='warning')
                 return
         async def chosen(hit):
             if not hit:
@@ -1530,7 +1692,7 @@ class Studio(App):
         if not ed.path:
             lang = langs.try_resolve(self.current_lang())
             ext = lang.exts[0] if lang and lang.exts else ".txt"
-            self.push_screen(PromptScreen("salvar como (relativo ao projeto)", f"novo{ext}"), self._save_as)
+            self.push_screen(PromptScreen(tr("salvar como (relativo ao projeto)"), f"novo{ext}"), self._save_as)
             return
         self._write(ed)
 
@@ -1563,11 +1725,13 @@ class Studio(App):
             self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
         if not automatic:
             self.verificar_pacotes(ed)
+            if ed.lang_id:
+                self.symbols_worker(ed.id, ed.path, ed.text, ed.lang_id)
         if self.audit_on and not automatic:
             self.action_audit_file()
 
     def action_new_file(self) -> None:
-        self.push_screen(PromptScreen("novo arquivo (relativo ao projeto)", "ex.: src/main.py"), self._new_file)
+        self.push_screen(PromptScreen(tr("novo arquivo (relativo ao projeto)"), "ex.: src/main.py"), self._new_file)
 
     async def _new_file(self, name: str | None) -> None:
         if name:
@@ -1583,7 +1747,7 @@ class Studio(App):
         if tabs.active:
             ed = self.current_editor()
             if ed and ed.dirty:
-                self.notify("arquivo com alterações não salvas (Ctrl+S); feche de novo para descartar", severity="warning")
+                self.notify(tr("arquivo com alterações não salvas (Ctrl+S); feche de novo para descartar"), severity="warning")
                 ed.saved_text = ed.text
                 return
             await tabs.remove_pane(tabs.active)
@@ -1621,7 +1785,7 @@ class Studio(App):
     async def action_run_file(self) -> None:
         ed = self.current_editor()
         if ed is None or not ed.path:
-            self.notify("salve o arquivo antes de executar (Ctrl+S)", severity="warning")
+            self.notify(tr("salve o arquivo antes de executar (Ctrl+S)"), severity="warning")
             return
         if ed.dirty:
             self._write(ed)
@@ -1717,7 +1881,7 @@ class Studio(App):
 
     async def action_close_terminal(self) -> None:
         if self.terminal.sessao.rodando():
-            self.notify("interrompa o processo com Ctrl+C antes de fechar o terminal", severity="warning")
+            self.notify(tr("interrompa o processo com Ctrl+C antes de fechar o terminal"), severity="warning")
             return
         await self.terminal.fechar_sessao(self.terminal.sessao)
 
@@ -1833,7 +1997,7 @@ class Studio(App):
     def _celular_fechado(self, acao: str | None) -> None:
         if acao == "parar":
             self._parar_rede()
-            self.notify("servidor da rede parado", title="celular")
+            self.notify(tr("servidor da rede parado"), title="celular")
 
     def _parar_rede(self) -> None:
         if self.rede_srv is not None:
@@ -1958,7 +2122,7 @@ class Studio(App):
         ed = self.current_editor()
         code = shutil.which("code") or shutil.which("codium")
         if not code:
-            self.notify("CLI `code` não encontrada no PATH", severity="error")
+            self.notify(tr("CLI `code` não encontrada no PATH"), severity="error")
             return
         target = f"{ed.path}:{ed.cursor_location[0] + 1}:{ed.cursor_location[1] + 1}" if ed and ed.path else str(self.root)
         flag = "-r" if os.environ.get("TERM_PROGRAM") == "vscode" else "-n"
@@ -1967,7 +2131,7 @@ class Studio(App):
         self.feed("VSCODE · alternando para o editor gráfico", "cyan")
 
     def action_set_lang(self) -> None:
-        self.push_screen(PromptScreen("linguagem (py, js, ts, go, rs, java, cs, c, cpp, sh, ps1, lua, rb, php)",
+        self.push_screen(PromptScreen(tr("linguagem (py, js, ts, go, rs, java, cs, c, cpp, sh, ps1, lua, rb, php)"),
                                       value=self.current_lang()), self._set_lang)
 
     def _set_lang(self, value: str | None) -> None:
@@ -1978,9 +2142,9 @@ class Studio(App):
 
     def action_save_pattern(self) -> None:
         if not self.last:
-            self.notify("gere algo antes de salvar como padrão", severity="warning")
+            self.notify(tr("gere algo antes de salvar como padrão"), severity="warning")
             return
-        self.push_screen(PromptScreen("id do novo padrão (ex.: meu.cliente_api)"), self._save_pattern)
+        self.push_screen(PromptScreen(tr("id do novo padrão (ex.: meu.cliente_api)")), self._save_pattern)
 
     def _save_pattern(self, pid: str | None) -> None:
         if pid and self.last:
@@ -2013,7 +2177,16 @@ class Studio(App):
             self.call_from_thread(self.notify, str(exc), severity="error")
 
     def palette(self) -> list[tuple[str, str, object]]:
+        return [(tr(title), tr(description), callback) for title, description, callback in self._palette_base()]
+
+    def _palette_base(self) -> list[tuple[str, str, object]]:
         return [
+            ('Codar: Perspectiva do Studio', 'Essencial · Desenvolvimento · Aprendizagem', self.action_perspective),
+            ('Codar: Completar símbolo', 'F10 — funções do projeto e APIs locais', self.action_complete_symbol),
+            ('Codar: Idioma da interface', 'pt-BR · English · Español · Português (Portugal)', self.action_ui_language),
+            ('Codar: Cancelar geração', 'F2 — interrompe o pedido e preserva seu código', self.action_cancel_generation),
+            ('Codar: Exercícios verificáveis', 'testes de comportamento na sua linguagem', self.action_estudo_exercicios),
+            ('Codar: Bibliotecas do projeto', 'Ctrl+Shift+L — instaladas, APIs, trilhas e instalação', self.action_libraries),
             ('Codar: Alternar salvamento automático', 'AUTO ON/OFF — salva após uma pausa na digitação', self.action_toggle_autosave),
             ('Codar: Escolher versão Python do projeto', 'múltiplas instalações e ambientes separados', self.action_runtimes),
             ('Codar: Catálogo de estudo', 'Ctrl+Shift+F7 — tópicos e exemplos na linguagem do arquivo', self.action_estudo_catalogo),
@@ -2049,6 +2222,8 @@ class Studio(App):
         ]
 
     def on_unmount(self) -> None:
+        if self._generation_cancel is not None:
+            self._generation_cancel.set()
         self._parar_rede()
         self.terminal.parar_tudo()
         self.backend.close()

@@ -74,6 +74,10 @@ function! s:apply(buf, first, last, original, tick, mode, out, code, err) abort
   catch
     return s:echo('resposta inválida do CLI: ' . a:out[:120], 'ErrorMsg')
   endtry
+  if index(['query', 'install', 'execute', 'study'], get(l:res, 'action', '')) >= 0
+    echomsg l:res.code
+    return
+  endif
   if bufnr('%') != a:buf
     return s:echo('o buffer mudou; o código ficou em :messages', 'WarningMsg') | echomsg l:res.code
   endif

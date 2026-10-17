@@ -224,7 +224,7 @@ def test_instalar_pillow_consulta_pil_sem_precisar_module(tmp_path, monkeypatch,
     def installed(root, commands):
         write(root, '.venv/lib/python3.13/site-packages/PIL/__init__.py', 'class Image:\n    pass\n')
     monkeypatch.setattr('codar.library_packages.install', installed)
-    assert main(['libraries', 'install', 'Pillow', '--root', str(tmp_path)]) == 0
+    assert main(['libraries', 'install', 'Pillow', '--root', str(tmp_path), '--yes']) == 0
     assert 'Referências locais atualizadas' in capsys.readouterr().out
     assert main(['libraries', 'list', '--root', str(tmp_path), '--json']) == 0
     assert json.loads(capsys.readouterr().out)[0]['name'] == 'PIL'

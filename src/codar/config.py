@@ -76,6 +76,9 @@ disabled = []                 # ids de regras desativadas, ex.: ["PERF010"]
 preview = true                # revisar edições no Studio antes de aplicar
 native_validation = true      # validar com SDKs instalados; nunca executa o código gerado
 
+[ui]
+locale = "pt-BR"             # idioma humano: pt-BR | en | es | pt-PT; não muda a linguagem do código
+
 [studio]
 autosave = false              # salva arquivos nomeados após uma pausa; botão AUTO no Studio
 autosave_delay_s = 1.5         # intervalo após a última alteração (0.3 a 60 segundos)
@@ -105,6 +108,7 @@ restore_clipboard = true
 DEFAULTS: dict[str, Any] = tomllib.loads(DEFAULT_TOML)
 
 _ENV = {
+    "CODAR_LOCALE": ("ui", "locale", str),
     "CODAR_BUDGET_MB": ("memory", "budget_mb", int),
     "CODAR_THREADS": ("model", "n_threads", int),
     "CODAR_BACKEND": ("model", "backend", str),

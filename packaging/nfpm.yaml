@@ -13,9 +13,10 @@ homepage: https://github.com/Kelvin-Marques-Cyber/ReAL-Codar
 license: Apache-2.0
 description: |-
   Tradução de pseudocódigo e intenções em código, 100% offline.
-  Você escreve a lógica linha por linha, em português ou inglês, e o codar escreve
-  o código em 14 linguagens. Um compilador de regras, um banco de padrões testados
-  e uma IA local (opcional) cabem em 3 GB de RAM. Inclui a IDE no terminal, plugins
+  Você escreve a lógica linha por linha e o codar gera código em 19 linguagens,
+  com estudo nos 24 tipos de arquivo reconhecidos. Inclui compilador de regras,
+  banco de padrões e IA local opcional com orçamento de memória configurável.
+  Oferece a IDE no terminal, plugins
   para Neovim e Vim, módulo PowerShell, extensão do VS Code, auditoria estática e
   consultor de projeto.
 

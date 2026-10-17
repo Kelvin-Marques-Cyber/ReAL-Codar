@@ -19,6 +19,19 @@ def cmd_libraries(args):
             raise ValueError('Projeto não encontrado: ' + args.root)
         catalog = LibraryCatalog(root)
         lang = langs.resolve(args.lang).id
+        if args.action == 'inventory':
+            from codar.library_inventory import inventory
+
+            rows = inventory(root, lang, args.query)
+            if args.json:
+                print(json.dumps([{**asdict(row), 'unresolved': row.unresolved, 'status': row.status} for row in rows],
+                                 ensure_ascii=False, indent=2))
+            else:
+                for row in rows:
+                    print(f'{row.name} ({row.lang}) · {row.version or row.requirement or "versão desconhecida"} · {row.status}')
+                if not rows:
+                    print('Nenhuma dependência encontrada para esta linguagem/filtro.')
+            return 0
         if args.action == 'list':
             references = catalog.list()
             if args.json:
@@ -29,6 +42,18 @@ def cmd_libraries(args):
             return 0
         if not args.name:
             raise ValueError('Informe o nome da biblioteca/módulo.')
+        if args.action == 'tutorial':
+            from codar.estudo.bibliotecas import track
+
+            value = track(root, args.name, lang, source=Path(args.source) if args.source else None)
+            if args.json:
+                print(json.dumps(asdict(value), ensure_ascii=False, indent=2))
+            else:
+                for lesson in value.lessons:
+                    print(f'\n{lesson.title}\n{lesson.text}\n\n{lesson.example}\n\nPratique: {lesson.practice}')
+                    if lesson.sources:
+                        print('Fontes: ' + ', '.join(lesson.sources))
+            return 0
         if args.action == 'install':
             from codar.library_packages import installation_plan, install
 
@@ -37,6 +62,14 @@ def cmd_libraries(args):
                 print(json.dumps({'root': str(root), 'commands': commands}, ensure_ascii=False, indent=2) if args.json
                       else '\n'.join(shlex.join(command) for command in commands))
                 return 0
+            print('Projeto: ' + str(root))
+            print('\n'.join(shlex.join(command) for command in commands))
+            if not args.yes:
+                if not sys.stdin.isatty():
+                    raise ValueError('Instalação não confirmada. Confira --dry-run e use --yes para autorizar.')
+                if input('Executar este plano? [s/N] ').strip().casefold() not in ('s', 'sim', 'y', 'yes'):
+                    print('Instalação cancelada; nenhum comando foi executado.')
+                    return 0
             install(root, commands)
             name = args.module or (python_module(args.name) if lang == 'python' else args.name)
             reference = catalog.learn(name, lang)

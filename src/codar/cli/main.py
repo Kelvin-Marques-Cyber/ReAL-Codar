@@ -117,6 +117,7 @@ def cmd_run(args) -> int:
             on_delta = delta if args.stream and hud.mode != "none" else None
             try:
                 res = client.translate(intent, args.lang, file=args.file, before=before, indent=args.indent or "", stages=_stages(args.stages),
+                                       locale=getattr(args, 'locale', None),
                                        selected=selected,
                                        audit=not args.no_audit, hints=args.hints, mode=args.mode, on_delta=on_delta,
                                        indent_unit=args.indent_unit,
@@ -133,7 +134,7 @@ def cmd_run(args) -> int:
             if k:
                 print()
             print_result(res, args, hud)
-            if not res.get("complete", True):
+            if not res.get("complete", True) and res.get('action') not in ('query', 'install', 'execute', 'study'):
                 print("codar: resposta incompleta; selecione um trecho menor ou aumente model.max_tokens", file=sys.stderr)
                 status = EXIT_UNRESOLVED
     return status
@@ -568,6 +569,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", metavar="comando")
 
     def common_engine(p):
+        p.add_argument('--locale', choices=['pt-BR', 'en', 'es', 'pt-PT'], help='idioma humano; --lang escolhe a linguagem do código')
         p.add_argument("-l", "--lang", help="linguagem alvo (py, js, ts, go, rs, java, cs, c, cpp, sh, ps1, dart, flutter…)")
         p.add_argument("--local", action="store_true", help="roda o motor no próprio processo, sem daemon")
         p.add_argument("--no-autostart", action="store_true", help="não sobe o daemon automaticamente")
@@ -718,21 +720,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=lambda a: __import__("codar.cli.toolchaincmd", fromlist=["x"]).cmd_toolchains(a))
 
     p = sub.add_parser('study', aliases=['estudar'], help='estudo offline: list | show ID, na linguagem escolhida')
-    p.add_argument('action', nargs='?', choices=['list', 'show'], default='list')
+    p.add_argument('action', nargs='?', choices=['list', 'show', 'exercises', 'exercise', 'check', 'progress', 'mark', 'export', 'import'], default='list')
     p.add_argument('name', nargs='?')
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--json', action='store_true')
+    p.add_argument('--root', default='.', help='projeto do progresso de aprendizagem')
+    p.add_argument('--file', help='arquivo JSON do progresso ou código para verificar um exercício')
     p.set_defaults(fn=lambda a: __import__('codar.cli.studycmd', fromlist=['x']).cmd_study(a))
 
     p = sub.add_parser('libraries', aliases=['bibliotecas'], help='bibliotecas: list | show | learn | install | verify | forget')
-    p.add_argument('action', choices=['list', 'show', 'learn', 'install', 'verify', 'forget'])
+    p.add_argument('action', choices=['list', 'inventory', 'show', 'learn', 'tutorial', 'install', 'verify', 'forget'])
     p.add_argument('name', nargs='?')
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--root', default='.', help='projeto ao qual pertence a referência')
     p.add_argument('--source', metavar='ARQUIVO', help='código, tipos ou documentação local da biblioteca')
     p.add_argument('--library-version', help='versão da documentação fornecida')
     p.add_argument('--module', help='nome usado no import quando difere do nome do pacote instalado')
+    p.add_argument('--query', default='', help='filtra o inventário por nome, linguagem ou estado')
     p.add_argument('--dry-run', action='store_true', help='mostra a instalação sem executar/baixar')
+    p.add_argument('-y', '--yes', action='store_true', help='confirma o plano de instalação no projeto')
     p.add_argument('--json', action='store_true')
     p.set_defaults(fn=lambda a: __import__('codar.cli.librarycmd', fromlist=['x']).cmd_libraries(a))
 

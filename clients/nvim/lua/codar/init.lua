@@ -214,6 +214,9 @@ local function translate(buf, first, last, intent, mode)
       return notify(msg, vim.log.levels.WARN)
     end
     M.last = { intent = intent, result = res, ft = ft }
+    if vim.tbl_contains({"query", "install", "execute", "study"}, res.action or "") then
+      return show_scratch(res.code, "text", "codar://consulta")
+    end
     if not vim.api.nvim_buf_is_valid(buf) then
       return
     end

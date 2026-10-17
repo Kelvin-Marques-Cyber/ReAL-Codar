@@ -61,7 +61,7 @@ where = ["src"]
 version = {attr = "codar.__version__"}
 
 [tool.setuptools.package-data]
-codar = ["plugins/**/*.toml", "plugins/**/*.md", "studio/*.tcss", "evals/*.toml"]
+codar = ["plugins/**/*.toml", "plugins/**/*.md", "studio/*.tcss", "evals/*.toml", "i18n/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

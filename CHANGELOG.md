@@ -4,6 +4,22 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.4.0] - 2026-10-16
+
+- Perspectivas Essencial, Desenvolvimento e Aprendizagem, com preferência persistente, editor utilizável em 80 colunas e altura limitada do painel.
+- Respostas informativas sinalizam que não são código completo, protegendo também clientes anteriores que recusam respostas incompletas. Hooks preservam o texto diante de geração incompleta.
+
+- Autocompletar inclui funções do projeto e assinaturas de APIs locais; F10 exibe assinatura/origem e aplica o nome com desfazer e proteção contra mudanças do editor. Índice limitado, atualizado ao abrir/salvar, sem executar dependências nem varrer o disco durante a digitação.
+- Base de internacionalização com recursos pt-BR, en, es e pt-PT, preferência `ui.locale`, seleção no Studio e `--locale` nos comandos do motor. Gramática ES conservadora compartilha a IR existente, preservando identificadores, strings e indentação. Rótulos principais/bibliotecas/trilhas traduzidos; mensagens legadas e conteúdo não traduzido mantêm fallback documentado.
+- Perguntas, consultas, estudo e planos de instalação são respostas informativas. Studio, VS Code, Vim, Neovim e hooks preservam o código/seleção, em vez de substituir texto por explicações.
+- F2 cancela gerações no Studio; SDK local e JSON-RPC propagam cancelamento. Respostas e tokens de pedidos cancelados/substituídos não são aplicados.
+- Exercícios de dobro, soma e ordenação verificam comportamento por entradas/saídas em runtimes instalados, com snapshot, hash, limites de tempo/saída e término dos processos. CLI `study exercises`, `exercise ID` e `check ID --file`; acesso pelo painel Estudo e paleta. Nenhuma solução é sobrescrita.
+- Studio oferece botão BIBLIOTECAS e Ctrl+Shift+L: busca por linguagem/estado, APIs e fontes reais, documentação manual e plano de instalação confirmado no terminal do projeto.
+- Trilhas de bibliotecas têm seis etapas, dicas progressivas e progresso por linguagem/projeto. CLI `libraries tutorial NOME --json`; fontes ausentes são informadas sem inventar métodos. Consulta e estudo preservam o editor.
+- Inventário offline une dependências declaradas, instaladas, importadas e documentadas, com estados separados e indicação de não resolvidas. Adaptadores para Python, Node/TypeScript, Dart, Rust, Go e .NET; CLI `libraries inventory --query TEXTO --json`.
+- Instalação de bibliotecas mostra o plano e exige confirmação; scripts usam `--yes` após a prévia.
+- Progresso do Estudo usa bloqueio entre processos e gravação atômica. CLI oferece `mark`, `progress`, `export` e `import`, com mesclagem por projeto/linguagem e validação de arquivos; um arquivo de progresso corrompido é preservado.
+
 ## [0.3.2] - 2026-10-10
 
 - Pedidos como `importar bibliotecas numpy e pandas` usam um fluxo limitado às importações. A finalidade da biblioteca não vira uma implementação; padrões, compositor e RAG não participam desse fluxo.
