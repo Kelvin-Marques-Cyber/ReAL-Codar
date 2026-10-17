@@ -4,6 +4,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+- Inventário offline une dependências declaradas, instaladas, importadas e documentadas, com estados separados e indicação de não resolvidas. Adaptadores para Python, Node/TypeScript, Dart, Rust, Go e .NET; CLI `libraries inventory --query TEXTO --json`.
 - Instalação de bibliotecas mostra o plano e exige confirmação; scripts usam `--yes` após a prévia.
 - Progresso do Estudo usa bloqueio entre processos e gravação atômica. CLI oferece `mark`, `progress`, `export` e `import`, com mesclagem por projeto/linguagem e validação de arquivos; um arquivo de progresso corrompido é preservado.
 

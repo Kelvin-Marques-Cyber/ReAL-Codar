@@ -30,7 +30,7 @@ MAX_SYMBOLS = 600
 CACHE_SCHEMA = 3
 EXTENSIONS = {'.py', '.pyi', '.js', '.ts', '.mjs', '.cjs', '.dart', '.rs', '.go', '.java', '.kt',
               '.cs', '.h', '.hpp', '.php', '.rb', '.lua', '.sh', '.ps1', '.psm1', '.swift', '.r',
-              '.jl', '.md', '.rst', '.txt', '.xml', '.json', '.yaml', '.toml', '.css', '.html'}
+              '.jl', '.md', '.rst', '.txt', '.xml', '.json', '.yaml', '.toml', '.css', '.html', '.csproj', '.in'}
 
 
 def project_root(root: str | Path | None = None, file: str | Path | None = None) -> Path | None:

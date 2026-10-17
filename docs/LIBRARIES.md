@@ -148,3 +148,12 @@ Imports e tipos: [NumPy](https://numpy.org/doc/stable/user/absolute_beginners.ht
 ### Confirmar uma instalação
 
 `codar libraries install` mostra o projeto e o plano antes de executar e pede confirmação no terminal. Em scripts sem terminal interativo, confira primeiro com `--dry-run` e autorize explicitamente com `--yes`. Recusar o plano não cria ambientes nem executa gerenciadores.
+
+### Inventário do ambiente
+
+```sh
+codar libraries inventory --root . --lang python
+codar libraries inventory --lang typescript --query react --json
+```
+
+O inventário mostra também pacotes instalados que ainda não têm referências aprendidas. Cada entrada distingue manifesto, instalação, imports e documentação. Python usa metadados dos ambientes do projeto/seleção de runtime; Node usa `package.json` e `node_modules`; Dart, Cargo, Go e NuGet usam manifestos/configurações e caches locais. Fontes de código ignoradas, segredos e links externos não participam da indexação do projeto. A varredura é limitada a 1.000 dependências e 500 arquivos de código. Bibliotecas de outros ecossistemas continuam aceitando referências manuais via `learn --source`. O inventário não consulta registros de versões: não afirma que um pacote está atualizado ou desatualizado sem essa verificação.
