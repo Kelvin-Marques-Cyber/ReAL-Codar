@@ -66,3 +66,21 @@ def test_bloco_reconhece_variavel_do_laco_e_parametros():
 def test_laco_em_lista_chamada_linhas_mas_nao_leitura_de_arquivo():
     assert compile_("para cada linha em linhas imprimir linha") == "for linha in linhas:\n    print(linha)"
     assert compile_("para cada linha do arquivo imprimir linha") is None  # vai para o banco ou para a IA
+
+
+@pytest.mark.parametrize("intent,lang,expected", [
+    ("teste se x é maior que 10", "python", "if x > 10:\n    pass"),
+    ("verifique se x é maior que 10 imprima x", "javascript", "if (x > 10) {\n  console.log(x);\n}"),
+    ("check if x > 10", "go", "if x > 10 {"),
+    ("rode o loop 3 vezes", "python", "for _ in range(3):\n    pass"),
+    ("faça um loop 3 vezes", "javascript", "for (let i = 0; i < 3; i++) {"),
+    ("run the loop 3 times", "python", "for _ in range(3):\n    pass"),
+])
+def test_verbo_de_teste_ou_execucao_abre_construcao(intent, lang, expected):
+    assert expected in compile_(intent, lang)
+
+
+@pytest.mark.parametrize("intent", ["rode pytest", "run main.py", "execute meu arquivo", "teste meu código",
+                                    "rodar testes", "test this file"])
+def test_pedido_de_execucao_nao_vira_codigo(intent):
+    assert compile_(intent) is None

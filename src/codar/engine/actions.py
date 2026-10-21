@@ -8,6 +8,19 @@ from codar.engine.imports import is_import_request, is_native_import
 from codar.textutil import fold
 
 INFORMATIONAL = frozenset({'query', 'install', 'execute', 'study'})
+# Verbos de execução também abrem construções de código: "teste se x > 1" é um if,
+# "execute 3 vezes" um laço e "teste unitário para somar" pede o código do teste.
+_CONSTRUCT = re.compile(r'^(?:test\w*|verific\w*|chec\w*|check\w*|comprob\w*|comprueb\w*|prueb\w*)\s+'
+                        r'(?:se|if|whether|si)\b|^(?:testes?|tests?|pruebas?)\s+(?:unitari\w*|unit\w*|de\s+unidade|'
+                        r'automatizad\w*|automated)\b')
+
+
+def _code_construct(intent: str, text: str) -> bool:
+    if _CONSTRUCT.match(text):
+        return True
+    from codar.engine.stage0 import Stage0
+
+    return Stage0().parse(intent) is not None
 
 
 def classify(intent: str, lang: str | None = None) -> str:
@@ -22,7 +35,7 @@ def classify(intent: str, lang: str | None = None) -> str:
     if re.match(r'^(?:estud\w*|study|learn|aprender|aprenda)\b', text):
         return 'study'
     if re.match(r'^(?:execut\w*|ejecut\w*|rodar|rode|run|testar|teste|test|prueba)\b', text):
-        return 'execute'
+        return 'generate' if _code_construct(intent, text) else 'execute'
     if re.match(r'^(?:expli\w*|explain|consult\w*|mostrar a api|show (?:the )?(?:api|documentation)|'
                 r'como\b|how\b|qual\b|quais\b|what\b|que es\b|cual\b)\b', text):
         return 'query'
