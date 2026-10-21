@@ -1524,8 +1524,9 @@ class Studio(App):
         if not text.strip():
             return
         from codar.engine.actions import INFORMATIONAL, classify
+        from codar.i18n import get_locale
 
-        if classify(text, self.current_lang()) in INFORMATIONAL:
+        if classify(text, self.current_lang(), get_locale()) in INFORMATIONAL:
             self.query_one('#intent', Input).value = ''
             self.request(text, 'insert', self.current_editor())
             return

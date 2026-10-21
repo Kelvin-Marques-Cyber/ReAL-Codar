@@ -299,7 +299,7 @@ class Router:
         lang = self._resolve_lang(req, hinted)
         from codar.engine.actions import INFORMATIONAL, classify, information
 
-        action = classify(req.intent, lang.id)
+        action = classify(req.intent, lang.id, locale)
         if action in INFORMATIONAL:
             from codar.libraries import project_root
 

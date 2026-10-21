@@ -5,6 +5,7 @@ from codar.i18n import normalize_locale
 from codar.textutil import fold
 
 _ATOM = r'[A-Za-z_]\w*|-?\d+(?:\.\d+)?'
+_CHECK = r'(?:(?:prueba|comprueba|verifica)\s+(?=si\b))?'
 
 
 def _expression(value, known):
@@ -45,7 +46,13 @@ def _normalize(intent, locale, known=None):
     for_loop = re.fullmatch(r'para cada\s+([A-Za-z_]\w*)\s+en\s+([A-Za-z_]\w*)\s+(.+)', text, re.I)
     if for_loop:
         return f'para cada {for_loop[1]} em {for_loop[2]} ' + normalize(for_loop[3], locale, known)
-    conditional = re.fullmatch(r'(si|mientras)\s+(.+?)\s+(?:entonces\s+)?((?:imprime|imprimir|muestra|mostrar|escribe)\s+.+)', text, re.I)
+    times = re.fullmatch(r'(?:repite|repetir|ejecuta|ejecutar)\s+(?:esto\s+|(?:el\s+|un\s+)?bucle\s+)?(\d+)\s+veces\s*:?\s*(.*)',
+                         text, re.I)
+    if times:
+        return f'repita {times[1]} vezes' + (' ' + normalize(times[2], locale, known) if times[2] else '')
+    # "comprueba si x > 1" verifica uma condição, como "teste se" em português.
+    conditional = re.fullmatch(_CHECK + r'(si|mientras)\s+(.+?)\s+(?:entonces\s+)?((?:imprime|imprimir|muestra|mostrar|escribe)\s+.+)',
+                               text, re.I)
     if conditional:
         prefix = 'se' if conditional[1].lower() == 'si' else 'enquanto'
         return prefix + ' ' + _expression(conditional[2], known) + ' ' + normalize(conditional[3], locale, known)
@@ -55,7 +62,7 @@ def _normalize(intent, locale, known=None):
     importing = re.fullmatch(r'(?:importa|importar|importe)\s+(?:la\s+|el\s+)?(?:(?:biblioteca|libreria|librería|paquete|modulo|módulo)\s+)?([@\w./-]+)', text, re.I)
     if importing:
         return 'importar biblioteca ' + importing[1]
-    header = re.fullmatch(r'(si|mientras)\s+(.+)', text, re.I)
+    header = re.fullmatch(_CHECK + r'(si|mientras)\s+(.+)', text, re.I)
     if header:
         return ('se' if header[1].lower() == 'si' else 'enquanto') + ' ' + _expression(header[2].rstrip(':'), known)
     loop_header = re.fullmatch(r'para cada\s+([A-Za-z_]\w*)\s+en\s+([A-Za-z_]\w*)\s*:?$', text, re.I)

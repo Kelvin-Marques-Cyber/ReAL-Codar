@@ -15,15 +15,17 @@ _CONSTRUCT = re.compile(r'^(?:test\w*|verific\w*|chec\w*|check\w*|comprob\w*|com
                         r'automatizad\w*|automated)\b')
 
 
-def _code_construct(intent: str, text: str) -> bool:
+def _code_construct(intent: str, text: str, locale: str | None) -> bool:
     if _CONSTRUCT.match(text):
         return True
+    from codar.engine.locale_intents import normalize
     from codar.engine.stage0 import Stage0
 
-    return Stage0().parse(intent) is not None
+    return Stage0().parse(normalize(intent, locale) if locale else intent) is not None
 
 
-def classify(intent: str, lang: str | None = None) -> str:
+def classify(intent: str, lang: str | None = None, locale: str | None = None) -> str:
+    """Mesma classe para pedidos equivalentes em pt-BR, en, es e pt-PT; identificadores ficam intactos."""
     if is_native_import(intent.strip(), lang) or is_import_request(intent, lang):
         return 'import'
     if '\n' in intent.strip():
@@ -32,12 +34,16 @@ def classify(intent: str, lang: str | None = None) -> str:
     text = re.sub(r'^(?:por favor|please|por favor,)\s*[, :]?\s*', '', text)
     if re.match(r'^(?:instal\w*|install|add package|adicione o pacote)\b', text):
         return 'install'
-    if re.match(r'^(?:estud\w*|study|learn|aprender|aprenda)\b', text):
+    if re.match(r"^(?:(?:eu\s+)?quero|quiero|gostaria\s+de|quisiera|i\s+want\s+to|i\s+would\s+like\s+to|i'd\s+like\s+to)?"
+                r"\s*(?:estud\w*|study|learn|aprend(?:er|a|e|amos)\b)", text):
         return 'study'
-    if re.match(r'^(?:execut\w*|ejecut\w*|rodar|rode|run|testar|teste|test|prueba)\b', text):
-        return 'generate' if _code_construct(intent, text) else 'execute'
-    if re.match(r'^(?:expli\w*|explain|consult\w*|mostrar a api|show (?:the )?(?:api|documentation)|'
-                r'como\b|how\b|qual\b|quais\b|what\b|que es\b|cual\b)\b', text):
+    # "correr o programa" é executar em pt-PT; "corre las pruebas", em espanhol.
+    if re.match(r'^(?:execut\w*|ejecut\w*|rodar|rode|run|testar|teste|test|prueba)\b|^corr(?:a|e|er)\s+(?:(?:o|a|os|as|el|la|'
+                r'los|las|meu|minha|meus|minhas|mi|mis)\s+)*(?:programa|arquivo|ficheiro|archivo|script|testes?|pruebas?|'
+                r'codigo|projeto|projecto|proyecto|aplicacao|aplicacion|app)\b', text):
+        return 'generate' if _code_construct(intent, text, locale) else 'execute'
+    if re.match(r'^(?:expli\w*|explain|consult\w*|look\s+up|mostrar a api|show (?:the )?(?:api|documentation)|'
+                r'como\b|how\b|qual\b|quais\b|what\b|que es\b|cual\b|o\s+que\s+(?:e|eh|sao|significa)\b)\b', text):
         return 'query'
     return 'generate'
 
