@@ -181,7 +181,7 @@ class Emitter:
         t = E.infer(node)
         return "int" if t == "num?" else t
 
-    def param_types(self, f: ir.FuncDef) -> dict[str, str]:
+    def param_types(self, f: ir.FuncDef, guess: bool = True) -> dict[str, str]:
         """Inferência rasa: parâmetros usados em aritmética viram numéricos; senão heurística pelo nome."""
         types = {p: "" for p in f.params}
 
@@ -225,7 +225,7 @@ class Emitter:
             for attr in ("value", "cond", "iterable", "end", "start"):
                 visit(getattr(n, attr, None))
                 lens(getattr(n, attr, None))
-        return {p: t or field_type(p) for p, t in types.items()}
+        return {p: t or (field_type(p) if guess else "") for p, t in types.items()}
 
     def ret_type(self, f: ir.FuncDef, ptypes: dict[str, str]) -> str:
         rets = [f.ret] if f.ret is not None else [n.value for n in _walk(f.body) if isinstance(n, ir.Return)]
@@ -320,9 +320,12 @@ class PythonEmitter(Emitter):
         return out
 
     def n_FuncDef(self, n, d):
-        pt = self.param_types(n)
+        # Esqueleto de método: self/cls nunca recebem tipo e os demais só o tipo deduzido do uso, não do nome.
+        method = bool(n.params) and n.params[0] in ("self", "cls")
+        pt = self.param_types(n, guess=not method)
         rt = self.ret_type(n, pt)
-        params = ", ".join(f"{p}: {E.py_type(pt[p])}" if E.py_type(pt[p]) else p for p in n.params)
+        params = ", ".join(f"{p}: {E.py_type(pt[p])}" if E.py_type(pt[p]) and not (method and i == 0) else p
+                           for i, p in enumerate(n.params))
         ann = " -> None" if rt == "void" else (f" -> {E.py_type(rt)}" if E.py_type(rt) else "")
         self.scopes.append(dict(pt))
         try:

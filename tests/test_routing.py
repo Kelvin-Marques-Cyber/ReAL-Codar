@@ -240,6 +240,12 @@ def test_playlist_youtube_usa_padrao_verificado_sem_chamar_modelo(translate, rou
     assert "download=False" in res.code
     assert "from yt_dlp import YoutubeDL" in res.code
 
+def test_metodo_python_nao_anota_self_e_mantem_tipo_deduzido_do_uso(translate):
+    res = translate("crie um método dobro com x que retorna x * 2", "python",
+                    mode="line", before="class Conta:\n", indent="    ", stages=(0,))
+    assert "def dobro(self, x: int) -> int:" in res.code and "self:" not in res.code
+
+
 @pytest.mark.parametrize("lang, before, indent, fragment", [
     ("python", "class Conta:\n", "    ", "def depositar(self, valor)"),
     ("javascript", "class Conta {\n", "  ", "depositar(valor) {"),
