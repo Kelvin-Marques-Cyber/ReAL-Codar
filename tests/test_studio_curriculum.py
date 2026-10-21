@@ -43,17 +43,21 @@ def test_estudo_retomar_marca_e_avanca_sem_abrir_arquivo(tmp_path, monkeypatch):
 
 def test_estudo_catalogo_mostra_percurso_por_nivel(tmp_path, monkeypatch):
     from codar.estudo.curriculo import percurso
-    from codar.studio.screens import ChoiceScreen
+    from codar.studio.review import ChoiceScreen
 
     app = _studio(tmp_path, monkeypatch)
 
     async def scenario():
-        async with app.run_test(size=(150, 42)):
+        async with app.run_test(size=(150, 42)) as pilot:
             path = percurso("html", app.root)
             app.action_estudo_catalogo()
+            await pilot.pause()
             assert isinstance(app.screen, ChoiceScreen)
-            assert path["total"] >= 10
-            assert path["lessons"][0]["id"]
-            assert path["lessons"][0]["level"] == "iniciante"
+            # guia e os oito tópicos de HTML descritos em docs/ESTUDO.md, todos listados no catálogo
+            assert path["total"] >= 9
+            assert app.screen.query_one("#choices").option_count == path["total"]
+            levels = [lesson["level"] for lesson in path["lessons"]]
+            order = ["iniciante", "intermediario", "avancado"]
+            assert levels[0] == "iniciante" and levels == sorted(levels, key=order.index)
 
     asyncio.run(scenario())
