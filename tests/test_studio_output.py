@@ -155,6 +155,7 @@ def test_saida_vazia_mantem_tokens_para_copiar_e_selecionar(tmp_path, monkeypatc
             assert app.query_one('#output-open').disabled
             app.action_copy_result()
             assert app.clipboard == raw
+            await pilot.pause()  # a aba SAÍDA recém-ativada precisa de layout antes do clique
             await pilot.click('#output')
             await pilot.pause()
             assert isinstance(app.screen, TerminalOutputScreen)
@@ -297,6 +298,7 @@ def test_erro_de_import_local_exibe_diagnostico_copiavel_sem_modelo(tmp_path, mo
             assert "não resolvida" in str(app.query_one("#output-status", Static).content)
             app.action_copy_result()
             assert app.clipboard == diagnostic
+            await pilot.pause()  # a aba SAÍDA recém-ativada precisa de layout antes do clique
             await pilot.click("#output")
             await pilot.pause()
             assert isinstance(app.screen, TerminalOutputScreen)
