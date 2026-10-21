@@ -21,6 +21,14 @@ METHODS = {"project.info", "project.context", "project.search", "project.check",
            "edits.prepare", "edits.commit"}
 
 
+def _syntax_only(res) -> bool:
+    """Resposta completa com erro só de sintaxe segue para validação e reparo limitado; truncada ou vazia, não."""
+    attempts = res.diagnostics.get("generation_attempts") or [{}]
+    reason = str(attempts[-1].get("reason", ""))
+    return bool(res.body.strip()) and attempts[-1].get("finish") == "stop" and (
+        "_syntax" in reason or reason in ("unbalanced_delimiters", "unclosed_delimiters"))
+
+
 def edit_units(text: str, file: str, maximum: int) -> list[tuple[int, int]]:
     """Arquivos grandes são divididos em funções completas; nenhuma instrução é cortada ao meio."""
     if len(text) <= maximum:
@@ -179,7 +187,7 @@ async def propose_project(router, root: str, files: list[str], intent: str, canc
                                   project_context=context["context"], project_guidance=project.guidance,
                                   project_skills=project.skills)
                 res = await router.translate(request, cancel=cancel)
-                if not res.complete:
+                if not res.complete and not _syntax_only(res):
                     raise TranslateError(f"edição incompleta em {name}; arquivos preservados")
                 body = res.body
                 if selected.endswith("\n") and not body.endswith("\n"):
