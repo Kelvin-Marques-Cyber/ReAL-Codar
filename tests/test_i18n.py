@@ -80,3 +80,35 @@ def test_es_preserva_indentacao_em_blocos(translate):
     b = translate(es, stages=(0,), before='total = 11\n', locale='es')
     assert a.code == b.code
     assert normalize('    imprime total', 'es') == '    imprimir total'
+
+
+@pytest.mark.parametrize('kind,pt,en,es,pt_pt', [
+    ('query', 'o que é uma lista', 'what is a list', 'qué es una lista', 'o que é uma lista'),
+    ('query', 'consulte a API de requests', 'look up the requests API', 'consulta la API de requests',
+     'consulte a API de requests'),
+    ('install', 'instale requests', 'install requests', 'instala requests', 'instale requests'),
+    ('study', 'quero aprender listas', 'I want to learn lists', 'quiero aprender listas', 'quero aprender listas'),
+    ('study', 'aprender python', 'learn python', 'aprende python', 'aprender python'),
+    ('execute', 'execute meu arquivo', 'run my file', 'ejecuta mi archivo', 'corre o meu ficheiro'),
+    ('execute', 'rode os testes', 'run the tests', 'corre las pruebas', 'corra os testes'),
+    ('generate', 'execute 3 vezes', 'run 3 times', 'ejecuta 3 veces', 'execute 3 vezes'),
+    ('generate', 'teste se x é maior que 10', 'test if x > 10', 'prueba si x es mayor que 10',
+     'verifique se x é maior que 10'),
+])
+def test_classe_da_intencao_equivalente_nos_quatro_idiomas(kind, pt, en, es, pt_pt):
+    from codar.engine.actions import classify
+
+    for text, locale in [(pt, 'pt-BR'), (en, 'en'), (es, 'es'), (pt_pt, 'pt-PT')]:
+        assert classify(text, 'python', locale) == kind, (text, locale)
+
+
+@pytest.mark.parametrize('lang', ['python', 'javascript', 'go'])
+@pytest.mark.parametrize('pt,en,es', [
+    ('repita 3 vezes', 'run 3 times', 'ejecuta 3 veces'),
+    ('teste se x é maior que 10', 'check if x > 10', 'comprueba si x es mayor que 10'),
+])
+def test_construcao_com_verbo_de_acao_equivalente_nos_idiomas(translate, lang, pt, en, es):
+    results = [translate(value, lang, before='x = 2\n', stages=(0,), locale=locale)
+               for value, locale in [(pt, 'pt-BR'), (en, 'en'), (es, 'es'), (pt, 'pt-PT')]]
+    assert all(result.stage == '0' and result.action == 'generate' for result in results)
+    assert len({result.code for result in results}) == 1
