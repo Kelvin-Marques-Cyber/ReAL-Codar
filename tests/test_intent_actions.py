@@ -67,3 +67,36 @@ def test_cli_consulta_tem_sucesso_sem_ser_marcada_como_codigo_incompleto(tmp_pat
     assert main(['run', 'explique uma função', '--local', '--root', str(tmp_path)]) == 0
     output = capsys.readouterr()
     assert 'função' in output.out and 'resposta incompleta' not in output.err
+
+
+@pytest.mark.parametrize('intent', [
+    'execute 3 vezes', 'execute isso 5 vezes', 'rode o loop 3 vezes', 'run the loop 3 times',
+    'executar a função soma com 2 e 3', 'run the function soma with 2 and 3',
+    'teste se x é maior que 10', 'testar se a lista está vazia', 'test if x > 10', 'test whether x > 10',
+    'teste unitário para a função somar', 'testes unitários para somar',
+])
+def test_construcao_de_codigo_com_verbo_de_acao_gera_codigo(intent):
+    # "execute 3 vezes" é um laço e "teste se" um if: nenhum deles pede para rodar o arquivo.
+    assert classify(intent, 'python') == 'generate'
+
+
+@pytest.mark.parametrize('intent', [
+    'execute meu arquivo', 'executar o programa', 'rode os testes', 'rodar testes', 'run tests', 'run main.py',
+    'teste meu código', 'test this file', 'ejecuta el archivo', 'execute', 'rode pytest',
+])
+def test_pedido_de_execucao_continua_informativo(intent):
+    assert classify(intent, 'python') == 'execute'
+
+
+@pytest.mark.parametrize('intent,expected', [
+    ('execute 3 vezes', 'for _ in range(3):'),
+    ('rode o loop 3 vezes', 'for _ in range(3):'),
+    ('executar a função soma com 2 e 3', 'soma(2, 3)'),
+    ('run the function soma with 2 and 3', 'soma(2, 3)'),
+    ('teste se x é maior que 10', 'if x > 10:'),
+    ('verifique se x é maior que 10', 'if x > 10:'),
+])
+def test_construcao_com_verbo_de_acao_chega_ao_compilador(translate, intent, expected):
+    result = translate(intent, before='x = 1\n', stages=(0,))
+    assert result.action == 'generate' and result.stage == '0'
+    assert expected in result.code

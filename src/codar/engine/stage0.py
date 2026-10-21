@@ -217,7 +217,8 @@ _P_FOR_RANGE = _rx(r"^(?:(?:um|uma|faca|fazer|criar|crie|cria|make|create|a)\s+)
                    r"(?P<var>" + ID + r")\s+)?(?:de|from|=|desde|indo\s+de|comecando\s+em|starting\s+at)\s+(?P<a>-?[\w.]+)"
                    r"\s+(?:a|ate|to|\.\.|until|through|thru)\s+(?P<b>-?[\w.]+)(?:\s+(?:de\s+(?P<s1>\d+)\s+em\s+\d+|"
                    r"(?:com\s+)?(?:passo|step|incremento|by)\s+(?P<s2>-?\d+)))?(?P<rest>.*)$")
-_P_TIMES = _rx(r"^(?:(?:repetir|repita|repeat|loop|laco|executar|execute|faca|fazer|do)\s+(?:isso\s+|this\s+)?)?"
+_P_TIMES = _rx(r"^(?:(?:repetir|repita|repeat|loop|laco|executar|execute|rodar|rode|run|faca|fazer|do)\s+"
+               r"(?:isso\s+|this\s+|(?:(?:o|um|the|a)\s+)?(?:loop|laco)\s+)?)?"
                r"(?P<n>\d+|" + ID + r")\s+(?:vezes|times)\s*:?(?P<rest>.*)$")
 _P_FOREACH = _rx(r"^(?:para\s+cada|for\s+each|foreach|for\s+every|percorrer|percorra|percorre|iterar\s+(?:sobre|em|por|pela|"
                  r"pelo|pelos|pelas)|itere\s+(?:sobre|em|por|pela|pelo)|iterate\s+(?:over|through)|loop\s+(?:over|through|"
@@ -228,7 +229,9 @@ _P_INFINITE = _rx(r"^(?:(?:um|uma|a|an)\s+)?(?:loop|laco)\s+(?:infinito|eterno|f
                   r"loop\s+forever|para\s+sempre|enquanto\s+(?:verdadeiro|true))$")
 _P_WHILE = _rx(r"^(?:enquanto|while)\s+(?P<cond>.+)$")
 _P_UNTIL = _rx(r"^(?:ate\s+que|until)\s+(?P<cond>.+)$")
-_P_IF = _rx(r"^(?:se|if|caso|quando|when)\s+(?P<cond>.+)$")
+# "teste se x > 1" e "check if x > 1" verificam uma condição no código, não executam o arquivo.
+_P_IF = _rx(r"^(?:(?:teste|testar|testa|verifique|verificar|verifica|cheque|checar|checa|test|check|verify)\s+"
+            r"(?:se|if|whether)|se|if|caso|quando|when)\s+(?P<cond>.+)$")
 _P_ELSE = _rx(r"^(?:senao|else|caso\s+contrario|otherwise)(?:\s+(?:se|if)\s+(?P<cond>.+)|[,:]?\s+(?P<acao>.+))?$"
               r"|^elif\s+(?P<cond2>.+)$")
 _P_FUNC = _rx(r"^" + _CREATE + _ART + r"(?:funcao|function|func|def|metodo|method|procedimento|procedure|rotina|fn)\s+"
