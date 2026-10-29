@@ -108,6 +108,8 @@
     "Desenvolvimento": "Development",
     "Aprendizagem": "Learning",
     "Codar: Perspectiva do Studio": "Codar: Studio perspective",
-    "Várias funções podem ser o alvo: selecione a implementação ou posicione o cursor dentro dela. Nada foi alterado.": "Several functions could be the target: select the implementation or place the cursor inside it. Nothing was changed."
+    "Várias funções podem ser o alvo: selecione a implementação ou posicione o cursor dentro dela. Nada foi alterado.": "Several functions could be the target: select the implementation or place the cursor inside it. Nothing was changed.",
+    "Maximizar painel": "Maximize panel",
+    "Codar: Maximizar/restaurar painel": "Codar: Maximize/restore panel"
   }
 }

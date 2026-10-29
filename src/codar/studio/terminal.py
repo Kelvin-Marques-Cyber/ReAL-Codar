@@ -28,6 +28,7 @@ from rich.text import Text
 from textual import on, work
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
+from textual.geometry import Size
 from textual.suggester import Suggester
 from textual.widgets import Input, RichLog
 
@@ -51,8 +52,16 @@ class TerminalLog(RichLog):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.transcript: deque[str] = deque(maxlen=3000)
+        self._reexecucoes = 0  # escritas adiadas pelo RichLog, que ele repete com write() ao conhecer o tamanho
+        self._parcial = 0  # linhas da pergunta incompleta exibida por escrever_parcial
 
     def write(self, content, *args, **kwargs):
+        self.descartar_parcial()
+        if not self._size_known:
+            self._reexecucoes += 1
+        elif self._reexecucoes:
+            self._reexecucoes -= 1  # repetição de uma escrita adiada: já está no texto copiável
+            return super().write(content, *args, **kwargs)
         plain = content.plain if isinstance(content, Text) else str(content)
         self.transcript.extend(plain.split("\n"))
         # Limita também linhas muito grandes; o painel de cópia guarda até 1 MB.
@@ -60,8 +69,27 @@ class TerminalLog(RichLog):
             self.transcript.popleft()
         return super().write(content, *args, **kwargs)
 
+    def escrever_parcial(self, content: Text) -> None:
+        """Mostra uma linha ainda sem quebra (a pergunta de um input()); a próxima escrita a substitui."""
+        self.descartar_parcial()
+        if not self._size_known:
+            return  # a escrita seria adiada e repetida; o campo do terminal já mostra a pergunta
+        antes = len(self.lines)
+        super().write(content)
+        self._parcial = len(self.lines) - antes
+
+    def descartar_parcial(self) -> None:
+        if self._parcial:
+            del self.lines[-self._parcial:]
+            self._line_cache.clear()
+            self.virtual_size = Size(self._widest_line_width, len(self.lines))
+            self.refresh()
+        self._parcial = 0
+
     def clear(self):
         self.transcript.clear()
+        self._parcial = 0
+        self._reexecucoes = 0
         return super().clear()
 
     def text(self) -> str:
@@ -533,6 +561,8 @@ class TerminalPainel(Vertical):
                 if pendente and pendente != avisado and sessao.rodando():
                     avisado = pendente
                     chamar(self.aguardando, sessao, _ANSI.sub("", pendente))
+                    # A pergunta também aparece na saída, como num terminal; a resposta ecoada a completa.
+                    chamar(sessao.log.escrever_parcial, Text.from_ansi(pendente.rsplit("\r", 1)[-1], style=C["text"]))
                 if not sessao.rodando():  # terminou, mas um filho em segundo plano segura o terminal
                     ociosos += 1
                     if ociosos > 6:

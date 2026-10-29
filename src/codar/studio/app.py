@@ -175,6 +175,7 @@ class Studio(App):
         Binding("ctrl+w", "close_tab", tr("Fechar aba"), show=False, priority=True),
         Binding("ctrl+b", "toggle_left", tr("Mostrar explorer"), show=False, priority=True),
         Binding("f9", "toggle_panel", tr("Painel"), show=False, priority=True),
+        Binding("shift+f9", "maximize_panel", tr("Maximizar painel"), show=False, priority=True),
         Binding("f12", "shell", tr("Seu shell"), show=False, priority=True),
         Binding("f4", "celular", tr("Celular"), priority=True),
         Binding("f7", "estudo", tr("Estudo"), priority=True),
@@ -1958,6 +1959,12 @@ class Studio(App):
         panel = self.query_one("#panel")
         panel.display = not panel.display
 
+    def action_maximize_panel(self) -> None:
+        """Shift+F9: o painel ocupa quase toda a área central (como Maximizar painel do VS Code) e volta."""
+        panel = self.query_one("#panel")
+        panel.display = True
+        panel.toggle_class("maximizado")
+
     # ------------------------------------------------------------------ auditoria / execução
     def action_audit_file(self) -> None:
         ed = self.current_editor()
@@ -2051,7 +2058,9 @@ class Studio(App):
         return self._terminal
 
     def run_command(self, cmd: str, visivel: str | None = None, cwd: Path | None = None) -> None:
-        self.query_one("#panel", TabbedContent).active = "tab-terminal"
+        panel = self.query_one("#panel", TabbedContent)
+        panel.display = True  # na perspectiva Essencial o painel fica oculto: a saída precisa aparecer
+        panel.active = "tab-terminal"
         self.terminal.executar(cmd, visivel, cwd=cwd)
 
     def process_running(self) -> bool:
@@ -2416,6 +2425,7 @@ class Studio(App):
             ("Codar: Parar o servidor da rede", "para a prévia/repasse aberto com F4", self._parar_rede),
             ("Codar: Mostrar/ocultar explorer", "Ctrl+B", self.action_toggle_left),
             ("Codar: Mostrar/ocultar painel", "F9", self.action_toggle_panel),
+            ("Codar: Maximizar/restaurar painel", "Shift+F9", self.action_maximize_panel),
         ]
 
     def on_unmount(self) -> None:

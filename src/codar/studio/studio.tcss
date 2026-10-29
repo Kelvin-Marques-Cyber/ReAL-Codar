@@ -110,6 +110,11 @@ Botao:hover {
     height: 22;
 }
 
+#panel.maximizado {
+    height: 85%;
+    max-height: 85%;
+}
+
 #estudo {
     padding: 0 1;
 }
@@ -190,9 +195,18 @@ Input > .input--placeholder {
 
 #term-input {
     dock: bottom;
+    height: 1;
+    border: none;
+    padding: 0 1;
+    background: $codar-grid;
 }
 
-#term-actions { height: 1; }
+#term-input:focus {
+    border: none;
+    text-style: bold;
+}
+
+#sessoes, #term-actions { height: 1; }  /* sem altura fixa, a barra dividia o espaço com a saída */
 #term-actions Botao { width: auto; margin-right: 2; color: $codar-mint; }
 Botao:focus { background: $codar-grid; text-style: bold reverse; }
 
