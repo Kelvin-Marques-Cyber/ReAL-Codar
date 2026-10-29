@@ -1874,7 +1874,8 @@ class Studio(App):
 
     @on(TabbedContent.TabActivated, "#panel")
     def _aba_do_painel(self, event: TabbedContent.TabActivated) -> None:
-        self.query_one("#panel").set_class(event.pane.id == "tab-estudo", "alto")  # o estudo ganha mais linhas
+        # O próprio evento traz o painel: ao fechar o Studio, a mensagem pode chegar depois de a tela ser desmontada.
+        event.tabbed_content.set_class(event.pane.id == "tab-estudo", "alto")  # o estudo ganha mais linhas
 
     def action_toggle_hints(self) -> None:
         self.hints = not self.hints

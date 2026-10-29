@@ -6,6 +6,8 @@ import pytest
 
 pytest.importorskip("textual")
 
+from textual.widgets import Button
+
 from codar.studio.app import Studio
 from codar.studio.edits import EditTarget
 from codar.studio.review import ReviewScreen
@@ -55,7 +57,11 @@ def test_revisao_protege_editor_e_guarda_original(tmp_path, monkeypatch, action)
             else:
                 if action == "changed":
                     editor.replace("x = 9\n", (0, 0), editor.document.end)
-                await pilot.click("#review-apply")
+                # A tela pode estar empilhada antes do layout, ou um aviso cobrir o botão: um clique por
+                # coordenada às vezes não acerta. press() aciona o botão sem depender da posição.
+                botao = app.screen.query_one("#review-apply", Button)
+                await wait(pilot, lambda: botao.is_mounted and not botao.disabled)
+                botao.press()
                 # O worker de aceite nasce no callback da prévia: espera-se o desfecho visível,
                 # não a lista de workers no instante do clique (vazia sob carga).
                 outcome = {"accept": "Código aplicado", "changed": "mudou durante a revisão",
