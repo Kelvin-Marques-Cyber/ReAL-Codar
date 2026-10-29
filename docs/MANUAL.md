@@ -394,6 +394,8 @@ Studio e VS Code abrem uma comparação antes de aplicar edições e permitem es
 
 Sem seleção, pedidos que começam com `corrija`, `refatore`, `reescreva`, `substitua`, `complete`, `melhore` ou `otimize` substituem o **arquivo aberto inteiro**, se ele contém código. Pedidos de criação continuam inserindo código abaixo da linha atual. Para uma alteração pequena, selecione apenas o trecho necessário. **Ctrl+Z** desfaz corpo e imports juntos; o arquivo só é salvo quando você manda salvar.
 
+**Pedidos encadeados** como `agora adicione tipagem`, `adicione docstrings`, `now add type hints`, `añade tipos`, `transforme em async` ou `renomeie x para total` alteram somente a implementação a que se referem: a função ou o método sob o cursor; senão, o código que o pedido anterior acabou de inserir; senão, a declaração logo acima do cursor. O registro de atividade mostra `CONTINUAÇÃO · nome · linhas`. Se várias funções puderem ser o alvo e nenhuma dessas evidências indicar uma delas, nada é enviado nem alterado: selecione a implementação e repita o pedido, que continua na barra. A detecção é estática em Python e nas linguagens de chaves (JavaScript/TypeScript, Go, Rust, Java, C#, C/C++, Dart, Kotlin, Swift, PHP, PowerShell e Bash); nas demais, o pedido edita o arquivo aberto, com prévia.
+
 A edição usa a IA local (S2). O motor recebe o trecho original e o código ao redor, com instruções para devolver uma substituição completa. Se o arquivo mudar durante a geração, a aba for fechada ou a resposta atingir o limite de tokens, o código original é preservado e a resposta fica em **SAÍDA**. A qualidade do resultado depende do modelo: revise a alteração antes de salvar.
 
 O limite de seleção é `router.max_edit_chars` (12.000 caracteres). Isso não aumenta a capacidade do modelo. Se o prompt não couber ou a resposta ficar incompleta, selecione um trecho menor. Para edições maiores, ajuste o contexto e a saída e reinicie o daemon, respeitando a RAM disponível:
@@ -689,7 +691,7 @@ A CLI não instala automaticamente a extensão. Se o VS Code abrir pelo menu do 
 
 ## Revisão, projetos e histórico
 
-- Pedidos de correção com uma seleção substituem somente o alvo; pedidos explícitos sem seleção editam o arquivo aberto inteiro. Sem uma intenção de edição, geração insere código abaixo da linha atual.
+- Pedidos de correção com uma seleção substituem somente o alvo; pedidos explícitos sem seleção editam o arquivo aberto inteiro. Pedidos encadeados (`agora adicione tipagem`) editam só a função sob o cursor ou a recém-inserida. Sem uma intenção de edição, geração insere código abaixo da linha atual.
 - A prévia é controlada por `codar.editing.preview` (padrão `true`). Resposta cortada, aba fechada ou documento modificado durante a geração/revisão preserva o código original. **Ctrl+Z** desfaz corpo e imports juntos.
 - **Codar: Histórico de edições e recuperação** guarda os originais de arquivos nomeados nos dados privados da CLI e permite revisar uma restauração. Buffers sem nome têm desfazer normal, sem histórico persistente por arquivo.
 - **Codar: Editar vários arquivos…** escolhe até oito arquivos salvos, prepara uma proposta e abre suas comparações. Depois da escolha dos trechos, **Aplicar aos arquivos** escreve no disco e guarda os originais. Arquivos com alterações não salvas precisam ser salvos antes.

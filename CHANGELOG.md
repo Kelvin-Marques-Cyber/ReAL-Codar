@@ -4,6 +4,8 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+- Pedidos encadeados (`agora adicione tipagem`, `add type hints`, `añade tipos`, `transforme em async`) editam no Studio somente a função sob o cursor, a recém-inserida ou a logo acima, em vez de gerar outra função ou reescrever o arquivo. Com várias candidatas e nenhuma evidência, nada é enviado e o pedido fica na barra. Detecção estática em Python e nas linguagens de chaves.
+
 ## [0.4.0] - 2026-10-16
 
 - Perspectivas Essencial, Desenvolvimento e Aprendizagem, com preferência persistente, editor utilizável em 80 colunas e altura limitada do painel.

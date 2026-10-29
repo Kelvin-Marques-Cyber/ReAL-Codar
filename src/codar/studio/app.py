@@ -37,6 +37,7 @@ from codar import __version__, langs
 from codar.advisor import pacotes
 from codar.studio import comandos, estado
 from codar.studio.backend import StudioBackend
+from codar.engine.continuity import declarations, followup_target, wants_followup
 from codar.studio.edits import EditTarget, wants_edit
 from codar.studio.references import AmbiguousReference, referenced_files, uses_existing_code
 from codar.studio.explorer import SKIP, Explorer
@@ -210,6 +211,7 @@ class Studio(App):
         self.streaming = False
         self._translation_serial = 0
         self._generation_cancel = None
+        self._recent_results: dict[str, tuple[int, int, list[str]]] = {}  # editor -> linhas do último resultado
         self.perspective = estado.ler().get('perspective', 'development')
         self.rede_srv = None  # prévia na rede ou repasse de servidor (F4: ver no celular)
         self.estudo = False  # modo estudo (F7): o painel ESTUDO acompanha o cursor
@@ -932,7 +934,7 @@ class Studio(App):
         return before, indent, unit
 
     def request(self, intent: str, mode: str, ed: CodeEditor | None = None, row: int | None = None,
-                original: str | None = None, indent: str | None = None) -> None:
+                original: str | None = None, indent: str | None = None, span=None) -> None:
         intent = intent.strip("\n") if mode == "block" else intent.strip()
         if not intent.strip():
             return
@@ -944,7 +946,7 @@ class Studio(App):
         indent = recuo if indent is None else indent
         if original is None:
             original = ed.document.get_line(row) if ed is not None and row is not None else None
-        target = EditTarget.capture(ed.text, mode, ed.cursor_location, (ed.selection.start, ed.selection.end),
+        target = EditTarget.capture(ed.text, mode, ed.cursor_location, span or (ed.selection.start, ed.selection.end),
                                     row, original) if ed is not None else None
         if target is not None:
             before = target.before
@@ -967,6 +969,25 @@ class Studio(App):
         self.streaming = False
         self.translate_worker(intent, self.current_lang(), mode, ed.path if ed else None, before, indent, unit,
                               target, ed.id if ed else None, request_id=serial, cancel=cancel)
+
+    def _followup_span(self, ed: CodeEditor, row: int | None = None):
+        """Implementação que um pedido encadeado modifica: seleção, None (arquivo inteiro) ou False (ambíguo)."""
+        row = ed.cursor_location[0] if row is None else row
+        lines = ed.text.split("\n")
+        recent = self._recent_results.get(ed.id)
+        # O resultado anterior só vale enquanto as mesmas linhas continuam no mesmo lugar.
+        if recent and lines[recent[0]:recent[1] + 1] != recent[2]:
+            recent = None
+        found = followup_target(ed.text, row, ed.lang_id or "", recent[:2] if recent else None)
+        if found is None:
+            if declarations(ed.text, ed.lang_id or ""):
+                self._output_status('Várias funções podem ser o alvo: selecione a implementação ou posicione o cursor '
+                                    'dentro dela. Nada foi alterado.', warning=True)
+                return False
+            return None  # script sem declarações, ou linguagem não analisada: o arquivo inteiro, com prévia
+        first, last, name = found
+        self.feed(f"CONTINUAÇÃO · {name[:40]} · linhas {first + 1}–{last + 1}", "cyan")
+        return (first, 0), (last, len(lines[last]))
 
     def action_cancel_generation(self):
         if self._generation_cancel is not None:
@@ -1242,6 +1263,7 @@ class Studio(App):
             except (OSError, ValueError) as exc:
                 self.notify(f"original guardado; confirmação do histórico falhou: {exc}", severity="warning")
         end_row = min(end_row, ed.document.line_count - 1)
+        self._recent_results[ed.id] = (start_row, end_row, ed.text.split("\n")[start_row:end_row + 1])
         ed.move_cursor((end_row, len(ed.document.get_line(end_row))))
         ed.destacar(start_row, end_row)
         ed.focus()
@@ -1573,10 +1595,17 @@ class Studio(App):
             await self.open_file(self.root / names[0])
             ed = self.current_editor()
             self.feed(f"CONTEXTO · {names[0]} · prévia de substituição", "cyan")
+        span = followup = None
+        if ed is not None and not names and ed.selection.start == ed.selection.end and ed.text.strip() \
+                and wants_followup(text):
+            # "agora adicione tipagem" altera a função sob o cursor ou a recém-inserida, não cria outra.
+            followup, span = True, self._followup_span(ed)
+            if span is False:
+                return  # o pedido fica na barra para ser reenviado após selecionar o alvo
         edit = ed is not None and (ed.selection.start != ed.selection.end or
-                                  (ed.text.strip() and (wants_edit(text) or names or context_request)))
+                                  (ed.text.strip() and (wants_edit(text) or names or context_request or followup)))
         self.query_one("#intent", Input).value = ""
-        self.request(text, "edit" if edit else "insert", ed, None)
+        self.request(text, "edit" if edit else "insert", ed, None, span=span)
 
     async def executar_pedido(self, pedido: comandos.PedidoArquivo) -> None:
         explorer = self.query_one("#explorer", Explorer)
@@ -1628,7 +1657,16 @@ class Studio(App):
         line = ed.document.get_line(row)
         if not line.strip():
             return
-        if wants_edit(line.lstrip().removeprefix("#").removeprefix("//").strip()):
+        instruction = line.lstrip().removeprefix("#").removeprefix("//").strip()
+        if wants_followup(instruction):
+            span = self._followup_span(ed, row)
+            if span is False:
+                return
+            if span and span[1][0] < row:
+                span = (span[0], (row, len(line)))  # a linha do pedido, logo abaixo, sai junto com a edição
+            self.request(line.strip(), "edit", ed, None, indent="", span=span)
+            return
+        if wants_edit(instruction):
             self.request(line.strip(), "edit", ed, None, indent="")
             return
         self.request(line.strip(), "line", ed, row, indent=self._recuo_senao(ed, row, line))
