@@ -27,13 +27,17 @@ O Studio agora oferece **Catálogo**, **Continuar**, **Exercícios**, **Marcar p
 
 Marcar uma aula como praticada registra somente a atividade declarada pelo aluno no projeto e linguagem atuais. **Não executa nem aprova automaticamente a solução.** Para um desafio com correção automática, utilize **Exercícios** ou `codar study check` com um arquivo escolhido explicitamente. O material, os identificadores e o progresso usam a mesma fonte dos comandos `codar study path` e `codar study resume`.
 
-## Explicação linha a linha (HTML e CSS)
+## Explicação linha a linha
 
 Em arquivos `.html` e `.css`, o painel ESTUDO identifica cada tag ou regra da linha do cursor e mostra o verbete da **referência local**: o que o elemento ou a propriedade faz, um exemplo correto, a prática sugerida, o erro comum e o link do MDN. Logo abaixo, **NESTA LINHA** explica o que está escrito ali: cada atributo e seu valor (`type="number"`, `lang="pt-BR"`, `data-*`), o tipo do `input`, entidades como `&nbsp;`, a especificidade de cada seletor CSS, valores (`display: flex`, `margin: 0 auto`), unidades e funções (`rem`, `fr`, `minmax`, `clamp`).
 
 Os alertas apontam problemas visíveis na própria linha: `img` sem `alt` ou com o nome do arquivo no `alt`, `button` sem `type` dentro de formulário, campo sem rótulo, `a` sem `href`, viewport que bloqueia o zoom, `div` clicável, `iframe` sem `title`, elementos obsoletos, propriedades CSS com erro de grafia (`colr` → `color`) e `outline: none`. Não há alerta para o que depende do documento inteiro, como ids repetidos ou a ordem dos títulos; isso continua na revisão manual e nos desafios `html_documento`/`html_formulario`.
 
-Num `.html`, linhas dentro de `<script>` são explicadas como JavaScript e dentro de `<style>` como CSS; `<script type="application/json">` continua HTML. A referência tem 76 verbetes, fica no catálogo e na busca (`codar study search "texto alternativo" --lang html`) e não entra na sequência do percurso. Pela CLI:
+Num `.html`, linhas dentro de `<script>` são explicadas como JavaScript e dentro de `<style>` como CSS; `<script type="application/json">` continua HTML.
+
+As demais linguagens têm uma **referência de construções** com o que cada linha típica faz na forma própria da linguagem: `#include`, `main`, ponteiros, `malloc` e `strtol` em C; `std::vector`, `std::map`, ponteiros inteligentes e algoritmos em C++; `using`, LINQ, `async`/`Task` e tipos anuláveis em C#; coleções, streams e try-with-resources em Java; `val`/`var`, null safety, `when` e `data class` em Kotlin; opcionais, `guard let` e `Codable` em Swift; `final`/`const`, `where`/`map` e construtores em Dart; tabelas, `pcall` e `pairs` em Lua; `<?php`, `strict_types`, `??` e XSS em PHP; `SELECT`, `JOIN`, `WITH`, restrições e transações em SQL; `param`, `-WhatIf` e operadores em PowerShell; `:=`, slices e goroutines em Go; `let mut`, iteradores, `Result` e `#[derive]` em Rust; além de verbetes de Python, JavaScript, Ruby, Julia, R, Bash e Dockerfile. Nas linhas das próprias aulas, a parcela explicada só pelo guia genérico caiu de 48% para 3%.
+
+Em C, C++, C#, Rust e outras linguagens em que `#` abre diretivas ou atributos, `#include` e `#[derive]` são código, não comentário; `# texto` continua sendo um comentário com palavras-chave. Ao todo são 204 verbetes, que ficam no catálogo e na busca (`codar study search "texto alternativo" --lang html`) e não entram na sequência do percurso. Pela CLI:
 
 ```bash
 codar study explain '<input type="number" id="cpf" name="cpf">' --lang html

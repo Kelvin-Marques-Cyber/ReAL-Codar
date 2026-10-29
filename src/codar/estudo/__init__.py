@@ -35,6 +35,20 @@ _PRIORIDADE = ["treino_teste", "agrupamento", "grafico", "imagem_matriz", "numpy
                "compreensao", "excecao", "arquivo", "fstring", "conversao", "input", "dicionario", "lista", "for",
                "while", "if", "funcao", "import", "texto", "let_const", "print", "variavel", "indentacao"]
 _COMENTARIO = ("#", "//", "--", "/*", "*", "<!--")
+# Nestas linguagens # abre diretivas e atributos (#include, #[derive], #region), não comentários.
+_CERQUILHA_CODIGO = frozenset({"c", "cpp", "csharp", "rust", "java", "go", "javascript", "typescript", "kotlin", "swift",
+                               "dart", "lua", "sql", "css", "html"})
+
+
+def _comentario(texto: str, lang: str | None) -> bool:
+    if texto.startswith("#") and lang in _CERQUILHA_CODIGO and not texto.startswith("# "):
+        return False  # "# o que é…" (consultas da barra de intenção) continua sendo texto
+    if texto.startswith("--") and lang not in ("lua", "sql"):
+        return False  # --i é decremento; -- só comenta em Lua e SQL
+    if texto.startswith("*") and not texto.startswith("*/"):
+        # Continuação de bloco "* texto"; "*p = 1" (ponteiro) e "* {" (CSS) são código.
+        return lang != "css" and (texto == "*" or texto.startswith("* "))
+    return texto.startswith(_COMENTARIO)
 _EXCECOES = {n for n in dir(builtins) if n[:1].isupper()}
 
 
@@ -59,7 +73,7 @@ def conceitos_da_linha(linha: str, lang: str | None) -> list[Conceito]:
     # HTML e CSS: a referência explica cada tag e propriedade da linha, na ordem em que aparecem.
     referencia = web.html_da_linha(linha, POR_ID) if lang == 'html' else web.css_da_linha(linha, POR_ID) \
         if lang == 'css' else []
-    if texto.startswith(_COMENTARIO):
+    if _comentario(texto, lang):
         baixo = texto.lower()  # palavra (ou começo de palavra): "se " não casa dentro de "classe com"
         achados = [c for c in CONCEITOS if any(re.search(r"(?<!\w)" + re.escape(p), baixo) for p in c.palavras)
                    and exemplo(c, lang)[0]]
