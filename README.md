@@ -18,7 +18,18 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.4.0.** [Downloads e notas da Release v0.4.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.4.0): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. Use a tag `v0.4.0` para obter estes recursos; a integração das mudanças em `main` está no [PR #1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/pull/1). Instalar `main` usa o código que estiver nessa branch.
+**Versão do código: 0.5.0.** [Downloads e notas da prévia v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. O projeto continua em fase alfa; esta publicação não certifica equivalência com uma IDE de uso geral. Use a tag `v0.5.0` para reproduzir a versão distribuída. Instalar `main` usa o código atual dessa branch.
+
+## Novidades da 0.5.0
+
+- **Continuidade na edição:** pedidos como `agora adicione tipagem` ou `transforme em async` usam a função sob o cursor, a recém-inserida ou a imediatamente anterior. Se o alvo for ambíguo, o Studio preserva o código e pede uma indicação.
+- **Procedência verificável:** o resultado identifica compilador, banco ou modelo, fontes e validação de sintaxe. Código gerado pela IA aparece como não testado; só variantes do banco com teste executável são marcadas como testadas.
+- **Estudo mais específico:** 128 verbetes de construções em 20 linguagens, além de 76 verbetes HTML/CSS sobre elementos, atributos, propriedades, valores e seletores. `#include`, `#[derive]` e `#region` recebem a classificação correta.
+- **HTML e CSS linha a linha:** explicações locais e alertas de acessibilidade e formulários; trechos em `<script>` e `<style>` usam JavaScript e CSS. Disponível também com `codar study explain`.
+- **Correções de confiabilidade:** roteamento equivalente nos quatro idiomas, reparo limitado de sintaxe em edições, métodos Python sem tipos inventados, código de saída correto nos testes Go e fechamento do Studio sem evento tardio quebrar a tela.
+
+[Validação da 0.5.0](docs/VALIDACAO_0.5.0.md) · [Diagnóstico e comparação com IDEs](docs/DIAGNOSTICO_IDE_0.5.0.md) · [Qualidade e critérios de liberação](docs/QUALIDADE.md).
+
 
 ## Novidades da 0.4.0
 
@@ -29,7 +40,7 @@ df+jcc+aic                                →  display: flex; justify-content: �
 - **Autocompletar com origem:** símbolos do projeto e APIs locais, com assinatura em F10. A indexação é estática, limitada e feita em segundo plano ao abrir/salvar.
 - **Idiomas humanos separados:** recursos pt-BR/en/es/pt-PT, escolha de interface e front-end espanhol para construções determinísticas. `--locale es --lang python` não traduz identificadores nem strings do código. Mensagens legadas têm fallback documentado.
 
-[Como usar bibliotecas, trilhas, exercícios e F10](docs/STUDIO_BIBLIOTECAS.md) · [Idiomas e cobertura](docs/I18N.md) · [Validação da versão](docs/VALIDACAO_0.4.0.md) · [Qualidade, CI e critérios de liberação](docs/QUALIDADE.md) · [Estudo linha a linha](docs/ESTUDO.md#explicação-linha-a-linha).
+[Como usar bibliotecas, trilhas, exercícios e F10](docs/STUDIO_BIBLIOTECAS.md) · [Idiomas e cobertura](docs/I18N.md) · [Validação da 0.4.0](docs/VALIDACAO_0.4.0.md) · [Qualidade, CI e critérios de liberação](docs/QUALIDADE.md) · [Estudo linha a linha](docs/ESTUDO.md#explicação-linha-a-linha).
 
 ## Novidades da 0.3.2
 
@@ -132,7 +143,7 @@ Outras vantagens no trabalho diário:
 - **Consultor de projeto**: sugestões para o ambiente e dependências, incluindo migrações de npm para pnpm ou Bun. Você escolhe a ação a executar.
 - **Atualização e distribuição**: versões dos componentes sincronizadas, diagnóstico de instalações duplicadas ou daemon antigo e arquivos publicados para Linux, Windows e macOS. Windows/macOS requerem Python 3.10+ e pipx; a extensão VS Code é instalada separadamente.
 
-O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da Release v0.4.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.4.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
+O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da prévia v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
 
 ### Correções e praticidade na 0.3.1
 
@@ -148,14 +159,14 @@ O terminal integrado executa comandos e entrada de programas. Para aliases, conc
 
 ### Começar pela versão publicada (pipx)
 
-Requer **Python 3.10+ e pipx**. Baixe `codar-0.4.0-py3-none-any.whl` na [Release v0.4.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.4.0) e execute na pasta do download:
+Requer **Python 3.10+ e pipx**. Baixe `codar-0.5.0-py3-none-any.whl` na [prévia v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0) e execute na pasta do download:
 
 ```sh
-pipx install --force ./codar-0.4.0-py3-none-any.whl
+pipx install --force ./codar-0.5.0-py3-none-any.whl
 pipx ensurepath --prepend
 ```
 
-Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.4.0`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
+Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.5.0`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
 
 ### Código atual da branch `main` (pipx)
 
@@ -228,7 +239,13 @@ Baixe o pacote da sua distro em [Releases](https://github.com/Kelvin-Marques-Cyb
 curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | sh
 ```
 
-O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release. Para fixar uma versão já publicada, passe `CODAR_VERSION=0.4.0` ao processo `sh`. Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
+O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release estável. Para instalar esta prévia, informe a versão ao processo `sh`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | CODAR_VERSION=0.5.0 sh
+```
+
+Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
 
 | Distro | Comando |
 |---|---|
@@ -246,8 +263,8 @@ Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônom
 
 | Sistema | Arquivo | Comando dentro da pasta extraída |
 |---|---|---|
-| Windows | `codar-0.4.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
-| macOS | `codar-0.4.0-macos-python.tar.gz` | `sh install.sh` |
+| Windows | `codar-0.5.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.5.0-macos-python.tar.gz` | `sh install.sh` |
 
 O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
 
@@ -664,4 +681,4 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) e o [histórico de mudanças](CHANGELOG.
 
 ---
 
-**In English:** Version 0.4.0 adds a library browser with real local APIs and learning tracks, portable study progress, behavioral exercises, cancellable generation, static symbol completion, three Studio perspectives and human-language resources for pt-BR/en/es/pt-PT. Library requests remain limited to imports; questions and installation plans preserve the editor. CODAR generates code in 19 languages and offers study material for all 24 recognized file types. The model is optional and local; downloads and explicit installations require a network connection. [Release v0.4.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.4.0) includes Linux packages, Python/pipx bundles for Windows/macOS, wheel/source archives and VSIX, with checksums and documented validation limits. Alpha project, Apache-2.0 licensed.
+**In English:** Version 0.5.0 improves follow-up edits that target the right function, generation provenance and syntax-verification reporting, and offline study with 128 language-construction entries plus 76 HTML/CSS entries. It fixes intent routing, bounded syntax repair, Python method annotations, Go pattern test exit codes and Studio shutdown. The optional model stays local; AI output is explicitly marked as untested. [Preview v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0) provides Linux packages, Python/pipx bundles for Windows/macOS, wheel/source archives and VSIX, with checksums and documented validation limits. Full LSP/DAP integration and advanced Git workflows remain future work. Alpha project, Apache-2.0 licensed.

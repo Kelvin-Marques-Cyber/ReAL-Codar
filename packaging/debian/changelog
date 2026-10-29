@@ -1,3 +1,11 @@
+codar (0.5.0-1) unstable; urgency=medium
+
+  * Preserva o alvo de pedidos encadeados e informa a procedência das gerações.
+  * Amplia o estudo de construções, elementos HTML e propriedades CSS.
+  * Corrige roteamento, edição, métodos Python, patternlint Go e fechamento do Studio.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Thu, 29 Oct 2026 14:06:18 -0300
+
 codar (0.4.0-1) unstable; urgency=medium
 
   * Integra inventário, APIs e trilhas de bibliotecas ao Studio.
