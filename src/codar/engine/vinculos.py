@@ -20,7 +20,7 @@ from codar.audit.lexer import mask
 
 _LIMITE_ARQUIVO = 400_000
 _MAX_ARQUIVOS = 2000
-_cache_arquivos: dict[Path, tuple[float, int, object]] = {}
+_cache_arquivos: dict[tuple[Path, str], tuple[float, int, object]] = {}
 
 _JS_LANGS = ("javascript", "typescript")
 _JS_EXTS = (".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx")
@@ -51,12 +51,14 @@ def _arquivos(raiz: Path, extensoes: tuple[str, ...]) -> list[Path]:
     return arquivos
 
 
-def _analisado(arquivo: Path, analisar):
+def _analisado(arquivo: Path, analisar, tipo: str = ""):
+    """Resultado de analisar(texto) em cache por data de modificação; tipo separa análises diferentes do mesmo arquivo."""
     try:
         estado = arquivo.stat()
     except OSError:
         return None
-    guardado = _cache_arquivos.get(arquivo)
+    chave = (arquivo, tipo or analisar.__qualname__)
+    guardado = _cache_arquivos.get(chave)
     if guardado and guardado[:2] == (estado.st_mtime, estado.st_size):
         return guardado[2]
     if estado.st_size > _LIMITE_ARQUIVO:
@@ -66,7 +68,7 @@ def _analisado(arquivo: Path, analisar):
             valor = analisar(arquivo.read_text(encoding="utf-8", errors="replace"))
         except (OSError, ValueError, RecursionError):
             valor = None
-    _cache_arquivos[arquivo] = (estado.st_mtime, estado.st_size, valor)
+    _cache_arquivos[chave] = (estado.st_mtime, estado.st_size, valor)
     return valor
 
 
@@ -203,6 +205,7 @@ def _js_livres(codigo: str) -> list[str]:
         definidos.update(re.findall(r"[A-Za-z_$][\w$]*", lista))
     usados = re.findall(r"(?<![\w$.])(?:new\s+)?([A-Za-z_$][\w$]*)\s*\(", texto)
     usados += re.findall(r"\bnew\s+([A-Za-z_$][\w$]*)", texto)
+    usados += re.findall(r"\bextends\s+([A-Za-z_$][\w$]*)", texto)
     vistos = []
     for nome in usados:
         if nome not in definidos and nome not in _JS_GLOBAIS and nome not in vistos and not keyword.iskeyword(nome):
@@ -210,14 +213,16 @@ def _js_livres(codigo: str) -> list[str]:
     return vistos
 
 
-def _js_estilo(contexto: str, raiz: Path, lang: str, atual: str | None) -> str:
-    """esm ou cjs, pelo que o arquivo já usa; depois pelo package.json; TypeScript usa import."""
+def _js_estilo(contexto: str, raiz: Path, lang: str, atual: str | None, exportador: str | None = None) -> str:
+    """esm ou cjs: pelo que o arquivo já usa; senão, pelo módulo que exporta o nome; depois pelo package.json."""
     if re.search(r"^\s*import\s.+\sfrom\s|^\s*export\s", contexto, re.M):
         return "esm"
     if re.search(r"\brequire\(\s*['\"]", contexto):
         return "cjs"
     if lang == "typescript" or (atual and atual.endswith((".mjs", ".mts"))):
         return "esm"
+    if exportador:  # require de um módulo com export falha; import de module.exports depende do empacotador
+        return "cjs" if exportador == "cjs" else "esm"
     try:
         import json
 
@@ -268,9 +273,8 @@ def _javascript(codigo, raiz, atual, contexto, lang):
                 origens.setdefault(nome, []).append((arquivo, "cjs"))
             elif nome in info["declarados"]:
                 nao_exportados.setdefault(nome, arquivo)
-    estilo = _js_estilo(contexto, raiz, lang, atual)
     imports, notas = [], []
-    agrupados: dict[str, list[str]] = {}
+    agrupados: dict[tuple[str, str], list[str]] = {}
     for nome in livres:
         encontrados = origens.get(nome, [])
         if len(encontrados) > 1:
@@ -284,11 +288,12 @@ def _javascript(codigo, raiz, atual, contexto, lang):
             continue
         arquivo, tipo = encontrados[0]
         caminho = _js_caminho(arquivo, atual, raiz, lang, contexto)
+        estilo = _js_estilo(contexto, raiz, lang, atual, tipo)
         if tipo == "padrao":
             imports.append(f'const {nome} = require("{caminho}");' if estilo == "cjs" else f'import {nome} from "{caminho}";')
         else:
-            agrupados.setdefault(caminho, []).append(nome)
-    for caminho, nomes in agrupados.items():
+            agrupados.setdefault((caminho, estilo), []).append(nome)
+    for (caminho, estilo), nomes in agrupados.items():
         lista = ", ".join(nomes)
         imports.append(f'const {{ {lista} }} = require("{caminho}");' if estilo == "cjs" else
                        f'import {{ {lista} }} from "{caminho}";')

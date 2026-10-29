@@ -687,6 +687,21 @@ class Router:
             return res
         if 0 in req.stages:
             t = time.perf_counter()
+            if lang.id in ("python", "javascript", "typescript"):
+                # Herança, métodos, objetos e chamadas dependem das classes reais do arquivo e do projeto.
+                from codar.engine import poo
+                from codar.libraries import project_root
+
+                try:
+                    feito = await asyncio.to_thread(poo.compilar, intent, lang.id, req.before, req.after, req.indent,
+                                                    project_root(req.project_root, req.file), req.file)
+                except ValueError as exc:
+                    raise TranslateError(str(exc)) from exc  # sem IA: ela inventaria o que falta na classe
+                if feito is not None:
+                    body, imports, construcao, notas = feito
+                    timings["stage0_ms"] = round((time.perf_counter() - t) * 1000, 3)
+                    return Result(code="", body=body, imports=imports, lang=lang.id, stage="0",
+                                  source=f"stage0:poo-{construcao}", notes=notas)
             parsed = self.stage0.parse(intent, known)
             res = None
             if parsed and len(parsed.nodes) == 1 and isinstance(parsed.nodes[0], ir.Else):

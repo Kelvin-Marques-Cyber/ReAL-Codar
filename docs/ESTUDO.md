@@ -49,6 +49,18 @@ codar study show html_ref_img --lang html
 
 O material de POO diferencia **classe**, **instância**, **método**, **atributo**, **construtor**, **herança** e **composição**. No editor Python, uma intenção como `crie um método depositar com valor` precisa estar **dentro da classe**, com recuo. Fora da classe, use `crie uma função depositar com valor`. O compilador S0 cria a **assinatura/esqueleto** do método; implementar o seu comportamento exige instrução adicional ou edição do corpo. Não considere o esqueleto uma solução funcional de negócio.
 
+### POO pelo compilador, sem IA (Python, JavaScript e TypeScript)
+
+| Pedido | Resultado |
+|---|---|
+| `classe Aluno herda de Pessoa com matricula` | subclasse cujo construtor repassa à mãe exatamente os parâmetros dela (lidos do arquivo ou do projeto); com uma dataclass, `@dataclass class Aluno(Pessoa)`; mãe desconhecida repassa `*args`/`...args`, sem inventar nomes |
+| `classe Conta com saldo e métodos depositar(valor) e sacar(valor)` | campos e métodos declarados, com corpo que sinaliza a implementação pendente |
+| `método depositar com valor que soma valor ao saldo` (com recuo, dentro da classe) | `self.saldo += valor` / `this.saldo += valor`; também `subtrai … do`, `define … para`, `imprime o saldo`, `retorna o saldo` |
+| `objeto ana da classe Pessoa com nome 'Ana' e idade 20` | `ana = Pessoa(nome="Ana", idade=20)`; em JS, `new Pessoa("Ana", 20)` na ordem do construtor |
+| `chame apresentar de ana e guarde em mensagem` | `mensagem = ana.apresentar()` |
+
+Os pedidos são conferidos com as classes reais: um parâmetro que o construtor não tem, um argumento obrigatório faltando ou um método que a classe do objeto não oferece produzem uma explicação com o que existe, em vez de código que falharia ao rodar. Classes de outros arquivos entram com o import certo. As frases também funcionam em inglês e espanhol (`class Aluno extends Pessoa with matricula`, `clase Alumno hereda de Persona con matricula`).
+
 Exemplo mínimo distribuído em dois arquivos:
 
 ```python
