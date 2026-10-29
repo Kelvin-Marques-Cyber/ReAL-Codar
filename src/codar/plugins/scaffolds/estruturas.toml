@@ -1,0 +1,404 @@
+# Estruturas de projeto: pastas e arquivos iniciais criados pelo botão ESTRUTURA, por `codar project scaffold`
+# ou por "crie a estrutura de um projeto …". Nada existente é sobrescrito.
+# {{nome}} é o nome do projeto (minha-loja) e {{pacote}} a forma válida como identificador (minha_loja).
+# Arquivos de entrada de linguagens compiladas têm o mínimo que compila; os demais ficam vazios.
+
+[[estrutura]]
+id = "fullstack-ts"
+titulo = "Full Stack TypeScript (Node + navegador)"
+descricao = "Servidor, cliente e tipos compartilhados em src/, testes e configuração TypeScript."
+palavras = "full stack fullstack typescript ts node servidor backend frontend cliente web api"
+pastas = ["src/server/routes", "src/client", "src/shared", "public", "tests"]
+[estrutura.arquivos]
+"package.json" = '''
+{
+  "name": "{{nome}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "build": "tsc -p .",
+    "start": "node dist/server/index.js",
+    "test": "node --test"
+  }
+}
+'''
+"tsconfig.json" = '''
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
+'''
+"src/server/index.ts" = ""
+"src/server/routes/index.ts" = ""
+"src/client/index.html" = ""
+"src/client/main.ts" = ""
+"src/client/styles.css" = ""
+"src/shared/types.ts" = ""
+"tests/server.test.ts" = ""
+".env.example" = ""
+".gitignore" = '''
+node_modules/
+dist/
+.env
+'''
+"README.md" = '''
+# {{nome}}
+
+Estrutura Full Stack TypeScript criada pelo CODAR.
+
+Instale as ferramentas de desenvolvimento: `npm install -D typescript tsx @types/node`.
+'''
+
+[[estrutura]]
+id = "fullstack-js"
+titulo = "Full Stack JavaScript (Node + navegador)"
+descricao = "Servidor, cliente e código compartilhado em src/, com módulos ES e testes do Node."
+palavras = "full stack fullstack javascript js node servidor backend frontend cliente web api"
+pastas = ["src/server/routes", "src/client", "src/shared", "public", "tests"]
+[estrutura.arquivos]
+"package.json" = '''
+{
+  "name": "{{nome}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server/index.js",
+    "start": "node src/server/index.js",
+    "test": "node --test"
+  }
+}
+'''
+"src/server/index.js" = ""
+"src/server/routes/index.js" = ""
+"src/client/index.html" = ""
+"src/client/main.js" = ""
+"src/client/styles.css" = ""
+"src/shared/utils.js" = ""
+"tests/server.test.js" = ""
+".env.example" = ""
+".gitignore" = '''
+node_modules/
+.env
+'''
+"README.md" = '''
+# {{nome}}
+
+Estrutura Full Stack JavaScript criada pelo CODAR. `npm run dev` reinicia o servidor a cada alteração.
+'''
+
+[[estrutura]]
+id = "web-estatico"
+titulo = "Site estático (HTML, CSS e JavaScript)"
+descricao = "index.html, folhas de estilo, scripts e imagens em pastas separadas."
+palavras = "site pagina web html css javascript estatico frontend landing portfolio"
+pastas = ["css", "js", "img"]
+[estrutura.arquivos]
+"index.html" = ""
+"css/style.css" = ""
+"js/main.js" = ""
+"README.md" = '''
+# {{nome}}
+
+Site estático criado pelo CODAR. Abra index.html no navegador ou use F4 no Studio para ver no celular.
+'''
+
+[[estrutura]]
+id = "python-pacote"
+titulo = "Pacote Python (layout src)"
+descricao = "pyproject.toml, pacote em src/, testes com pytest e .gitignore."
+palavras = "python pacote biblioteca package lib cli aplicacao src pytest"
+pastas = ["src/{{pacote}}", "tests"]
+[estrutura.arquivos]
+"pyproject.toml" = '''
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{nome}}"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+'''
+"src/{{pacote}}/__init__.py" = ""
+"src/{{pacote}}/main.py" = ""
+"tests/test_main.py" = ""
+".gitignore" = '''
+__pycache__/
+*.egg-info/
+.venv/
+dist/
+build/
+'''
+"README.md" = '''
+# {{nome}}
+
+Pacote Python criado pelo CODAR. Instale em modo de desenvolvimento com `pip install -e .`.
+'''
+
+[[estrutura]]
+id = "python-api"
+titulo = "API Python (rotas, modelos e serviços)"
+descricao = "Aplicação web organizada em rotas, modelos e serviços, com testes e variáveis de ambiente."
+palavras = "python api web backend servidor flask fastapi rotas rest"
+pastas = ["app", "tests"]
+[estrutura.arquivos]
+"app/__init__.py" = ""
+"app/rotas.py" = ""
+"app/modelos.py" = ""
+"app/servicos.py" = ""
+"tests/__init__.py" = ""
+"tests/test_rotas.py" = ""
+"requirements.txt" = ""
+".env.example" = ""
+".gitignore" = '''
+__pycache__/
+.venv/
+.env
+'''
+"README.md" = '''
+# {{nome}}
+
+API Python criada pelo CODAR. Liste as dependências em requirements.txt (por exemplo, fastapi ou flask).
+'''
+
+[[estrutura]]
+id = "python-dados"
+titulo = "Ciência de dados em Python"
+descricao = "Dados brutos e processados, notebooks, código reutilizável e relatórios."
+palavras = "python dados data science ciencia analise notebook jupyter pandas machine learning ml"
+pastas = ["data/raw", "data/processed", "notebooks", "src/{{pacote}}", "reports/figures"]
+[estrutura.arquivos]
+"src/{{pacote}}/__init__.py" = ""
+"src/{{pacote}}/preparar.py" = ""
+"requirements.txt" = ""
+".gitignore" = '''
+__pycache__/
+.venv/
+.ipynb_checkpoints/
+data/raw/
+'''
+"README.md" = '''
+# {{nome}}
+
+Projeto de dados criado pelo CODAR. Guarde os dados originais em data/raw e nunca os altere.
+'''
+
+[[estrutura]]
+id = "go-modulo"
+titulo = "Módulo Go (cmd, internal, pkg)"
+descricao = "go.mod, executável em cmd/, código interno em internal/ e pacotes públicos em pkg/."
+palavras = "go golang modulo servico cli api backend"
+pastas = ["cmd/{{nome}}", "internal", "pkg"]
+[estrutura.arquivos]
+"go.mod" = '''
+module {{nome}}
+
+go 1.22
+'''
+"cmd/{{nome}}/main.go" = '''
+package main
+
+func main() {
+}
+'''
+"README.md" = '''
+# {{nome}}
+
+Módulo Go criado pelo CODAR. Rode com `go run ./cmd/{{nome}}`.
+'''
+
+[[estrutura]]
+id = "rust-binario"
+titulo = "Projeto Rust (Cargo)"
+descricao = "Cargo.toml, src/main.rs e pasta de testes de integração."
+palavras = "rust cargo binario cli crate"
+pastas = ["src", "tests"]
+[estrutura.arquivos]
+"Cargo.toml" = '''
+[package]
+name = "{{pacote}}"
+version = "0.1.0"
+edition = "2021"
+'''
+"src/main.rs" = '''
+fn main() {
+}
+'''
+".gitignore" = '''
+/target
+'''
+"README.md" = '''
+# {{nome}}
+
+Projeto Rust criado pelo CODAR. Rode com `cargo run`.
+'''
+
+[[estrutura]]
+id = "java-maven"
+titulo = "Projeto Java (Maven)"
+descricao = "pom.xml, código em src/main/java e testes em src/test/java."
+palavras = "java maven spring backend aplicacao jvm"
+pastas = ["src/main/java/com/exemplo/{{pacote}}", "src/main/resources", "src/test/java/com/exemplo/{{pacote}}"]
+[estrutura.arquivos]
+"pom.xml" = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.exemplo</groupId>
+  <artifactId>{{nome}}</artifactId>
+  <version>0.1.0</version>
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+</project>
+'''
+"src/main/java/com/exemplo/{{pacote}}/App.java" = '''
+package com.exemplo.{{pacote}};
+
+public class App {
+    public static void main(String[] args) {
+    }
+}
+'''
+".gitignore" = '''
+target/
+'''
+"README.md" = '''
+# {{nome}}
+
+Projeto Java criado pelo CODAR. Compile com `mvn package`.
+'''
+
+[[estrutura]]
+id = "c-cmake"
+titulo = "Projeto C (CMake)"
+descricao = "CMakeLists.txt, código em src/, cabeçalhos em include/ e testes."
+palavras = "c cmake linguagem c programa embarcado"
+pastas = ["src", "include", "tests"]
+[estrutura.arquivos]
+"CMakeLists.txt" = '''
+cmake_minimum_required(VERSION 3.16)
+project({{pacote}} C)
+add_executable({{pacote}} src/main.c)
+target_include_directories({{pacote}} PRIVATE include)
+'''
+"src/main.c" = '''
+int main(void) {
+    return 0;
+}
+'''
+".gitignore" = '''
+build/
+'''
+"README.md" = '''
+# {{nome}}
+
+Projeto C criado pelo CODAR. Compile com `cmake -S . -B build && cmake --build build`.
+'''
+
+[[estrutura]]
+id = "cpp-cmake"
+titulo = "Projeto C++ (CMake)"
+descricao = "CMakeLists.txt, código em src/, cabeçalhos em include/ e testes."
+palavras = "c++ cpp cmake programa jogo"
+pastas = ["src", "include", "tests"]
+[estrutura.arquivos]
+"CMakeLists.txt" = '''
+cmake_minimum_required(VERSION 3.16)
+project({{pacote}} CXX)
+set(CMAKE_CXX_STANDARD 20)
+add_executable({{pacote}} src/main.cpp)
+target_include_directories({{pacote}} PRIVATE include)
+'''
+"src/main.cpp" = '''
+int main() {
+    return 0;
+}
+'''
+".gitignore" = '''
+build/
+'''
+"README.md" = '''
+# {{nome}}
+
+Projeto C++ criado pelo CODAR. Compile com `cmake -S . -B build && cmake --build build`.
+'''
+
+[[estrutura]]
+id = "dart-console"
+titulo = "Aplicativo Dart de terminal"
+descricao = "pubspec.yaml, executável em bin/, código em lib/ e testes. Para Flutter, use `flutter create`."
+palavras = "dart console terminal cli pubspec"
+pastas = ["bin", "lib", "test"]
+[estrutura.arquivos]
+"pubspec.yaml" = '''
+name: {{pacote}}
+version: 0.1.0
+environment:
+  sdk: ^3.0.0
+'''
+"bin/{{pacote}}.dart" = '''
+void main() {
+}
+'''
+".gitignore" = '''
+.dart_tool/
+'''
+"README.md" = '''
+# {{nome}}
+
+Aplicativo Dart criado pelo CODAR. Rode com `dart run`.
+'''
+
+[[estrutura]]
+id = "latex-documento"
+titulo = "Documento LaTeX (capítulos e bibliografia)"
+descricao = "main.tex, capítulos separados, figuras e referências BibTeX."
+palavras = "latex tex documento artigo tcc monografia dissertacao relatorio bibliografia abnt"
+pastas = ["capitulos", "figuras"]
+[estrutura.arquivos]
+"main.tex" = '''
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\title{ {{nome}} }
+\begin{document}
+\maketitle
+\input{capitulos/introducao}
+\bibliographystyle{plain}
+\bibliography{referencias}
+\end{document}
+'''
+"capitulos/introducao.tex" = ""
+"referencias.bib" = ""
+".gitignore" = '''
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.pdf
+'''
+"README.md" = '''
+# {{nome}}
+
+Documento LaTeX criado pelo CODAR. Compile com `pdflatex main.tex` e `bibtex main`.
+'''

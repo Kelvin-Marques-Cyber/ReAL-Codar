@@ -110,6 +110,43 @@ class Advice:
 
 
 @dataclass
+class Estrutura:
+    """Estrutura inicial de projeto: pastas e arquivos (com {{nome}}/{{pacote}}) criados sem sobrescrever nada."""
+
+    id: str
+    titulo: str
+    descricao: str = ""
+    palavras: str = ""
+    pastas: list[str] = field(default_factory=list)
+    arquivos: dict[str, str] = field(default_factory=dict)
+    source: str = "builtin"
+
+
+def _caminho_de_estrutura(caminho) -> str:
+    texto = str(caminho)
+    partes = texto.replace("{{nome}}", "x").replace("{{pacote}}", "x").split("/")
+    if (not texto or texto.startswith("/") or "\\" in texto or ":" in texto or any(p in ("", ".", "..") for p in partes)
+            or partes[0] == ".git" or len(texto) > 200):
+        raise ValueError(f"caminho inválido na estrutura: {texto!r}")
+    return texto
+
+
+def _estruturas_from(data: dict, source: str) -> list[Estrutura]:
+    out = []
+    for raw in data.get("estrutura", []):
+        arquivos = raw.get("arquivos") or {}
+        if not isinstance(arquivos, dict) or any(not isinstance(v, str) for v in arquivos.values()):
+            raise ValueError(f"estrutura {raw.get('id', '?')}: arquivos deve mapear caminho para texto")
+        pastas = _texts(raw.get("pastas", []), "pastas")
+        if len(pastas) + len(arquivos) > 300 or sum(len(v) for v in arquivos.values()) > 1_000_000:
+            raise ValueError(f"estrutura {raw.get('id', '?')}: excede 300 itens ou 1 MB de conteúdo")
+        out.append(Estrutura(id=raw["id"], titulo=raw["titulo"], descricao=raw.get("descricao", ""),
+                             palavras=raw.get("palavras", ""), pastas=[_caminho_de_estrutura(c) for c in pastas],
+                             arquivos={_caminho_de_estrutura(k): v for k, v in arquivos.items()}, source=source))
+    return out
+
+
+@dataclass
 class Plugin:
     name: str
     version: str = "0"
@@ -120,6 +157,7 @@ class Plugin:
     skills: list[Skill] = field(default_factory=list)
     rules: list[Rule] = field(default_factory=list)
     advice: list[Advice] = field(default_factory=list)
+    estruturas: list[Estrutura] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     requires_codar: str = ""
     requires_plugins: dict[str, str] = field(default_factory=dict)
@@ -134,6 +172,7 @@ class Bundle:
     advice: list[Advice]
     fingerprint: str
     hooks: list[Any] = field(default_factory=list)
+    estruturas: list[Estrutura] = field(default_factory=list)
 
 
 def _load_toml(path: Path) -> dict:
@@ -251,11 +290,13 @@ def load_plugin(root: Path, builtin: bool) -> Plugin:
                 plugin.advice.append(Advice(id=raw["id"], title=raw["title"], reason=raw.get("reason", ""),
                                             options=options, category=raw.get("category", "tooling"),
                                             impact=raw.get("impact", "medium"), when=raw.get("when", {}), source=src))
-        all_items = [*plugin.patterns, *plugin.skills, *plugin.rules, *plugin.advice]
+        if (root / "estruturas.toml").exists():
+            plugin.estruturas += _estruturas_from(_load_toml(root / "estruturas.toml"), src)
+        all_items = [*plugin.patterns, *plugin.skills, *plugin.rules, *plugin.advice, *plugin.estruturas]
         ids = [item.id for item in all_items]
         if any(not isinstance(identity, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]+", identity) for identity in ids):
             raise ValueError("ids devem ser textos não vazios")
-        for items in (plugin.patterns, plugin.skills, plugin.rules, plugin.advice):
+        for items in (plugin.patterns, plugin.skills, plugin.rules, plugin.advice, plugin.estruturas):
             if len({item.id for item in items}) != len(items):
                 raise ValueError("ids repetidos no plugin")
         for skill in plugin.skills:
@@ -384,7 +425,8 @@ def discover(cfg: dict | None = None) -> Bundle:
             seen[p.id] = p
     return Bundle(plugins=plugins, patterns=list(seen.values()),
                   skills=[s for p in active for s in p.skills], rules=[r for p in active for r in p.rules],
-                  advice=[a for p in active for a in p.advice], fingerprint=digest.hexdigest()[:16], hooks=hooks)
+                  advice=[a for p in active for a in p.advice], fingerprint=digest.hexdigest()[:16], hooks=hooks,
+                  estruturas=list({e.id: e for p in active for e in p.estruturas}.values()))
 
 
 def _load_python(path: Path, plugin: Plugin):

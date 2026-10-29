@@ -40,7 +40,7 @@ from codar.studio.backend import StudioBackend
 from codar.engine.continuity import declarations, followup_target, wants_followup
 from codar.studio.edits import EditTarget, wants_edit
 from codar.studio.references import AmbiguousReference, referenced_files, uses_existing_code
-from codar.studio.explorer import SKIP, Explorer
+from codar.studio.explorer import SKIP, ConfirmScreen, Explorer
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen, TerminalOutputScreen
@@ -243,6 +243,7 @@ class Studio(App):
                     yield Botao(tr('⌕ BUSCAR'), acao='find_project', id='search-button')
                     yield Botao(tr('SDKs'), acao='runtimes', id='runtimes-button')
                     yield Botao(tr('BIBLIOTECAS'), acao='libraries', id='libraries-button')
+                    yield Botao(tr('ESTRUTURA'), acao='estrutura', id='structure-button')
                     yield Botao(tr('AUTO OFF'), acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
@@ -744,6 +745,57 @@ class Studio(App):
                                               editor.path if editor and editor.path else ''), run)
         self.push_screen(ChoiceScreen(tr('EXERCÍCIOS · verificação por entradas e saídas'),
                                      [(key, item.title + ' · ' + item.task) for key, item in EXERCISES.items()]), choose)
+
+    def action_estrutura(self, consulta: str | None = None) -> None:
+        """Botão ESTRUTURA: escolhe um modelo de projeto, mostra o que será criado e cria sem sobrescrever."""
+        from codar import config, estruturas
+        from codar.plugin_loader import discover
+
+        modelos = discover(config.load()).estruturas
+        if not modelos:
+            self.notify(tr("nenhuma estrutura de projeto disponível nos plugins"), severity="warning")
+            return
+        candidatos = estruturas.buscar(modelos, consulta) if consulta else []
+        if candidatos:
+            self._confirmar_estrutura(candidatos[0])
+            return
+        por_id = {e.id: e for e in modelos}
+
+        def escolhido(identidade):
+            if identidade:
+                self._confirmar_estrutura(por_id[identidade])
+        self.push_screen(ChoiceScreen(tr("ESTRUTURA DE PROJETO · pastas e arquivos iniciais"),
+                                      [(e.id, f"{e.titulo} — {e.descricao}") for e in modelos]), escolhido)
+
+    def _confirmar_estrutura(self, modelo) -> None:
+        from codar import estruturas
+
+        try:
+            itens = estruturas.plano(self.root, modelo)
+        except (OSError, ValueError) as exc:
+            self.notify(str(exc), severity="error")
+            return
+        novos = [i for i in itens if not i.existe]
+        if not novos:
+            self.notify(tr("Tudo desta estrutura já existe no projeto; nada foi alterado."))
+            return
+        linhas = [("+ " if not i.existe else "· ") + i.caminho + ("/" if i.tipo == "pasta" else "") +
+                  (" (já existe, mantido)" if i.existe else "") for i in itens]
+        detalhe = "\n".join(linhas[:30]) + (f"\n… e mais {len(linhas) - 30}" if len(linhas) > 30 else "")
+
+        async def confirmado(ok):
+            if not ok:
+                return
+            try:
+                criados, mantidos = estruturas.aplicar(self.root, itens)
+            except (OSError, ValueError) as exc:
+                self.notify(str(exc), severity="error")
+                return
+            await self.query_one("#explorer", Explorer).reload()
+            self.feed(f"ESTRUTURA · {modelo.titulo[:40]} · {len(criados)} criado(s)", "green")
+            self.notify(f"{modelo.titulo}: {len(criados)} item(ns) criado(s)" +
+                        (f"; {len(mantidos)} existente(s) mantido(s)" if mantidos else ""))
+        self.push_screen(ConfirmScreen(f"Criar {len(novos)} item(ns) · {modelo.titulo}?", detalhe), confirmado)
 
     def action_libraries(self):
         from codar.studio.libraries import LibrariesScreen
@@ -1574,6 +1626,12 @@ class Studio(App):
             self.query_one('#intent', Input).value = ''
             self.request(text, 'insert', self.current_editor())
             return
+        from codar.estruturas import pedido as pedido_de_estrutura
+
+        if (tipo := pedido_de_estrutura(text)) is not None:  # "crie a estrutura de um projeto full stack typescript"
+            self.query_one("#intent", Input).value = ""
+            self.action_estrutura(tipo)
+            return
         pedido = comandos.interpretar(text)
         if pedido is not None:  # "crie o arquivo main.py", "crie a pasta src", "abra conta.py"
             await self.executar_pedido(pedido)
@@ -2399,6 +2457,8 @@ class Studio(App):
             ('Codar: Cancelar geração', 'F2 — interrompe o pedido e preserva seu código', self.action_cancel_generation),
             ('Codar: Exercícios verificáveis', 'testes de comportamento na sua linguagem', self.action_estudo_exercicios),
             ('Codar: Bibliotecas do projeto', 'Ctrl+Shift+L — instaladas, APIs, trilhas e instalação', self.action_libraries),
+            ('Codar: Criar estrutura de projeto', 'Full Stack, Python, Go, Rust, Java, C/C++, LaTeX… sem sobrescrever',
+             self.action_estrutura),
             ('Codar: Alternar salvamento automático', 'AUTO ON/OFF — salva após uma pausa na digitação', self.action_toggle_autosave),
             ('Codar: Escolher versão Python do projeto', 'múltiplas instalações e ambientes separados', self.action_runtimes),
             ('Codar: Catálogo de estudo', 'Ctrl+Shift+F7 — tópicos e exemplos na linguagem do arquivo', self.action_estudo_catalogo),

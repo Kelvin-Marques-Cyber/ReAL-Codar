@@ -22,6 +22,28 @@ codar restart                   # o daemon relê os plugins
 
 Um plugin desativa-se com `[plugins] disabled = ["nome"]` no `config.toml`. Plugins do usuário não executam Python, a menos que você ative `[plugins] allow_python = true`.
 
+## Estruturas de projeto
+
+Um plugin pode oferecer modelos ao botão ESTRUTURA e a `codar project scaffold` com um `estruturas.toml`:
+
+```toml
+[[estrutura]]
+id = "api-go"
+titulo = "API em Go"
+descricao = "Servidor HTTP com handlers e testes."
+palavras = "go golang api http servidor"
+pastas = ["cmd/{{nome}}", "internal/handlers"]
+[estrutura.arquivos]
+"go.mod" = '''
+module {{nome}}
+
+go 1.22
+'''
+"internal/handlers/handlers.go" = ""
+```
+
+`{{nome}}` é o nome do projeto e `{{pacote}}` sua forma de identificador. Caminhos precisam ser relativos, sem `..`, `\`, `:` nem `.git/`; cada modelo tem no máximo 300 itens e 1 MB de conteúdo. Um modelo de plugin com o mesmo `id` de um embutido o substitui.
+
 ## Instalação, compatibilidade e recuperação
 
 ```bash

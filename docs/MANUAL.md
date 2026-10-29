@@ -326,6 +326,20 @@ codar study show guia_sql --lang sql
 
 As linguagens têm catálogos de profundidades diferentes. A **trilha automática de POO** que analisa o arquivo e sugere `main` continua disponível para Python e JavaScript/TypeScript; as demais têm guias e exercícios nativos. O Estudo não insere exemplos no seu código automaticamente. Shift+F7 cria uma sugestão somente quando ela existe e não sobrescreve um arquivo já criado.
 
+### Estrutura automática de projeto
+
+O botão **ESTRUTURA** (ou **Codar: Criar estrutura de projeto** na paleta) lista os modelos; escrever na barra `crie a estrutura de um projeto full stack typescript` escolhe o modelo pela descrição. A confirmação mostra cada pasta e arquivo: `+` será criado, `·` já existe e é mantido. Nada é sobrescrito, e caminhos que sairiam da pasta ou passariam por links simbólicos são recusados.
+
+Modelos incluídos: Full Stack TypeScript e JavaScript, site estático, pacote Python (layout src), API Python, ciência de dados, módulo Go, Rust (Cargo), Java (Maven), C e C++ (CMake), Dart de terminal e documento LaTeX. Arquivos de configuração vêm válidos e os pontos de entrada de linguagens compiladas compilam; os demais arquivos são criados vazios. O nome da pasta vira o nome do projeto (`Minha Loja` → `minha-loja`, pacote `minha_loja`).
+
+```bash
+codar project scaffold                              # lista os modelos
+codar project scaffold api python --dry-run         # mostra o que seria criado
+codar project scaffold fullstack-ts --name loja     # cria
+```
+
+Plugins podem acrescentar modelos com um `estruturas.toml`; veja [EXTENDING.md](EXTENDING.md).
+
 ### Editar um projeto pela CLI
 
 Dentro da pasta do projeto, inicialize suas convenções e peça uma alteração. A geração de edições exige o extra `llm` e um modelo local instalado; `project`, `check` e o histórico funcionam sem IA.

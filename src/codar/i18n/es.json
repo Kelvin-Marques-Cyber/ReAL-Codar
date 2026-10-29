@@ -110,6 +110,11 @@
     "Codar: Perspectiva do Studio": "Codar: Perspectiva de Studio",
     "Várias funções podem ser o alvo: selecione a implementação ou posicione o cursor dentro dela. Nada foi alterado.": "Varias funciones pueden ser el objetivo: seleccione la implementación o coloque el cursor dentro de ella. No se modificó nada.",
     "Maximizar painel": "Maximizar panel",
-    "Codar: Maximizar/restaurar painel": "Codar: Maximizar/restaurar panel"
+    "Codar: Maximizar/restaurar painel": "Codar: Maximizar/restaurar panel",
+    "ESTRUTURA": "ESTRUCTURA",
+    "ESTRUTURA DE PROJETO · pastas e arquivos iniciais": "ESTRUCTURA DE PROYECTO · carpetas y archivos iniciales",
+    "nenhuma estrutura de projeto disponível nos plugins": "ninguna estructura de proyecto disponible en los plugins",
+    "Tudo desta estrutura já existe no projeto; nada foi alterado.": "Todo lo de esta estructura ya existe en el proyecto; no se cambió nada.",
+    "Codar: Criar estrutura de projeto": "Codar: Crear estructura de proyecto"
   }
 }

@@ -36,13 +36,15 @@ repair_attempts = 1
 
 
 def register(sub):
-    p = sub.add_parser("project", help="projeto: init | info | context | search | doctor | run")
-    p.add_argument("action", choices=["init", "info", "context", "search", "doctor", "run"])
+    p = sub.add_parser("project", help="projeto: init | info | context | search | doctor | run | scaffold")
+    p.add_argument("action", choices=["init", "info", "context", "search", "doctor", "run", "scaffold", "estrutura"])
     p.add_argument("terms", nargs="*")
     p.add_argument("--root", default=".")
     p.add_argument("--file")
     p.add_argument("--json", action="store_true")
     p.add_argument("--ai", action="store_true", help="na busca, sugere palavras-chave usando a IA local")
+    p.add_argument("--name", help="scaffold: nome do projeto (padrão: nome da pasta)")
+    p.add_argument("--dry-run", action="store_true", help="scaffold: só mostra o que seria criado")
     p.set_defaults(fn=cmd_project)
     p = sub.add_parser("edit", help="propõe uma edição em vários arquivos e mostra o diff")
     p.add_argument("intent", nargs="+")
@@ -103,7 +105,51 @@ def project_versions(project: Project) -> list[dict]:
     return results
 
 
+def _scaffold(args) -> int:
+    """codar project scaffold [MODELO OU DESCRIÇÃO] [--name N] [--dry-run]: pastas e arquivos sem sobrescrever."""
+    from codar import config, estruturas
+    from codar.plugin_loader import discover
+
+    modelos = discover(config.load()).estruturas
+    consulta = " ".join(args.terms)
+    if not consulta:
+        valores = [{"id": e.id, "title": e.titulo, "description": e.descricao} for e in modelos]
+        print(json.dumps(valores, ensure_ascii=False, indent=2) if args.json else
+              "\n".join(f"{e.id:18} {e.titulo} — {e.descricao}" for e in modelos))
+        return 0
+    escolhido = next((e for e in modelos if e.id == consulta), None) or next(iter(estruturas.buscar(modelos, consulta)), None)
+    if escolhido is None:
+        print("codar: nenhuma estrutura corresponde; veja `codar project scaffold` para a lista", file=sys.stderr)
+        return 1
+    raiz = Path(args.root).resolve()
+    itens = estruturas.plano(raiz, escolhido, args.name)
+    novos = [i for i in itens if not i.existe]
+    if args.dry_run:
+        if args.json:
+            print(json.dumps({"structure": escolhido.id, "create": [i.caminho for i in novos],
+                              "keep": [i.caminho for i in itens if i.existe]}, ensure_ascii=False, indent=2))
+        else:
+            print(f"{escolhido.titulo} em {raiz}")
+            for item in itens:
+                print(f"{'·' if item.existe else '+'} {item.caminho}{'/' if item.tipo == 'pasta' else ''}"
+                      f"{' (já existe, mantido)' if item.existe else ''}")
+        return 0
+    criados, mantidos = estruturas.aplicar(raiz, itens)
+    if args.json:
+        print(json.dumps({"structure": escolhido.id, "created": criados, "kept": mantidos}, ensure_ascii=False, indent=2))
+    else:
+        print(f"{escolhido.titulo}: {len(criados)} item(ns) criado(s) em {raiz}" +
+              (f"; {len(mantidos)} arquivo(s) existente(s) mantido(s)" if mantidos else ""))
+    return 0
+
+
 def cmd_project(args) -> int:
+    if args.action in ("scaffold", "estrutura"):
+        try:
+            return _scaffold(args)
+        except (OSError, ValueError) as exc:
+            print(f"codar: {exc}", file=sys.stderr)
+            return 1
     try:
         project = Project.load(args.root)
         if args.action == "search":
