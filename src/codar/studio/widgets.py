@@ -23,6 +23,8 @@ from codar.textutil import looks_like_intent
 from codar.vocab import KEYWORDS, PSEUDO_WORDS
 from textual.widget import Widget
 from textual.widgets import RichLog, Static, TextArea
+from textual.document._wrapped_document import WrappedDocument
+import textual.widgets._text_area as _modulo_text_area
 from textual.widgets.text_area import Selection, TextAreaTheme
 
 # Paleta do SENTRY. O Studio inteiro lê as cores de C, que acompanha o tema ativo (Ctrl+P → tema): aplicar_paleta()
@@ -182,6 +184,36 @@ def _sobrepor(strip: Strip, marcas: dict[int, tuple[str, Style]], destaque: tupl
     return Strip.join(saida)
 
 
+class _DocumentoQuebrado(WrappedDocument):
+    """WrappedDocument.height soma todas as linhas e é lido centenas de vezes por tecla (milhões de operações num
+    arquivo de 6 mil linhas). A altura fica em cache até a quebra de linhas mudar (wrap ou wrap_range)."""
+
+    _altura: int | None = None
+
+    def wrap(self, *args, **kwargs):
+        self._altura = None
+        return super().wrap(*args, **kwargs)
+
+    def wrap_range(self, *args, **kwargs):
+        self._altura = None
+        try:
+            return super().wrap_range(*args, **kwargs)
+        finally:
+            self._altura = None
+
+    @property
+    def height(self) -> int:
+        if self._altura is None:
+            self._altura = WrappedDocument.height.fget(self)
+        return self._altura
+
+
+# O TextArea cria o documento pelo nome do módulo; só troca se a estrutura do Textual for a esperada.
+if getattr(_modulo_text_area, "WrappedDocument", None) is WrappedDocument and isinstance(
+        getattr(WrappedDocument, "height", None), property):
+    _modulo_text_area.WrappedDocument = _DocumentoQuebrado
+
+
 class CodeEditor(TextArea):
     """TextArea do Studio: espaço+Enter traduz a linha, Tab expande abreviações (HTML/CSS/JSX) e aceita a
     sugestão do autocompletar (palavras do arquivo, da linguagem e do pseudocódigo)."""
@@ -216,6 +248,63 @@ class CodeEditor(TextArea):
     @property
     def dirty(self) -> bool:
         return self.text != self.saved_text
+
+    # ------------------------------------------------------------------ realce de sintaxe
+    _MARGEM_REALCE = 150  # linhas além da tela: rolar um pouco não exige consultar a árvore de novo
+    _realce_janela: tuple[int, int] | None = None
+
+    def _build_highlight_map(self) -> None:
+        """O TextArea consulta a árvore de sintaxe do arquivo inteiro a cada tecla (~0,3 s com 6 mil linhas).
+
+        Aqui a consulta cobre só a área visível com margem; a rolagem que sai dela refaz a janela. Arquivos
+        pequenos, e versões do Textual sem estas partes internas, usam o comportamento original.
+        """
+        documento = self.document
+        consulta = getattr(self, "_highlight_query", None)
+        realces = getattr(self, "_highlights", None)
+        cache = getattr(self, "_line_cache", None)
+        altura = max(self.size.height, 1)
+        if (not consulta or realces is None or cache is None or not hasattr(documento, "query_syntax_tree")
+                or documento.line_count <= 2 * self._MARGEM_REALCE + altura):
+            self._realce_janela = None
+            return super()._build_highlight_map()
+        topo = int(self.scroll_offset.y)
+        inicio = max(0, topo - self._MARGEM_REALCE)
+        fim = min(documento.line_count, topo + altura + self._MARGEM_REALCE)
+        cache.clear()
+        realces.clear()
+        # Nós que atravessam a janela (docstrings, comentários de bloco) também são devolvidos pelo tree-sitter.
+        for nome, nos in documento.query_syntax_tree(consulta, start_point=(inicio, 0), end_point=(fim, 0)).items():
+            for no in nos:
+                (linha_ini, col_ini), (linha_fim, col_fim) = no.start_point, no.end_point
+                if linha_ini == linha_fim:
+                    realces[linha_ini].append((col_ini, col_fim, nome))
+                    continue
+                if linha_ini >= inicio:
+                    realces[linha_ini].append((col_ini, None, nome))
+                for linha in range(max(linha_ini + 1, inicio), min(linha_fim, fim)):
+                    realces[linha].append((0, None, nome))
+                if linha_fim < fim:
+                    realces[linha_fim].append((0, col_fim, nome))
+        self._realce_janela = (inicio, fim)
+
+    def _janela_cobre_a_tela(self) -> bool:
+        if self._realce_janela is None:
+            return True
+        inicio, fim = self._realce_janela
+        topo = int(self.scroll_offset.y)
+        return inicio <= topo and topo + self.size.height <= fim
+
+    def watch_scroll_y(self, old_value: float, new_value: float) -> None:
+        super().watch_scroll_y(old_value, new_value)
+        if not self._janela_cobre_a_tela():
+            self._build_highlight_map()
+            self.refresh()
+
+    def on_resize(self) -> None:
+        if not self._janela_cobre_a_tela():
+            self._build_highlight_map()
+            self.refresh()
 
     # ------------------------------------------------------------------ autocompletar
     def update_suggestion(self) -> None:

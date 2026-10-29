@@ -453,7 +453,10 @@ class Studio(App):
         state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["error"])
         line.append(f"  DAEMON {state[0]} ", style=f"bold {state[1]}")
         line.append("  " + time.strftime("%Y-%b-%d %H:%MZ", time.gmtime()).upper(), style=f"bold {C['mint']}")
-        barra.update(line)
+        if line.plain == getattr(self, "_status_anterior", None):
+            return  # o cursor andou sem mudar a barra: nada a redesenhar
+        self._status_anterior = line.plain
+        barra.update(line, layout=False)  # altura fixa de uma linha: não precisa refazer o layout da tela
 
     def context_hint(self) -> str:
         """O que dá para fazer agora, de acordo com o foco e a linha do cursor."""
@@ -934,8 +937,11 @@ class Studio(App):
         if pane is None or not pane.id:
             return
         name = Path(ed.path).name if ed.path else "sem título"
-        tab = self.query_one("#editors", TabbedContent).get_tab(pane.id)
-        tab.label = f"● {name}" if ed.dirty else name
+        rotulo = f"● {name}" if ed.dirty else name
+        if getattr(ed, "_rotulo_aba", None) == rotulo:
+            return  # trocar o rótulo refaz o layout da tela: só quando ele muda de fato
+        ed._rotulo_aba = rotulo
+        self.query_one("#editors", TabbedContent).get_tab(pane.id).label = rotulo
 
     # ------------------------------------------------------------------ tradução
     def _editor_context(self, ed: CodeEditor | None, row: int | None) -> tuple[str, str, str | None]:
