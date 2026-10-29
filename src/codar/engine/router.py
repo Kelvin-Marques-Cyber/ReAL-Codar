@@ -347,6 +347,8 @@ class Router:
             if cancel is not None and cancel.is_set():
                 raise TranslateError('requisição cancelada')
             res = Result(**{**hit.as_dict(), "cached": True})
+            if res.complete and await self._vincular(res, req):  # o projeto pode ter ganhado a função depois
+                res.code = join_imports(res.imports, res.body.strip("\n") if not req.indent else res.body, res.lang)
             res.timings = {**hit.timings, "total_ms": round((time.perf_counter() - t0) * 1000, 3)}
             self.metrics.record(res, intent)
             return res
@@ -394,13 +396,33 @@ class Router:
             elif only_imports:
                 res.notes.append('fontes/tipos/documentação local indisponíveis; use codar libraries learn NOME '
                                  '--source ARQUIVO ou instale a dependência no ambiente do projeto')
+        if not only_imports and res.complete and res.body.strip():
+            await self._vincular(res, req)
         if cancel is not None and cancel.is_set():
             raise TranslateError('requisição cancelada')
         self._finish(res, req, timings, t0)
-        if not only_imports and res.complete and (res.stage != "2:gen" or not res.notes):
+        # Imports do projeto dependem de arquivos que mudam: o resultado é recalculado em vez de vir do cache.
+        if (not only_imports and res.complete and (res.stage != "2:gen" or not res.notes)
+                and 'project_imports' not in res.diagnostics):
             self.cache_put(key, res)
         self.metrics.record(res, intent)
         return res
+
+    @staticmethod
+    async def _vincular(res: Result, req: Request) -> bool:
+        """Funções e classes de outros arquivos do projeto entram com o import certo, nunca reescritas."""
+        from codar.engine.vinculos import imports_do_projeto
+        from codar.libraries import project_root
+
+        extras, avisos = await asyncio.to_thread(imports_do_projeto, res.body, res.lang,
+                                                 project_root(req.project_root, req.file), req.file,
+                                                 req.before + '\n' + req.after + '\n' + req.selected)
+        novos = [linha for linha in extras if linha not in res.imports]
+        if novos:
+            res.imports.extend(novos)
+            res.diagnostics['project_imports'] = novos
+        res.notes.extend(aviso for aviso in avisos if aviso not in res.notes)
+        return bool(novos)
 
     @staticmethod
     def _with_project(req: Request, intent: str) -> Request:
