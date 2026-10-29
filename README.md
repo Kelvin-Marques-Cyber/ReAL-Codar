@@ -29,7 +29,7 @@ df+jcc+aic                                →  display: flex; justify-content: �
 - **Autocompletar com origem:** símbolos do projeto e APIs locais, com assinatura em F10. A indexação é estática, limitada e feita em segundo plano ao abrir/salvar.
 - **Idiomas humanos separados:** recursos pt-BR/en/es/pt-PT, escolha de interface e front-end espanhol para construções determinísticas. `--locale es --lang python` não traduz identificadores nem strings do código. Mensagens legadas têm fallback documentado.
 
-[Como usar bibliotecas, trilhas, exercícios e F10](docs/STUDIO_BIBLIOTECAS.md) · [Idiomas e cobertura](docs/I18N.md) · [Validação da versão](docs/VALIDACAO_0.4.0.md).
+[Como usar bibliotecas, trilhas, exercícios e F10](docs/STUDIO_BIBLIOTECAS.md) · [Idiomas e cobertura](docs/I18N.md) · [Validação da versão](docs/VALIDACAO_0.4.0.md) · [Qualidade, CI e critérios de liberação](docs/QUALIDADE.md) · [Estudo linha a linha](docs/ESTUDO.md#explicação-linha-a-linha).
 
 ## Novidades da 0.3.2
 

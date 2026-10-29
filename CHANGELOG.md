@@ -8,6 +8,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - Estudo explica HTML e CSS linha a linha: 76 verbetes locais de elementos, atributos, tipos de input, propriedades, valores, unidades e seletores (com especificidade), e alertas como img sem alt, campo sem rótulo, button sem type, viewport sem zoom e erro de grafia em propriedades. Linhas dentro de <script>/<style> usam JavaScript/CSS. `codar study explain` mostra o mesmo pela CLI; a referência fica no catálogo e na busca, fora do percurso.
 - Resultados trazem `verification`: origem, modelo, sintaxe conferida (validador), fontes e se houve teste. Só variantes do banco com teste executável contam como testadas; código da IA aparece como não testado no HUD da CLI, em `codar run -v` e no cartão do Studio.
 - Pedidos encadeados (`agora adicione tipagem`, `add type hints`, `añade tipos`, `transforme em async`) editam no Studio somente a função sob o cursor, a recém-inserida ou a logo acima, em vez de gerar outra função ou reescrever o arquivo. Com várias candidatas e nenhuma evidência, nada é enviado e o pedido fica na barra. Detecção estática em Python e nas linguagens de chaves.
+- Correções: pedidos equivalentes recebem a mesma classe (consultar, estudar, executar) nos quatro idiomas; verbos de execução que abrem uma construção (`execute 3 vezes`, `teste se x > 10`) geram código; métodos Python gerados não anotam `self` nem adivinham tipos pelo nome; `codar edit` volta a tentar o reparo limitado quando a resposta tem só erro de sintaxe.
+- CI: diagnóstico das execuções que falharam sem runner (infraestrutura do Actions, não código), linha de base local, critérios de liberação e tabela dos cenários mínimos de regressão em [docs/QUALIDADE.md](docs/QUALIDADE.md). Corrigidos um import de teste que quebraria o `pytest` do CI e um teste do Studio dependente de tempo.
+- patternlint compila as variantes Go antes de executar: `go run` sai sempre com 1 e escondia o código de saída esperado pelos testes de `cli.subcommands`.
+- Studio não lança erro ao fechar quando uma troca de aba do painel chega depois da desmontagem da tela.
+- CONTRIBUTING com guias para idiomas humanos, material de estudo e plugins.
 
 ## [0.4.0] - 2026-10-16
 
