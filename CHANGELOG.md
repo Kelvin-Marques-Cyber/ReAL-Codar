@@ -4,6 +4,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+- Resultados trazem `verification`: origem, modelo, sintaxe conferida (validador), fontes e se houve teste. Só variantes do banco com teste executável contam como testadas; código da IA aparece como não testado no HUD da CLI, em `codar run -v` e no cartão do Studio.
 - Pedidos encadeados (`agora adicione tipagem`, `add type hints`, `añade tipos`, `transforme em async`) editam no Studio somente a função sob o cursor, a recém-inserida ou a logo acima, em vez de gerar outra função ou reescrever o arquivo. Com várias candidatas e nenhuma evidência, nada é enviado e o pedido fica na barra. Detecção estática em Python e nas linguagens de chaves.
 
 ## [0.4.0] - 2026-10-16

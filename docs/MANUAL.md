@@ -49,6 +49,8 @@ Na tradução de intenções, o motor tenta resolver o pedido por regras, depois
 
 \* Medições de geração registradas em [docs/BENCHMARKS.md](BENCHMARKS.md), num notebook Intel i7-7500U (2 núcleos, 2016), sem GPU. A primeira frase de cada linguagem que não foi pré-aquecida leva cerca de 10 s. Esses números não são um novo benchmark de qualidade das edições da versão 0.3.0.
 
+Cada resultado informa a origem (compilador, banco ou IA), o modelo quando houver, a sintaxe conferida e se o código foi testado: só variantes do banco com teste executável aparecem como testadas, e código da IA aparece como **não testado**. Use `codar run -v` para ver o resumo e as fontes; no Studio, o cartão do último resultado mostra TESTE e SINTAXE.
+
 O compilador e o banco de padrões funcionam sem instalar um modelo. Com modelos e dependências já disponíveis na máquina, a tradução e a auditoria funcionam offline. Instalação, atualização e downloads de modelos, SDKs e dependências usam a rede; veja também a seção **Privacidade**.
 
 ## Leve para começar, completo para crescer

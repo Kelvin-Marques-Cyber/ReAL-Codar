@@ -190,6 +190,8 @@ class Result:
     action: str = 'generate'
     raw_output: str = ''
     diagnostics: dict[str, Any] = field(default_factory=dict)
+    # Procedência: origem, modelo, sintaxe conferida e se houve teste; IA nunca é "testado".
+    verification: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -243,6 +245,8 @@ class Router:
         self.needle = needle
         self.auditor = Auditor(cfg.get("audit", {}), bundle.rules)
         self.skills: list[Skill] = bundle.skills
+        # O banco SQLite não guarda os testes: as linguagens testadas vêm dos plugins carregados.
+        self._tested = {p.id: frozenset(p.tests) for p in bundle.patterns}
         self.metrics = Metrics()
         self._cache: OrderedDict[str, Result] = OrderedDict()
         self._cache_lock = threading.Lock()
@@ -310,7 +314,9 @@ class Router:
                 raise TranslateError('requisição cancelada')
             res = Result(code=message, body='', imports=[], lang=lang.id, stage='0', source='action:' + action,
                          action=action, complete=False,
-                         timings={'total_ms': round((time.perf_counter() - t0) * 1000, 3)})
+                         timings={'total_ms': round((time.perf_counter() - t0) * 1000, 3)},
+                         verification={'origin': 'information', 'model': None, 'tested': False, 'sources': [],
+                                       'summary': 'resposta informativa; nenhum código gerado ou executado'})
             self.metrics.record(res, req.intent)
             return res
         native_import = is_native_import(req.intent.strip(), lang.id)
@@ -436,6 +442,11 @@ class Router:
             res.notes.append('resultado vazio após o processamento; código original preservado')
         res.diagnostics.update(body_chars=len(res.body), import_count=len(res.imports), code_chars=len(res.code),
                                complete=res.complete)
+        from codar.engine.provenance import verification
+
+        res.verification = verification(res.stage, res.source, res.code, res.lang, slots=res.slots,
+                                        pattern_tested=res.diagnostics.get('pattern_tested'),
+                                        library_context=req.library_context)
         if req.audit and self.cfg.get("audit", {}).get("enabled", True):
             ta = time.perf_counter()
             # audita sem a indentação da linha do editor: "    total = 0" sozinho é erro de sintaxe em Python
@@ -831,7 +842,8 @@ class Router:
         p = m.pattern
         out_lang = lang.id if lang.id in p.code or p.kind != "file" else next(iter(p.code))
         res = Result(code="", body=filled.body, imports=filled.imports, lang=out_lang, stage=stage,
-                     source=f"pattern:{p.id}", confidence=round(m.score, 3), slots=filled.slots, candidates=cands)
+                     source=f"pattern:{p.id}", confidence=round(m.score, 3), slots=filled.slots, candidates=cands,
+                     diagnostics={'pattern_tested': p.source != 'user' and out_lang in self._tested.get(p.id, ())})
         if p.kind == "file":
             res.file_suggestion = {"path": p.path or "", "kind": "file"}
         return res

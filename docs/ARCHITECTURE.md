@@ -24,6 +24,10 @@ A ordem é sempre do mais barato para o mais caro, e cada estágio só responde 
    - **Pseudocódigo** (frase curta, sem palavras de funcionalidade como "criar", "api", "calculadora"): modo literal. O prompt mostra 4 exemplos que o próprio compilador traduziu para a linguagem alvo, o código antes e depois do cursor e a regra "traduza só o que a linha diz". A saída passa por pós-processamento determinístico: corta no primeiro bloco, remove linhas que repetem o contexto, remove imports não usados e remove dados de exemplo inventados (`itens = [1, 2, 3]` antes de `itens.reverse()`).
    - **Pedido livre**: geração com o padrão mais próximo e as skills da linguagem no prompt (RAG), ou composição de padrões com gramática JSON.
 
+## Procedência e verificação
+
+Todo resultado traz `verification` (`engine/provenance.py`): origem (compilador, banco, composição, IA ou resposta informativa), modelo, validador e estado da sintaxe, fontes e se houve teste. A sintaxe usa o mesmo validador das gerações (ast do Python, gramáticas tree-sitter instaladas ou checagem léxica), sem executar nada. Os testes do banco vêm dos plugins carregados, não do SQLite: uma variante só conta como testada se tem teste no patternlint e não foi sobrescrita pelo usuário. A IA nunca é marcada como testada. A CLI mostra `TESTADO`/`NÃO TESTADO` no HUD e o resumo completo com `-v`; o Studio mostra TESTE e SINTAXE no cartão do último resultado.
+
 ## Memória
 
 O teto padrão é 3072 MB de RSS para o processo inteiro. As decisões abaixo vieram de medições num i7-7500U com 16 GB:

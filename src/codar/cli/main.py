@@ -71,6 +71,11 @@ def print_result(res: dict, args, hud) -> None:
         parts.append(hud.c("CACHE", "cyan"))
     n = len(res.get("findings", []))
     parts.append(hud.c(f"AUDIT {'✓' if not n else n}", "green" if not n else "orange"))
+    check = res.get("verification") or {}
+    if check.get("tested"):
+        parts.append(hud.c("TESTADO", "mint"))
+    elif check.get("origin") in ("ai", "composition"):
+        parts.append(hud.c("NÃO TESTADO", "orange"))
     print(" ".join(parts), file=sys.stderr)
     for f in res.get("findings", []):
         mark = "✖" if f["severity"] in ("critical", "error") else "⚠" if f["severity"] == "warning" else "ℹ"
@@ -81,6 +86,10 @@ def print_result(res: dict, args, hud) -> None:
         print("  " + hud.bullet(note, "dim"), file=sys.stderr)
     if res.get("slots") and getattr(args, "verbose", False):
         print("  " + hud.kv("slots", ", ".join(f"{k}={v}" for k, v in res["slots"].items())), file=sys.stderr)
+    if check.get("summary") and getattr(args, "verbose", False):
+        print("  " + hud.kv("verificação", check["summary"]), file=sys.stderr)
+        for source in check.get("sources", []):
+            print("  " + hud.kv("fonte", source), file=sys.stderr)
 
 
 def cmd_run(args) -> int:

@@ -422,6 +422,13 @@ class Studio(App):
                                                 f"[{C['orange']}]{len(r['findings'])} achado(s)[/]")]
         if r.get("slots"):
             rows.append(f"[{C['dim']}]SLOTS [/][{C['moon']}]" + _esc(", ".join(f"{k}={v}" for k, v in list(r["slots"].items())[:3])) + "[/]")
+        check = r.get("verification") or {}
+        if check.get("tested"):
+            rows.append(f"[{C['dim']}]TESTE [/][{C['mint']}]variante testada no banco[/]")
+        elif check.get("origin") in ("ai", "composition"):
+            rows.append(f"[{C['dim']}]TESTE [/][{C['orange']}]não testado · revise[/]")
+        if check.get("syntax"):
+            rows.append(f"[{C['dim']}]SINTAXE [/][{C['text']}]{_esc(check['syntax'])} · {_esc(check.get('validator', ''))}[/]")
         self.query_one("#last-card", Static).update("\n".join(rows))
 
     def render_status(self) -> None:
