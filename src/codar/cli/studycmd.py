@@ -30,6 +30,34 @@ def cmd_study(args):
                       'Todas as práticas disponíveis foram registradas. Revise o projeto e os desafios; isso não certifica domínio da linguagem.')
                 return 0
             args.name = value['next']
+        if args.action == 'explain':
+            # Explica uma linha (argumento) ou a linha N de um arquivo, sem IA: conceitos, atributos e alertas.
+            line = args.name or ''
+            if args.file:
+                file = Path(args.file).expanduser()
+                text = file.read_text(encoding='utf-8', errors='replace')
+                detected = langs.from_path(file)
+                lang = detected.id if detected else lang
+                rows = text.split('\n')
+                if not args.line or not 1 <= args.line <= len(rows):
+                    raise ValueError(f'Informe --line entre 1 e {len(rows)}.')
+                line = rows[args.line - 1]
+                lang = estudo.linguagem_na_posicao(text, args.line - 1, lang)
+            concepts = estudo.conceitos_da_linha(line, lang)
+            notes = estudo.anotacoes(line, lang)
+            value = {'line': line, 'language': lang,
+                     'concepts': [{'id': c.id, 'title': c.titulo, 'text': estudo.explicacao(c, lang)} for c in concepts[:4]],
+                     'notes': [{'kind': kind, 'text': text} for kind, text in notes]}
+            if args.json:
+                print(json.dumps(value, ensure_ascii=False, indent=2))
+            else:
+                if concepts:
+                    print(f"{concepts[0].titulo}\n{estudo.explicacao(concepts[0], lang)}\n")
+                for kind, text in notes:
+                    print(('⚠ ' if kind == 'alerta' else '• ') + text)
+                if len(concepts) > 1:
+                    print('\nTambém nesta linha: ' + ' · '.join(c.titulo for c in concepts[1:5]))
+            return 0
         if args.action == 'search':
             from codar.estudo.curriculo import buscar
 
@@ -113,8 +141,12 @@ def cmd_study(args):
                      check=concept.verifique, sources=estudo.fontes(concept, lang))
         from codar.estudo.curriculo import percurso
 
-        lesson = next(item for item in percurso(lang, args.root)['lessons'] if item['id'] == concept.id)
-        value.update({key: lesson[key] for key in ('level', 'module', 'previous', 'next', 'related', 'practiced')})
+        lesson = next((item for item in percurso(lang, args.root)['lessons'] if item['id'] == concept.id), None)
+        if lesson:
+            value.update({key: lesson[key] for key in ('level', 'module', 'previous', 'next', 'related', 'practiced')})
+        else:  # verbete da referência: fora da sequência do percurso
+            value.update(level='referência', module=estudo.TRILHAS[concept.trilha], previous=None, next=None,
+                         related=list(concept.relacionados), practiced=False)
         if args.json:
             print(json.dumps(value, ensure_ascii=False, indent=2))
         else:

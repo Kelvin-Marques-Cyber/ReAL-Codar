@@ -827,7 +827,9 @@ class Studio(App):
             corpo.update(self.estudo_vazio())
             botao.display = False
             return
-        lang = ed.lang_id if ed else self.current_lang()
+        arquivo = ed.lang_id if ed else self.current_lang()
+        # Num .html, a linha dentro de <script> é explicada como JavaScript e dentro de <style> como CSS.
+        lang = estudo.linguagem_na_posicao(ed.text, ed.cursor_location[0], arquivo) if ed else arquivo
         linha = ed.document.get_line(ed.cursor_location[0]) if ed else ''
         achados = estudo.conceitos_da_linha(linha, lang) if ed else []
         if self._estudo_forcado:
@@ -839,7 +841,7 @@ class Studio(App):
             conceito = estudo.POR_ID.get('guia_' + str(lang))
         self._estudo_conceito = conceito
         partes: list = []
-        estado = estudo.trilha_poo(ed.text, lang, uso_externo=self._usado_fora(ed)) if ed else None
+        estado = estudo.trilha_poo(ed.text, arquivo, uso_externo=self._usado_fora(ed)) if ed else None
         if estado is not None:
             self._estudo_poo = (ed, estado)
         elif ed and self._estudo_poo and self._estudo_poo[0] is ed:  # último estado do editor
@@ -854,7 +856,7 @@ class Studio(App):
                                         (f" · próximo: {estudo.POR_ID[prox].titulo.split(' (')[0].lower()}" if prox
                                          else " · completa", C["dim"])))
             partes.append(Text.assemble(("▶ próximo passo: ", f"bold {C['mint']}"), (estado.passo(lang), C["text"])))
-        self.sugestao_estudo = estudo.sugestao_main(self.root, Path(ed.path), ed.text, lang) if ed and ed.path else None
+        self.sugestao_estudo = estudo.sugestao_main(self.root, Path(ed.path), ed.text, arquivo) if ed and ed.path else None
         if self.sugestao_estudo is not None:
             s = self.sugestao_estudo
             partes.append(Text.assemble(("▶ sugestão: ", f"bold {C['orange']}"), (s.motivo + " ", C["text"]),
@@ -866,6 +868,12 @@ class Studio(App):
             partes.append(Text.assemble(("◆ ", f"bold {C['orange']}"), (conceito.titulo.upper(), f"bold {C['mint']}"),
                                         (f"   {estudo.TRILHAS[conceito.trilha]}", C["dim"])))
             partes.append(Text(estudo.explicacao(conceito, lang), style=C["text"]))
+            notas = estudo.anotacoes(linha, lang)
+            if notas:
+                partes.append(Text("NESTA LINHA" + ("" if lang == arquivo else f" · {lang}"), style=f"bold {C['cyan']}"))
+                for tipo, nota in notas[:12]:
+                    partes.append(Text(("⚠ " if tipo == "alerta" else "• ") + nota,
+                                       style=C["orange"] if tipo == "alerta" else C["text"]))
             pessoal = estudo.pelo_comentario(linha, lang) if linha.strip().startswith(("#", "//")) else None
             codigo, lang_ex = pessoal or estudo.exemplo(conceito, lang)
             rotulo = "exemplo com os nomes do seu comentário (para estudar e digitar):" if pessoal else \

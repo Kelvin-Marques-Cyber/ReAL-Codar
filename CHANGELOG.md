@@ -4,6 +4,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+- Estudo explica HTML e CSS linha a linha: 76 verbetes locais de elementos, atributos, tipos de input, propriedades, valores, unidades e seletores (com especificidade), e alertas como img sem alt, campo sem rótulo, button sem type, viewport sem zoom e erro de grafia em propriedades. Linhas dentro de <script>/<style> usam JavaScript/CSS. `codar study explain` mostra o mesmo pela CLI; a referência fica no catálogo e na busca, fora do percurso.
 - Resultados trazem `verification`: origem, modelo, sintaxe conferida (validador), fontes e se houve teste. Só variantes do banco com teste executável contam como testadas; código da IA aparece como não testado no HUD da CLI, em `codar run -v` e no cartão do Studio.
 - Pedidos encadeados (`agora adicione tipagem`, `add type hints`, `añade tipos`, `transforme em async`) editam no Studio somente a função sob o cursor, a recém-inserida ou a logo acima, em vez de gerar outra função ou reescrever o arquivo. Com várias candidatas e nenhuma evidência, nada é enviado e o pedido fica na barra. Detecção estática em Python e nas linguagens de chaves.
 

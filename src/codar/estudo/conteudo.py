@@ -29,7 +29,7 @@ class Conceito:
 
 TRILHAS = {"fundamentos": "FUNDAMENTOS", "poo": "ORIENTAÇÃO A OBJETOS", "web": "JAVASCRIPT E WEB",
            "dados": "CIÊNCIA DE DADOS E VISÃO", "praticas": "PRÁTICAS E FERRAMENTAS",
-           "linguagens": "GUIA DA LINGUAGEM"}
+           "linguagens": "GUIA DA LINGUAGEM", "referencia": "REFERÊNCIA HTML E CSS"}
 
 CONCEITOS: list[Conceito] = [
     # ------------------------------------------------------------------------------------------- fundamentos
@@ -456,6 +456,9 @@ CONCEITOS.extend(ampliar(Conceito))
 from codar.estudo.curriculo import ampliar_curriculo
 
 CONCEITOS.extend(ampliar_curriculo(Conceito))
+from codar.estudo.web import ampliar_web
+
+CONCEITOS.extend(ampliar_web(Conceito))
 POR_ID: dict[str, Conceito] = {c.id: c for c in CONCEITOS}
 TRILHA_POO = ["classe", "construtor", "atributo", "metodo", "objeto", "str", "encapsulamento", "heranca", "super",
               "polimorfismo", "composicao"]

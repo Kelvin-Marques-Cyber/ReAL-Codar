@@ -24,7 +24,8 @@ def home(tmp_path, monkeypatch):
 def test_percurso_tem_conteudo_nativo_niveis_e_projeto_reais(lang, tmp_path):
     path = percurso(lang, tmp_path)
     ids = [lesson['id'] for lesson in path['lessons']]
-    assert len(ids) == len(set(ids)) == len(estudo.catalogo(lang))
+    # A referência de elementos/propriedades fica no catálogo e na busca, fora da sequência de aulas.
+    assert len(ids) == len(set(ids)) == len([c for c in estudo.catalogo(lang) if c.trilha != 'referencia'])
     assert path['project'] in ids and ids[-1] == path['project']
     assert path['next'] == 'guia_' + lang and path['environment']
     levels = [lesson['level'] for lesson in path['lessons']]

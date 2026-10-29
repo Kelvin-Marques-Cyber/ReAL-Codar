@@ -413,7 +413,8 @@ def percurso(lang, project=None):
     from codar.estudo.progresso import ler
 
     detalhes = {f'{lang}_{a.chave}': a for a in AULAS[lang]}
-    existentes = [c for c in estudo.catalogo(lang) if c.id not in detalhes]
+    # A referência de elementos é consultada pela linha do cursor e pela busca, não percorrida aula a aula.
+    existentes = [c for c in estudo.catalogo(lang) if c.id not in detalhes and c.trilha != 'referencia']
     existentes.sort(key=lambda c: (not c.id.startswith('guia_'), c.trilha != 'fundamentos'))
     conceitos = existentes + [estudo.POR_ID[identity] for identity in detalhes]
     def nivel(c):

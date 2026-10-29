@@ -729,12 +729,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(fn=lambda a: __import__("codar.cli.toolchaincmd", fromlist=["x"]).cmd_toolchains(a))
 
     p = sub.add_parser('study', aliases=['estudar'], help='estudo offline: list | show ID, na linguagem escolhida')
-    p.add_argument('action', nargs='?', choices=['list', 'show', 'path', 'search', 'resume', 'exercises', 'exercise', 'check', 'progress', 'mark', 'export', 'import'], default='list')
+    p.add_argument('action', nargs='?', choices=['list', 'show', 'path', 'search', 'resume', 'explain', 'exercises', 'exercise', 'check', 'progress', 'mark', 'export', 'import'], default='list')
     p.add_argument('name', nargs='?')
     p.add_argument('-l', '--lang', default='python')
     p.add_argument('--json', action='store_true')
     p.add_argument('--root', default='.', help='projeto do progresso de aprendizagem')
-    p.add_argument('--file', help='arquivo JSON do progresso ou código para verificar um exercício')
+    p.add_argument('--file', help='arquivo JSON do progresso, código para verificar um exercício ou arquivo a explicar')
+    p.add_argument('--line', type=int, help='explain: número da linha (a partir de 1) do --file')
     p.set_defaults(fn=lambda a: __import__('codar.cli.studycmd', fromlist=['x']).cmd_study(a))
 
     p = sub.add_parser('libraries', aliases=['bibliotecas'], help='bibliotecas: list | show | learn | install | verify | forget')

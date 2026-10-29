@@ -34,9 +34,12 @@ def test_laco_infinito_e_saida_excessiva_sao_interrompidos(tmp_path):
     ('.js', "const fs=require('fs');console.log(Number(fs.readFileSync(0,'utf8'))*2);"),
     ('.sh', 'read n\nprintf "%s\\n" "$((n*2))"\n'),
     ('.c', '#include <stdio.h>\nint main(){int n; scanf("%d", &n); printf("%d\\n",n*2); return 0;}'),
+    ('.rs', 'use std::io::Read;\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n'
+            '    let n: i64 = s.trim().parse().unwrap();\n    println!("{}", n * 2);\n}\n'),
+    ('.go', 'package main\n\nimport "fmt"\n\nfunc main() {\n\tvar n int\n\tfmt.Scan(&n)\n\tfmt.Println(n * 2)\n}\n'),
 ])
 def test_exercicios_em_outros_runtimes(tmp_path, extension, code):
-    runtime = {'.js':'node','.sh':'bash','.c':'gcc'}[extension]
+    runtime = {'.js': 'node', '.sh': 'bash', '.c': 'gcc', '.rs': 'rustc', '.go': 'go'}[extension]
     if not shutil.which(runtime):
         pytest.skip('runtime opcional ausente: ' + runtime)
     file = tmp_path / ('solucao' + extension)

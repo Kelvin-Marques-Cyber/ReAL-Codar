@@ -20,10 +20,12 @@ from pathlib import Path
 
 from codar.estudo.conteudo import CONCEITOS, POR_ID, TRILHA_POO, TRILHAS, Conceito
 
-__all__ = ["CONCEITOS", "POR_ID", "TRILHA_POO", "TRILHAS", "Conceito", "EstadoPoo", "Sugestao", "conceitos_da_linha",
-           "exemplo", "pelo_comentario", "sugestao_main", "trilha_poo"]
+__all__ = ["CONCEITOS", "POR_ID", "TRILHA_POO", "TRILHAS", "Conceito", "EstadoPoo", "Sugestao", "anotacoes",
+           "conceitos_da_linha", "exemplo", "linguagem_na_posicao", "pelo_comentario", "sugestao_main", "trilha_poo"]
 
 from codar.estudo.ampliado import EXEMPLOS_R, FONTES
+from codar.estudo import web
+from codar.estudo.web import linguagem_na_posicao
 
 _GRUPO = {**{lang: lang for lang in FONTES}, "python": "py", "javascript": "js", "typescript": "js"}
 # a linha "class Poupanca(Conta):" é herança antes de ser classe; "conta = Conta()" é objeto antes de variável
@@ -54,6 +56,9 @@ def conceitos_da_linha(linha: str, lang: str | None) -> list[Conceito]:
     texto = linha.strip()
     if not texto:
         return []
+    # HTML e CSS: a referência explica cada tag e propriedade da linha, na ordem em que aparecem.
+    referencia = web.html_da_linha(linha, POR_ID) if lang == 'html' else web.css_da_linha(linha, POR_ID) \
+        if lang == 'css' else []
     if texto.startswith(_COMENTARIO):
         baixo = texto.lower()  # palavra (ou começo de palavra): "se " não casa dentro de "classe com"
         achados = [c for c in CONCEITOS if any(re.search(r"(?<!\w)" + re.escape(p), baixo) for p in c.palavras)
@@ -70,7 +75,16 @@ def conceitos_da_linha(linha: str, lang: str | None) -> list[Conceito]:
                 achados.append(c)
     if not achados and lang and 'guia_' + lang in POR_ID:
         achados = [POR_ID['guia_' + lang]]
-    return sorted(achados, key=_ordem)
+    return referencia + [c for c in sorted(achados, key=_ordem) if c not in referencia]
+
+
+def anotacoes(linha: str, lang: str | None) -> list[tuple[str, str]]:
+    """O que está escrito nesta linha: atributos, valores, seletores e problemas visíveis (HTML e CSS)."""
+    if lang == 'html':
+        return web.anotacoes_html(linha)
+    if lang == 'css':
+        return web.anotacoes_css(linha)
+    return []
 
 
 @functools.lru_cache(maxsize=256)
