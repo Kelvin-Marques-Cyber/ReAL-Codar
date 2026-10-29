@@ -1,3 +1,11 @@
+codar (0.5.0-1) unstable; urgency=medium
+
+  * Explica HTML, CSS e as construções de 20 linguagens linha a linha no Estudo.
+  * Pedidos encadeados editam a função a que se referem; resultados informam procedência e verificação.
+  * Corrige o patternlint em Go, um erro ao fechar o Studio e testes dependentes do ambiente.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Thu, 29 Oct 2026 13:50:00 -0300
+
 codar (0.4.0-1) unstable; urgency=medium
 
   * Integra inventário, APIs e trilhas de bibliotecas ao Studio.
