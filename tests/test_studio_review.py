@@ -34,7 +34,7 @@ def test_revisao_protege_editor_e_guarda_original(tmp_path, monkeypatch, action)
                imports=[], findings=[], notes=[], complete=True)
 
     async def wait(pilot, condition):
-        for _ in range(80):
+        for _ in range(200):  # até 10 s sob a suíte completa; sai assim que a condição vale
             await pilot.pause(0.05)
             if condition():
                 return
@@ -56,9 +56,13 @@ def test_revisao_protege_editor_e_guarda_original(tmp_path, monkeypatch, action)
                 if action == "changed":
                     editor.replace("x = 9\n", (0, 0), editor.document.end)
                 await pilot.click("#review-apply")
+                # O worker de aceite nasce no callback da prévia: espera-se o desfecho visível,
+                # não a lista de workers no instante do clique (vazia sob carga).
+                outcome = {"accept": "Código aplicado", "changed": "mudou durante a revisão",
+                           "invalid": "bloqueada pela validação"}[action]
+                await wait(pilot, lambda: outcome in str(app.query_one("#output-status").content))
                 await asyncio.wait_for(asyncio.gather(*(worker.wait() for worker in app.workers
                                                         if worker.group == "review")), timeout=5)
-                await pilot.pause(0.1)
                 if action == "accept":
                     assert editor.text == body
                     records = EditStore(tmp_path).list()

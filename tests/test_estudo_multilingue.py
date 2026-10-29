@@ -42,7 +42,7 @@ def test_painel_nativo_ao_trocar_entre_todas_linguagens(tmp_path, monkeypatch):
     pytest.importorskip('textual')
     from textual.widgets import Static
     from codar.studio.app import Studio
-    from tests.test_estudo import _texto
+    from test_estudo import _texto
 
     monkeypatch.setenv('CODAR_HOME', str(tmp_path / 'home'))
     monkeypatch.setenv('CODAR_NO_AUTOSTART', '1')
