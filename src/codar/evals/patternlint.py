@@ -342,7 +342,8 @@ _SESSION = {
     "javascript": ("t.mjs", lambda f: [shutil.which("node"), f]),
     "typescript": ("t.mts", lambda f: [shutil.which("node"), f]),
     "java": ("t.java", lambda f: [shutil.which("java"), f]),
-    "go": ("main.go", lambda f: [shutil.which("go"), "run", f]),
+    # go run sempre sai com 1 quando o programa falha; o binário compilado preserva o código de saída.
+    "go": ("main.go", lambda f: [shutil.which("go") and os.path.splitext(f)[0] + (".exe" if os.name == "nt" else "")]),
     "powershell": ("t.ps1", lambda f: [pwsh_bin(), "-NoProfile", "-NonInteractive", "-File", f]),
     "bash": ("t.sh", lambda f: [shutil.which("bash"), f]),
 }
@@ -366,6 +367,14 @@ def run_session(lang: str, code: str, stdin: str, expect: list[str], timeout: fl
             return None
         argv += args or []
         Path(tmp, name).write_text(code, encoding="utf-8")
+        if lang == "go":
+            try:
+                build = subprocess.run([shutil.which("go"), "build", "-o", argv[0], name], capture_output=True, text=True,
+                                       timeout=120, cwd=tmp)
+            except subprocess.TimeoutExpired:
+                return "timeout ao compilar"
+            if build.returncode:
+                return "não compilou: " + (build.stderr.strip().splitlines() or ["?"])[-1][:160]
         try:
             r = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=timeout, cwd=tmp,
                                env={**os.environ, "NO_COLOR": "1"})
