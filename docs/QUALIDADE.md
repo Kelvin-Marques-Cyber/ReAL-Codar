@@ -11,7 +11,9 @@ logs não existem (a API devolve 404). Um teste que falha produz passos e logs; 
 
 **Conclusão:** a falha é de infraestrutura do Actions na conta ou no repositório, não do código. As causas típicas
 desse sintoma são limite de gastos ou de minutos do Actions atingido, pendência de pagamento na conta, ou Actions
-desativado/restrito nas configurações do repositório. Quem administra o repositório deve conferir:
+desativado/restrito nas configurações do repositório. As notas da Release 0.3.0 já registravam que o Actions não
+iniciava os jobs "devido ao bloqueio de cobrança da conta"; a execução 83, sobre a 0.5.0, repetiu o mesmo sintoma.
+Quem administra o repositório deve conferir:
 
 1. **Settings → Billing and plans** da conta: uso de minutos do Actions, limite de gastos (*spending limit*) e
    pendências de pagamento.
