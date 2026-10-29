@@ -33,6 +33,14 @@ def find_root(file: str | Path | None = None) -> Path | None:
     return None
 
 
+def is_secret(relative: str) -> bool:
+    """Arquivos de credenciais e chaves: nunca vão para prompts, para a rede nem para listagens."""
+    name = Path(relative).name
+    return (name in SECRET_NAMES or name.startswith(".env.") or name.startswith(("id_rsa", "id_ecdsa", "id_ed25519"))
+            and not name.endswith(".pub") or Path(name).suffix.lower() in (".pem", ".key", ".p12", ".pfx", ".jks",
+                                                                            ".keystore", ".kdbx"))
+
+
 def safe_path(root: Path, relative: str) -> Path:
     """Recusa caminhos absolutos, escapes e links em qualquer componente."""
     path = Path(relative)
@@ -111,8 +119,7 @@ class Project:
 
     def allowed(self, relative: str) -> bool:
         path = Path(relative)
-        return not (any(x in EXCLUDED_DIRS for x in path.parts) or path.name in SECRET_NAMES or
-                    path.name.startswith(".env.") or path.suffix.lower() in (".pem", ".key", ".p12", ".pfx") or
+        return not (any(x in EXCLUDED_DIRS for x in path.parts) or is_secret(relative) or
                     path.name.endswith((".g.dart", ".freezed.dart", ".min.js", ".lock")) or
                     any(fnmatch.fnmatch(relative, rule) or fnmatch.fnmatch(path.name, rule) for rule in self.exclude))
 

@@ -184,6 +184,10 @@ def _patterns_from(data: dict, source: str, errors: list[str]) -> list[Pattern]:
             if bad:
                 raise ValueError(f"variante(s) {bad} não são texto (chave fora do lugar após [pattern.code]?)")
             code = {k: v.strip("\n") + "\n" for k, v in raw_code.items()}
+            # Slots viram nomes de parâmetro (planejador e compositor): só identificadores, nunca código.
+            invalid = [k for k in (raw.get("slots") or {}) if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", str(k))]
+            if invalid:
+                raise ValueError(f"slot(s) com nome inválido: {invalid}; use letras, números e _")
             p = Pattern(
                 id=raw["id"], title=raw["title"], code=code, keywords=raw.get("keywords", ""),
                 kind=raw.get("kind", "snippet"), require=_texts(raw.get("require", []), "require"),

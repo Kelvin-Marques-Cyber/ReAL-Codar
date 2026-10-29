@@ -198,3 +198,14 @@ def test_painel_do_studio_explica_a_linha_html_e_o_script(tmp_path, monkeypatch)
             painel = _texto(app.query_one("#estudo-corpo", Static).content)
             assert "FUNÇÕES DE SETA" in painel.upper() and "<IMG>" not in painel
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("lang,linha", [("html", '<div class="a" id="b"><span data-x="1">t</span></div>' * 400),
+                                        ("css", ".a{color:red;margin:0 auto}" * 8000)])
+def test_linha_minificada_nao_trava_o_painel(lang, linha):
+    import time
+
+    inicio = time.perf_counter()
+    estudo.conceitos_da_linha(linha, lang)
+    estudo.anotacoes(linha, lang)
+    assert time.perf_counter() - inicio < .25  # o painel recalcula a cada movimento do cursor

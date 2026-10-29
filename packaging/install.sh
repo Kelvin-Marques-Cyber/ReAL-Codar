@@ -72,6 +72,23 @@ main() {
         pkg="$tmp/$(basename "$url")"
         say "baixando $(basename "$url")"
         curl -fsSL -o "$pkg" "$url"
+        # O pacote é instalado como root: só segue se o SHA-256 bater com o SHA256SUMS da mesma Release.
+        sums="$(grep -o '"browser_download_url": *"[^"]*' "$tmp/release.json" | sed 's/.*"//' |
+            grep -- '/SHA256SUMS$' | head -n 1)" || true
+        [ -n "$sums" ] || fail "a Release não publica SHA256SUMS; instalação cancelada (o pacote não pode ser conferido)"
+        curl -fsSL -o "$tmp/SHA256SUMS" "$sums"
+        nome="$(basename "$url")"
+        esperado="$(awk -v f="$nome" '$2 == f || $2 == "*" f { print $1; exit }' "$tmp/SHA256SUMS")"
+        [ -n "$esperado" ] || fail "SHA256SUMS não lista $nome; instalação cancelada"
+        if command -v sha256sum >/dev/null 2>&1; then
+            obtido="$(sha256sum "$pkg" | cut -d ' ' -f 1)"
+        elif command -v shasum >/dev/null 2>&1; then
+            obtido="$(shasum -a 256 "$pkg" | cut -d ' ' -f 1)"
+        else
+            fail "instale sha256sum (coreutils) ou shasum para conferir o pacote"
+        fi
+        [ "$obtido" = "$esperado" ] || fail "o SHA-256 de $nome não confere com SHA256SUMS; instalação cancelada"
+        say "SHA-256 conferido: $nome"
     fi
     case "$pkg" in /*) ;; *) pkg="$(pwd)/$pkg" ;; esac
     [ -f "$pkg" ] || fail "pacote não encontrado: $pkg"

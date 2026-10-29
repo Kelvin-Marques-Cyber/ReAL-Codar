@@ -87,3 +87,51 @@ def test_unknown_option_does_not_install(sandbox):
     _, run = sandbox
     result, calls = run("--typo")
     assert result.returncode != 0 and not calls
+
+
+def _release(sandbox, tmp_path, conteudo_soma):
+    """curl falso: a Release tem o .deb e (se conteudo_soma) um SHA256SUMS; sudo só registra a chamada."""
+    import hashlib
+
+    env, run = sandbox
+    pacote = b"pacote deb falso"
+    soma = conteudo_soma(hashlib.sha256(pacote).hexdigest()) if conteudo_soma else None
+    base = "https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/download/v0.5.0/"
+    ativos = [{"browser_download_url": base + "codar_0.5.0-1_all.deb"}]
+    if soma is not None:
+        ativos.append({"browser_download_url": base + "SHA256SUMS"})
+    dados = {"release": json.dumps({"assets": ativos}, indent=1), "deb": pacote.decode(), "sums": soma or ""}
+    (tmp_path / "dados.json").write_text(json.dumps(dados), encoding="utf-8")
+    env["MOCK_DADOS"] = str(tmp_path / "dados.json")
+    bindir = Path(env["MOCK_BIN"])
+    corpo = ("import json, os, sys\n"
+             "with open(os.environ['MOCK_LOG'], 'a') as f: f.write(json.dumps(sys.argv) + '\\n')\n"
+             "d = json.load(open(os.environ['MOCK_DADOS']))\n"
+             "url = sys.argv[-1]; destino = sys.argv[sys.argv.index('-o') + 1]\n"
+             "chave = 'release' if 'api.github.com' in url else 'sums' if url.endswith('SHA256SUMS') else 'deb'\n"
+             "open(destino, 'w').write(d[chave])\n")
+    for nome, texto in (("curl", corpo), ("sudo", "import json, os, sys\n"
+                        "with open(os.environ['MOCK_LOG'], 'a') as f: f.write(json.dumps(sys.argv) + '\\n')\n")):
+        caminho = bindir / nome
+        caminho.write_text(f"#!{sys.executable}\n" + texto, encoding="utf-8")
+        caminho.chmod(0o755)
+    return run
+
+
+def _instalou(calls):
+    return any(Path(call[0]).name == "sudo" and "apt-get" in call for call in calls)
+
+
+def test_pacote_so_e_instalado_com_sha256_conferido(sandbox, tmp_path):
+    run = _release(sandbox, tmp_path, lambda h: f"{h}  codar_0.5.0-1_all.deb\n")
+    result, calls = run()
+    assert "SHA-256 conferido" in result.stdout and _instalou(calls), result.stderr
+
+
+@pytest.mark.parametrize("soma", [lambda h: "0" * 64 + "  codar_0.5.0-1_all.deb\n",
+                                  lambda h: f"{h}  outro-arquivo.deb\n", None],
+                         ids=["sha-diferente", "pacote-nao-listado", "sem-sha256sums"])
+def test_pacote_sem_verificacao_nao_e_instalado(sandbox, tmp_path, soma):
+    run = _release(sandbox, tmp_path, soma)
+    result, calls = run()
+    assert result.returncode != 0 and "cancelada" in result.stderr and not _instalou(calls)

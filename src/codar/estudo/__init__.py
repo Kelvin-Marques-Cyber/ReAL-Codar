@@ -67,6 +67,7 @@ def _ordem(c: Conceito) -> int:
 def conceitos_da_linha(linha: str, lang: str | None) -> list[Conceito]:
     """Conceitos que a linha usa (o mais específico primeiro). Num comentário, pelas palavras: "# laço para cada
     aluno" -> repetição com for."""
+    linha = linha[:4000]  # linhas minificadas: o painel acompanha o cursor e não pode travar a digitação
     texto = linha.strip()
     if not texto:
         return []

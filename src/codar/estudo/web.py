@@ -650,7 +650,8 @@ def anotacoes_html(linha: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     if "<!--" in linha:
         out.append(("info", "comentário: o navegador ignora, mas qualquer pessoa vê no código-fonte"))
-    tags = _tags(linha)
+    tags = _tags(linha[:_LIMITE])[:_MAX_TAGS]
+    abertas = {t for t, _a, f in tags if not f}
     label_aberto = False  # <label><input …> Texto</label>: o campo está dentro do rótulo
     for indice, (tag, attrs, fecha) in enumerate(tags):
         if tag == "label":
@@ -659,7 +660,7 @@ def anotacoes_html(linha: str) -> list[tuple[str, str]]:
             out.append(("info", "<!doctype html>: ativa o modo padrão de renderização"))
             continue
         if fecha:
-            if tag in _E and not any(t == tag and not f for t, _a, f in _tags(linha)):
+            if tag in _E and tag not in abertas:
                 out.append(("info", f"</{tag}> fecha o elemento {tag} aberto numa linha anterior"))
             continue
         if tag not in _E and tag not in _VALIDOS and "-" not in tag:
@@ -706,6 +707,11 @@ def anotacoes_html(linha: str) -> list[tuple[str, str]]:
     return list(dict.fromkeys(out))
 
 
+# O painel mostra poucas notas: linhas minificadas não podem custar tempo proporcional ao arquivo inteiro.
+_LIMITE = 4000
+_MAX_TAGS = 60
+
+
 def _camel(nome: str) -> str:
     partes = nome.split("-")
     return partes[0] + "".join(p.title() for p in partes[1:])
@@ -714,9 +720,10 @@ def _camel(nome: str) -> str:
 def html_da_linha(linha: str, por_id: dict) -> list:
     """Conceitos da referência HTML na ordem das tags da linha."""
     out = []
+    linha = linha[:_LIMITE]
     if "<!--" in linha and "html_ref_comentario" in por_id:
         out.append(por_id["html_ref_comentario"])
-    for tag, _attrs, _fecha in _tags(linha):
+    for tag, _attrs, _fecha in _tags(linha)[:_MAX_TAGS]:
         if tag in _E and (c := por_id.get(_conceito_id(tag))) and c not in out:
             out.append(c)
     return out
@@ -1023,6 +1030,7 @@ def _resumo_valor(prop: str, valor: str) -> list[str]:
 
 def anotacoes_css(linha: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
+    linha = linha[:_LIMITE]
     texto = re.sub(r"/\*.*?\*/", "", linha)
     if texto.strip() == "}":
         return [("info", "} fecha o bloco de declarações aberto acima")]
@@ -1110,7 +1118,7 @@ def _descricao(prop: str) -> str | None:
 
 
 def css_da_linha(linha: str, por_id: dict) -> list:
-    texto = re.sub(r"/\*.*?\*/", "", linha)
+    texto = re.sub(r"/\*.*?\*/", "", linha[:_LIMITE])
     chaves = []
     at = re.match(r"\s*@([\w-]+)", texto)
     if at:

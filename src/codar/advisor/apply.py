@@ -21,6 +21,19 @@ class ApplyError(RuntimeError):
     pass
 
 
+def _alvo(root: Path, relativo) -> Path:
+    """Arquivo de um passo de sugestão: dentro do projeto, sem caminho absoluto, .. ou link simbólico.
+
+    As sugestões podem vir de plugins de terceiros; um passo nunca escreve fora da pasta do projeto.
+    """
+    from codar.project import safe_path
+
+    try:
+        return safe_path(root, str(relativo))
+    except ValueError as exc:
+        raise ApplyError(f"passo recusado: {exc}") from exc
+
+
 def find_option(root: Path, bundle: Bundle, sid: str, oid: str | None) -> tuple[str, dict | None, list[dict]]:
     """(título, opção-render, passos executáveis)."""
     facts = collect(root)
@@ -63,13 +76,13 @@ def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run
         elif "pm_add" in step or "pm_exec" in step:
             _run(pm_command(root, step), root, out, step.get("allow_fail", False))
         elif "backup" in step:
-            src = root / step["backup"]
+            src = _alvo(root, step["backup"])
             if src.exists():
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(src), str(backup_dir / src.name))
                 out(f"    ✓ movido para {backup_dir.relative_to(root)}/{src.name}")
         elif "write" in step:
-            dest = root / step["write"]
+            dest = _alvo(root, step["write"])
             if dest.exists() and step.get("if_missing", True):
                 out("    ↷ já existe")
                 continue
@@ -81,7 +94,7 @@ def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run
             dest.write_text(content, encoding="utf-8")
             out(f"    ✓ {step['write']} ({len(content.splitlines())} linhas)")
         elif "append" in step:
-            dest = root / step["append"]
+            dest = _alvo(root, step["append"])
             existing = dest.read_text(encoding="utf-8").splitlines() if dest.exists() else []
             norm = {ln.strip().strip("/") for ln in existing}
             new = [ln for ln in step.get("lines", []) if ln.strip().strip("/") not in norm]
@@ -94,7 +107,7 @@ def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run
             else:
                 out("    ↷ nada a acrescentar")
         elif "json_set" in step:
-            dest = root / step["json_set"]
+            dest = _alvo(root, step["json_set"])
             data = (_load_json(root, step["json_set"]) if dest.exists() else {}) or {}
             if dest.exists():
                 backup_dir.mkdir(parents=True, exist_ok=True)
@@ -128,7 +141,7 @@ def _content(step: dict, patterns: dict, root: Path) -> str:
             text = text.replace("{{" + slot + "}}", str(step.get("slots", {}).get(slot, default)))
         return text
     if step.get("from_env_keys"):
-        src = root / step["from_env_keys"]
+        src = _alvo(root, step["from_env_keys"])
         keys = []
         for ln in src.read_text(encoding="utf-8", errors="ignore").splitlines():
             if "=" in ln and not ln.lstrip().startswith("#"):

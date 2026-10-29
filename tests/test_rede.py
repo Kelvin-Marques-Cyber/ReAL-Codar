@@ -136,3 +136,28 @@ def test_f5_em_pagina_html_abre_a_previa_com_qr_no_studio(tmp_path, monkeypatch)
             assert app.rede_srv is None
 
     asyncio.run(cenario())
+
+
+def test_nao_segue_links_para_fora_nem_entrega_segredos(previa, tmp_path):
+    servidor, site = previa
+    fora = tmp_path / "fora"
+    fora.mkdir()
+    (fora / "privado.html").write_text("<p>fora do projeto</p>", encoding="utf-8")
+    (site / "atalho").symlink_to(fora, target_is_directory=True)
+    (site / "id_rsa").write_text("-----BEGIN OPENSSH PRIVATE KEY-----", encoding="utf-8")
+    (site / "servidor.pem").write_text("chave", encoding="utf-8")
+    (site / "id_rsa.pub").write_text("ssh-ed25519 AAAA publica", encoding="utf-8")
+    base = servidor.url_local
+    assert _get(base + "atalho/privado.html")[0] == 404  # link simbólico que sai da pasta
+    assert _get(base + "atalho/")[0] == 404
+    assert _get(base + "id_rsa")[0] == 404 and _get(base + "servidor.pem")[0] == 404
+    assert _get(base + "id_rsa.pub")[0] == 200  # chave pública não é segredo
+    assert _get(base + "..%5c..%5cfora%5cprivado.html")[0] == 404  # barra invertida (Windows)
+    assert _get(base + "%2e%2e/fora/privado.html")[0] == 404
+    status, indice = _get(base)
+    assert status == 200 and b"atalho" not in indice and b"id_rsa<" not in indice and b"servidor.pem" not in indice
+
+
+def test_codigo_do_endereco_tem_96_bits(previa):
+    servidor, _ = previa
+    assert len(servidor.token) == 16

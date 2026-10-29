@@ -8,6 +8,7 @@ engine nativo é otimizado. Telemetria é sempre desligada e, após o primeiro d
 
 from __future__ import annotations
 
+import keyword
 import os
 import re
 
@@ -30,8 +31,9 @@ class NeedleRouter:
     def plan(self, intent: str, tools: list[dict]) -> list[dict]:
         funcs = []
         for t in tools:
-            params = ", ".join(f"{p}: str = ''" for p in t["params"])
-            name = re.sub(r"\W", "_", t["id"])
+            # Só identificadores entram no código gerado; o título vai como literal (repr).
+            params = ", ".join(f"{p}: str = ''" for p in t["params"] if p.isidentifier() and not keyword.iskeyword(p))
+            name = "t_" + re.sub(r"\W", "_", t["id"])
             ns: dict = {}
             exec(f"def {name}({params}):\n    {t['title']!r}\n    return {{}}", ns)  # noqa: S102 - ids/títulos do banco
             fn = ns[name]
@@ -41,7 +43,7 @@ class NeedleRouter:
         result = agent.run(intent)
         if float(result.get("confidence", 0)) < self.min_confidence:
             return []
-        by_name = {re.sub(r"\W", "_", t["id"]): t["id"] for t in tools}
+        by_name = {"t_" + re.sub(r"\W", "_", t["id"]): t["id"] for t in tools}
         ungrounded = set((result.get("validation") or {}).get("ungrounded", []))
         steps = []
         for call in result.get("function_calls", []):

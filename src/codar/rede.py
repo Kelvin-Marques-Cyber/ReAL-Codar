@@ -11,6 +11,7 @@ Sem dependências; o endereço vira QR code (codar.qr) no Studio e no `codar ser
 
 from __future__ import annotations
 
+import hmac
 import html
 import json
 import os
@@ -120,14 +121,22 @@ class _Pagina(SimpleHTTPRequestHandler):
             self.servidor.ao_acessar(self.address_string(), self.path)
 
     def _relativo(self) -> str | None:
-        """O caminho pedido sem o código do endereço; None se o código não bate ou se é um arquivo oculto."""
+        """O caminho pedido sem o código do endereço; None se o código não bate, se é oculto, segredo ou link,
+        ou se sairia da pasta (inclusive por \\ no Windows)."""
+        from codar.project import is_secret, safe_path
+
         caminho = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
-        prefixo = f"/{self.servidor.token}"
-        if caminho != prefixo and not caminho.startswith(prefixo + "/"):
+        codigo, _, rel = caminho.lstrip("/").partition("/")
+        if not hmac.compare_digest(codigo.encode(), self.servidor.token.encode()):
             return None
-        rel = caminho[len(prefixo):].lstrip("/")
-        if any(p.startswith(".") for p in rel.split("/") if p) or any(p in IGNORAR for p in rel.split("/")):
+        partes = [p for p in rel.split("/") if p]
+        if any(p.startswith(".") or p in IGNORAR for p in partes) or (partes and is_secret(partes[-1])):
             return None
+        if rel.strip("/"):
+            try:
+                safe_path(self.servidor.raiz, rel.strip("/"))
+            except ValueError:
+                return None
         return rel
 
     def send_head(self):
@@ -171,8 +180,10 @@ class _Pagina(SimpleHTTPRequestHandler):
 
     def _indice(self, pasta: Path, rel: str):
         itens = []
+        from codar.project import is_secret
+
         for p in sorted(pasta.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
-            if p.name.startswith(".") or p.name in IGNORAR:
+            if p.name.startswith(".") or p.name in IGNORAR or p.is_symlink() or is_secret(p.name):
                 continue
             nome = html.escape(p.name) + ("/" if p.is_dir() else "")
             href = urllib.parse.quote(p.name) + ("/" if p.is_dir() else "")
@@ -217,7 +228,7 @@ class ServidorPrevia:
     def __init__(self, raiz: str | Path, porta: int | None = None, rede: bool = True, ao_acessar=None) -> None:
         self.raiz = Path(raiz).resolve()
         self.rede = rede
-        self.token = secrets.token_urlsafe(6).replace("-", "x").replace("_", "y")
+        self.token = secrets.token_urlsafe(12).replace("-", "x").replace("_", "y")  # 96 bits no endereço
         self.versao = 0
         self.ao_acessar = ao_acessar
         host = "0.0.0.0" if rede else "127.0.0.1"
