@@ -241,6 +241,11 @@ def _finish(root, source, original, result):
             'message': 'Todos os casos passaram.' if passed else 'Há casos que precisam de correção.'}
 
 
+def _programa(lang):
+    meta = langs.LANGS.get(lang)
+    return meta is None or meta.programa
+
+
 def catalog(lang=None):
     return [asdict(exercise) for exercise in EXERCISES.values()
-            if lang is None or lang in exercise.languages or (not exercise.languages and lang not in ('html', 'css', 'sql', 'yaml', 'dockerfile'))]
+            if lang is None or lang in exercise.languages or (not exercise.languages and _programa(lang))]

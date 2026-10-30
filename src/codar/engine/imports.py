@@ -96,7 +96,7 @@ def is_native_import(intent: str, lang: str | None) -> bool:
         except SyntaxError:
             pass
     elif lang in _RULES and re.fullmatch(_RULES[lang], re.sub(r"\s+", " ", intent.strip()),
-                                        re.I if lang in ("powershell", "html") else 0):
+                                        re.I if lang in _SEM_CAIXA else 0):
         return True
     elif lang == "go" and re.fullmatch(r"import\s*\([\s\S]*\)", intent.strip()):
         return bool(import_prefix(intent, lang))
@@ -227,6 +227,11 @@ def _named_import(name: str, symbol: str, alias: str, lang: str) -> tuple[str, s
         return 'using ' + name + (': ' + symbol if symbol else ''), name
     if lang == 'bash' and not symbol and not alias and re.fullmatch(r'[\w./-]+', name) and name.endswith('.sh'):
         return f'source "{name}"', name
+    if lang == 'latex' and not symbol and not alias and re.fullmatch(r'[A-Za-z][\w-]*', name):
+        return '\\usepackage{' + name + '}', name
+    if lang in ('protobuf', 'solidity') and not symbol and not alias and re.fullmatch(r'[\w./@-]+', name) and (
+            name.endswith('.proto' if lang == 'protobuf' else '.sol')) and '..' not in name.split('/')[1:]:
+        return f'import "{name}";', name
     return None
 
 
@@ -270,8 +275,14 @@ _RULES = {
     "bash": rf"(?:source|\.)\s+(?:{_STR}|{_PATH})",
     "html": rf"<script\s+src\s*=\s*{_STR}\s*>\s*</script>|<link\s+rel\s*=\s*['\"]stylesheet['\"]\s+href\s*=\s*{_STR}\s*/?>",
     "css": rf"@import\s+(?:{_STR}|url\(\s*{_STR}\s*\))\s*;",
+    "latex": r"\\(?:usepackage|RequirePackage)(?:\[[^\]\n]*\])?\{[\w\s,.-]+\}",
+    "protobuf": r'import\s+(?:public\s+|weak\s+)?"[^"\n]+\.proto"\s*;',
+    "solidity": rf'import\s+(?:\{{[\w\s,]+\}}\s+from\s+|\*\s+as\s+{_ID}\s+from\s+)?"[^"\n]+\.sol"(?:\s+as\s+{_ID})?\s*;',
+    "verilog": r'`include\s+"[^"\n]+"',
+    "vhdl": r"(?:library\s+\w+(?:\s*,\s*\w+)*|use\s+\w+(?:\.\w+)+)\s*;",
 }
 IMPORT_LANGS = frozenset(_RULES) | {"python"}
+_SEM_CAIXA = ("powershell", "html", "vhdl")
 
 
 def _balanced(text: str) -> bool:
@@ -339,7 +350,7 @@ def import_prefix(code: str, lang: str) -> list[str]:
             # Une os imports multilinha; os padrões não aceitam chamadas ou
             # comandos concatenados após uma declaração.
             chunk = re.sub(r"\s+", " ", chunk) if "\n" in chunk else chunk
-            if not re.fullmatch(_RULES[lang], chunk, re.I if lang in ("powershell", "html") else 0):
+            if not re.fullmatch(_RULES[lang], chunk, re.I if lang in _SEM_CAIXA else 0):
                 break
             if lang in ("bash", "powershell") and any(x in chunk for x in ("$", "`")):
                 break

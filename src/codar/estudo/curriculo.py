@@ -369,6 +369,10 @@ from codar.estudo.curriculo_outros import outras_aulas
 
 AULAS.update(outras_aulas(Aula))
 
+from codar.estudo.linguagens import FICHAS as _FICHAS  # noqa: E402
+
+AULAS.update({lang: [Aula(*aula) for aula in ficha.aulas] for lang, ficha in _FICHAS.items()})
+
 AMBIENTES = {
     'python': 'Salve em .py. Confira python --version (ou python3) e crie um venv por projeto; execute python arquivo.py. Bibliotecas externas precisam estar instaladas nesse ambiente.',
     'javascript': 'No terminal, confira node --version e execute node arquivo.js. Exemplos DOM exigem uma página no navegador. Para módulos Node use .mjs; no navegador use script type="module".',
@@ -395,6 +399,8 @@ AMBIENTES = {
     'yaml': 'Salve como .yaml e identifique a ferramenta consumidora e seu schema. Um parser só verifica estrutura; o consumidor precisa validar tipos, campos e regras.',
     'dockerfile': 'Confira docker version e o acesso ao daemon. Crie Dockerfile e os arquivos COPY na mesma pasta de contexto. docker build -t estudo . exige imagem base e dependências locais no uso offline.',
 }
+
+AMBIENTES.update({lang: ficha.ambiente for lang, ficha in _FICHAS.items()})
 
 
 def ampliar_curriculo(C):

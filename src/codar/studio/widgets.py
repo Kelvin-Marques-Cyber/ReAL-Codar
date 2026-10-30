@@ -141,7 +141,8 @@ _SAI_BLOCO_PY = re.compile(r"^\s*(return|pass|break|continue|raise)\b")
 _ALINHA_PY = re.compile(r"^\s*(else|elif|except|finally)\b[^:]*:\s*$")
 _ABRIDORES = {"else": ("if", "elif", "for", "while", "try", "except"), "elif": ("if", "elif"),
               "except": ("try", "except"), "finally": ("try", "except", "else")}
-COMENTARIO_BLOCO = {"html": ("<!--", "-->"), "css": ("/*", "*/")}
+COMENTARIO_BLOCO = {"html": ("<!--", "-->"), "css": ("/*", "*/"), "xml": ("<!--", "-->"),
+                    "markdown": ("<!--", "-->")}
 
 
 def _sem_comentario(texto: str, marcador: str) -> str:
@@ -609,6 +610,9 @@ class CodeEditor(TextArea):
         if lang is None or self.read_only:
             return
         abre, fecha = COMENTARIO_BLOCO.get(lang.id, (lang.comment, ""))
+        if not abre:
+            self.app.notify(f"{lang.name} não tem comentários", severity="warning", timeout=3)
+            return
         sel = self.selection
         r0, r1 = self.linhas_selecionadas()
         antigas = [self.document.get_line(r) for r in range(r0, r1 + 1)]

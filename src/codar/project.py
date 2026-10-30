@@ -151,7 +151,7 @@ class Project:
                     break
         out = []
         for name in sorted(set(names)):
-            if not name or not self.allowed(name) or (code_only and not langs.from_path(name)):
+            if not name or not self.allowed(name) or (code_only and not getattr(langs.from_path(name), 'codigo', False)):
                 continue
             try:
                 if safe_path(self.root, name).is_file():

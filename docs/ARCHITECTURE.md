@@ -11,7 +11,7 @@ flowchart TD
     D --> E
 ```
 
-O compilador tem 19 emissores. HTML/CSS usam abreviações estruturadas; o registro reconhece também YAML e Dockerfile, totalizando 24 tipos de arquivo para contexto e estudo. O daemon usa socket Unix com permissão 0600, Named Pipe ou TCP local autenticado. O Studio pode usar o motor no próprio processo com `--local`.
+O compilador tem 19 emissores. HTML/CSS usam abreviações estruturadas; o registro reconhece também SQL, YAML, Dockerfile, LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity, totalizando 36 tipos de arquivo para contexto e estudo. O daemon usa socket Unix com permissão 0600, Named Pipe ou TCP local autenticado. O Studio pode usar o motor no próprio processo com `--local`.
 
 
 ## Roteamento

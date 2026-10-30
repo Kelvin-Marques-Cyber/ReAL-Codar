@@ -696,13 +696,19 @@ REFERENCIA: dict[str, list[tuple[str, tuple[str, ...], str, str, str, str]]] = {
     ],
 }
 
+from codar.estudo.linguagens import FICHAS as _FICHAS  # noqa: E402
+
+REFERENCIA.update({lang: list(ficha.referencia) for lang, ficha in _FICHAS.items()})
+
+_PALAVRAS = {"shebang": ("#!/",), "licenca": ("spdx-license-identifier",)}
+
 
 def ampliar_construcoes(C) -> list:
     out = []
     for lang, verbetes in REFERENCIA.items():
         for chave, padroes, titulo, texto, exemplo, erro in verbetes:
-            # "#!" é comentário no léxico: o shebang também é reconhecido pelas palavras da linha.
-            palavras = ("#!/",) if chave == "shebang" else ()
+            # "#!" e a licença SPDX são comentários no léxico: também são reconhecidos pelas palavras da linha.
+            palavras = _PALAVRAS.get(chave, ())
             out.append(C(f"{lang}_ref_{chave}", titulo, "referencia", texto, _PRATIQUE, linha={lang: padroes},
                          palavras=palavras, exemplos={lang: exemplo}, fontes=(FONTES[lang],), erros_comuns=erro))
     return out

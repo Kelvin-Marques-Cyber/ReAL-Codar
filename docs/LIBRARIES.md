@@ -100,7 +100,7 @@ codar libraries learn videos -l powershell --source ./documentacao/API.md --libr
 codar libraries learn meu_sdk -l java --source ./documentacao/meu-sdk --library-version 4.0.0
 ```
 
-Referências fornecidas funcionam nas **24 linguagens/formatos registrados**. Use como nome o módulo/pacote que aparece no import. Quando ele aparecer no contexto de código de uma linguagem com imports, o CODAR poderá incluir a referência na geração. HTML/CSS e formatos de configuração também permitem consultar o catálogo pelo CLI; isso não acrescenta uma sintaxe de importação ao formato.
+Referências fornecidas funcionam nas **36 linguagens/formatos registrados**. Use como nome o módulo/pacote que aparece no import. Quando ele aparecer no contexto de código de uma linguagem com imports, o CODAR poderá incluir a referência na geração. HTML/CSS e formatos de configuração também permitem consultar o catálogo pelo CLI; isso não acrescenta uma sintaxe de importação ao formato.
 
 Prefira documentação da versão usada no projeto. Não há download automático de páginas ao importar. A consulta funciona offline com as fontes locais disponíveis. Dados das bibliotecas são tratados como referência, com neutralização de delimitadores de prompt; não viram instruções do sistema.
 

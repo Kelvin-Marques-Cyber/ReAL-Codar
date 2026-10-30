@@ -140,6 +140,18 @@ HTML inclui documento/semântica, formulários, metadados, imagens, tabelas, mí
 
 As demais linguagens recebem práticas próprias de dados, erros, memória, concorrência, contratos ou segurança conforme a linguagem, além de projetos de revisão. A estrutura não inventa POO, funções ou concorrência de aplicação para HTML, CSS, SQL, YAML ou Dockerfile.
 
+### Documentos, dados, build, hardware e contratos (0.5.0)
+
+LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity têm guia, aulas do básico ao avançado, projeto de revisão e referência de construções: 51 aulas e 136 verbetes,
+com 0% das linhas das aulas caindo só no guia genérico. Cada exemplo de guia e aula (e os trechos de referência de
+JSON, TOML, GraphQL, Protobuf e Terraform) passa pela ferramenta oficial em `tests/test_estudo_linguagens.py` quando
+ela está instalada: `pdflatex` (duas compilações, sem referências indefinidas), `xmllint` com o XSD da aula, `protoc`,
+`make -n`, `terraform fmt -check`, o parser do `graphql-js`, `iverilog`/`vvp` com os testbenches, `ghdl` com os asserts
+e `solc` sem erros nem avisos. No Studio, F5 compila `.tex` com `pdflatex` e roda Makefiles com `make -f`.
+
+Essas linguagens não são programas de entrada e saída: os desafios de comportamento não são listados para elas.
+JSON não tem comentários, então Ctrl+/ avisa em vez de inserir texto inválido.
+
 ## Validação e lacunas
 
 Os testes educacionais incluem navegação/retomada pela CLI, persistência e importação, execução de exemplos com runtimes locais, correção de soluções válidas e inválidas, HTML com falsos rótulos/comentários/scripts, CSS com strings/comentários/sobrescritas e consultas SQL maliciosas ou sem fim. O painel Studio é exercitado com Textual e troca entre todas as linguagens. Os resultados da execução de testes devem ser consultados no relatório da alteração; uma gramática sintática opcional não equivale à execução no runtime.

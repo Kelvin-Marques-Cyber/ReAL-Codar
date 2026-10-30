@@ -67,7 +67,14 @@ NATIVE_IMPORTS = [
     ("julia", "using JSON"),
     ("html", '<script src="biblioteca.js"></script>'),
     ("css", '@import "biblioteca.css";'),
+    ("latex", r"\usepackage[brazil]{babel}"),
+    ("protobuf", 'import "google/protobuf/timestamp.proto";'),
+    ("solidity", 'import {Token} from "./Token.sol";'),
+    ("verilog", '`include "definicoes.vh"'),
+    ("vhdl", "use ieee.numeric_std.all;"),
 ]
+# Dados, documentos e build: não importam bibliotecas de código.
+SEM_IMPORTACAO = ["sql", "yaml", "dockerfile", "markdown", "json", "toml", "xml", "makefile", "graphql", "terraform"]
 
 
 @pytest.mark.parametrize("lang,expected", NATIVE_IMPORTS)
@@ -90,7 +97,7 @@ def test_importacao_nativa_nao_vira_programa(translate, router, lang, native):
     assert not router.stage2.prompts
 
 
-@pytest.mark.parametrize("lang", ["sql", "yaml", "dockerfile"])
+@pytest.mark.parametrize("lang", SEM_IMPORTACAO)
 def test_formato_sem_import_nao_recebe_codigo_inventado(translate, router, lang):
     with pytest.raises(TranslateError, match="não possui importação"):
         translate("importar biblioteca de YouTube", lang)
@@ -98,7 +105,7 @@ def test_formato_sem_import_nao_recebe_codigo_inventado(translate, router, lang)
 
 
 def test_registro_inteiro_tem_cobertura_do_escopo_de_importacao():
-    assert {lang for lang, _ in NATIVE_IMPORTS} | {"sql", "yaml", "dockerfile"} == set(langs.LANGS)
+    assert {lang for lang, _ in NATIVE_IMPORTS} | set(SEM_IMPORTACAO) == set(langs.LANGS)
 
 
 @pytest.mark.parametrize("intent", [
@@ -151,6 +158,17 @@ def test_bloco_so_de_importacoes_nao_vira_funcoes(translate):
      'import (\n\t"encoding/json"\n\t"net/http"\n)'),
 ])
 def test_imports_multilinha_preservam_aliases_e_nao_chamam_ia(translate, router, lang, intent, expected):
+    assert translate(intent, lang).code == expected
+    assert not router.stage2.prompts
+
+
+@pytest.mark.parametrize("lang,intent,expected", [
+    ("latex", "importe o pacote amsmath", r"\usepackage{amsmath}"),
+    ("protobuf", "importe google/protobuf/timestamp.proto", 'import "google/protobuf/timestamp.proto";'),
+    ("solidity", "importe ./Token.sol", 'import "./Token.sol";'),
+    ("vhdl", "LIBRARY IEEE;", "LIBRARY IEEE;"),
+])
+def test_nome_explicito_vira_a_importacao_da_linguagem(translate, router, lang, intent, expected):
     assert translate(intent, lang).code == expected
     assert not router.stage2.prompts
 

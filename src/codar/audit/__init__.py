@@ -118,6 +118,8 @@ class Auditor:
         if not findings:
             return code
         info = langs.try_resolve(lang)
+        if info and not info.comment:
+            return code  # JSON não tem comentário: a dica fica só na lista de achados
         lines = code.split("\n")
         starts = python_rules.statement_starts(code) if lang == "python" else {}
         by_line: dict[int, list[Finding]] = {}

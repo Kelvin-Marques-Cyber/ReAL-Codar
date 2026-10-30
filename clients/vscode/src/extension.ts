@@ -24,7 +24,8 @@ const STAGE_LABEL: Record<string, string> = {
 
 const LINE_COMMENT: Record<string, string> = {
   python: "#", shellscript: "#", powershell: "#", ruby: "#", yaml: "#", dockerfile: "#", perl: "#", r: "#",
-  lua: "--", sql: "--", haskell: "--",
+  toml: "#", makefile: "#", graphql: "#", terraform: "#", julia: "#",
+  lua: "--", sql: "--", haskell: "--", vhdl: "--", latex: "%",
 };
 
 function cfg<T>(key: string, fallback: T): T {

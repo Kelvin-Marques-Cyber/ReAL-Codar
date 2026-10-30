@@ -315,7 +315,7 @@ Ative **F7** e mova o cursor: o painel explica o conceito, mostra um exemplo na 
 
 Em HTML e CSS, o painel explica cada elemento, atributo, propriedade e seletor da linha (com especificidade, valores e unidades) e aponta problemas como `img` sem `alt`, campo sem rótulo ou viewport que bloqueia o zoom. Dentro de `<script>` e `<style>`, a linha é explicada como JavaScript ou CSS. Nas demais linguagens, uma referência de construções reconhece a forma própria de cada uma (`#include` e ponteiros em C, LINQ em C#, `guard let` em Swift, tabelas em Lua, `JOIN` em SQL, `param` em PowerShell, entre outras). `codar study explain --file index.html --line 12` mostra o mesmo pela CLI; veja [docs/ESTUDO.md](ESTUDO.md).
 
-São 24 tipos de arquivo reconhecidos: as 19 linguagens do compilador, HTML, CSS, YAML e Dockerfile. O catálogo inclui testes, tipos, geradores, logs e ambientes Python; null safety, Future e widgets/estado Flutter em Dart; pipeline e erros PowerShell; posse Rust; erros Go; agregações SQL; acessibilidade HTML; Flexbox; vetores R e broadcast Julia. Material e links oficiais revisados em **10/10/2026**.
+São 36 tipos de arquivo reconhecidos: as 19 linguagens do compilador, SQL, HTML, CSS, YAML, Dockerfile e, com estudo próprio desde a 0.5.0, LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity. O catálogo inclui testes, tipos, geradores, logs e ambientes Python; null safety, Future e widgets/estado Flutter em Dart; pipeline e erros PowerShell; posse Rust; erros Go; agregações SQL; acessibilidade HTML; Flexbox; vetores R e broadcast Julia. Material e links oficiais revisados em **10/10/2026**.
 
 ```bash
 codar study list --lang dart
@@ -646,7 +646,7 @@ Veja [CONTRIBUTING.md](../CONTRIBUTING.md) e o [histórico de mudanças](../CHAN
 ---
 ## Catálogo de estudo por linguagem
 
-O registro reconhece 24 tipos de arquivo; 19 deles têm compilador de pseudocódigo. Flutter usa Dart, com tópicos próprios de widgets e estado. O catálogo filtrado oferece somente exemplos na linguagem escolhida. A marca de prática é preenchida por você e não comprova aprendizado automaticamente.
+O registro reconhece 36 tipos de arquivo; 19 deles têm compilador de pseudocódigo. Flutter usa Dart, com tópicos próprios de widgets e estado. O catálogo filtrado oferece somente exemplos na linguagem escolhida. A marca de prática é preenchida por você e não comprova aprendizado automaticamente.
 
 ![Estudo de estrutura YAML](img/manual/05-estudo-yaml.png)
 
@@ -763,7 +763,7 @@ flowchart TD
     D --> E
 ```
 
-O compilador tem 19 emissores. HTML/CSS usam abreviações estruturadas; o registro reconhece também YAML e Dockerfile, totalizando 24 tipos de arquivo para contexto e estudo. O daemon usa socket Unix com permissão 0600, Named Pipe ou TCP local autenticado. O Studio pode usar o motor no próprio processo com `--local`.
+O compilador tem 19 emissores. HTML/CSS usam abreviações estruturadas; o registro reconhece também SQL, YAML, Dockerfile, LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity, totalizando 36 tipos de arquivo para contexto e estudo. O daemon usa socket Unix com permissão 0600, Named Pipe ou TCP local autenticado. O Studio pode usar o motor no próprio processo com `--local`.
 
 
 ### Roteamento

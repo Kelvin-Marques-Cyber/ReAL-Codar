@@ -75,6 +75,12 @@ GUIAS = {
                    'FROM python:3.13-slim\nWORKDIR /app\nCOPY app.py .\nCMD ["python", "app.py"]'),
 }
 
+# As demais linguagens vêm das fichas (codar/estudo/linguagens), com o mesmo formato.
+from codar.estudo.linguagens import FICHAS as _FICHAS  # noqa: E402
+
+FONTES.update({lang: ficha.fonte for lang, ficha in _FICHAS.items()})
+GUIAS.update({lang: ficha.guia for lang, ficha in _FICHAS.items()})
+
 # Exemplos dos conceitos de dados que também são próprios de R.
 EXEMPLOS_R = {
     'dataframe': 'vendas <- data.frame(categoria=c("A", "B"), preco=c(10, 20))\nprint(vendas)\nprint(vendas[vendas$preco > 15, ])',
