@@ -1,0 +1,103 @@
+{
+  "version": "0.5.0",
+  "measured_at_utc": "2026-10-29T16:58:47.029708+00:00",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "python": "3.12.14",
+    "textual": "8.2.8"
+  },
+  "metric": "RSS e VmHWM de /proc/self/status em MiB (1 MiB = 1048576 bytes)",
+  "exclusions": "Sem modelo, daemon separado, emulador de terminal, servidor de linguagem, builds ou programas filhos ativos. Studio usa o driver headless de teste do Textual.",
+  "comparison": "Não foi feito benchmark comparativo com outras IDEs.",
+  "results": {
+    "engine": {
+      "runs": [
+        {
+          "initial": {
+            "rss_mib": 25.14,
+            "peak_mib": 25.14
+          },
+          "after_workload": {
+            "rss_mib": 30.8,
+            "peak_mib": 32.77
+          },
+          "model_loaded": false,
+          "workload": "20 traduções por regras e 1 calculadora por padrão; motor local sem daemon separado"
+        },
+        {
+          "initial": {
+            "rss_mib": 25.13,
+            "peak_mib": 25.13
+          },
+          "after_workload": {
+            "rss_mib": 30.75,
+            "peak_mib": 32.71
+          },
+          "model_loaded": false,
+          "workload": "20 traduções por regras e 1 calculadora por padrão; motor local sem daemon separado"
+        },
+        {
+          "initial": {
+            "rss_mib": 25.14,
+            "peak_mib": 25.14
+          },
+          "after_workload": {
+            "rss_mib": 30.13,
+            "peak_mib": 32.13
+          },
+          "model_loaded": false,
+          "workload": "20 traduções por regras e 1 calculadora por padrão; motor local sem daemon separado"
+        }
+      ],
+      "median_rss_mib": 30.75,
+      "min_rss_mib": 30.13,
+      "max_rss_mib": 30.8,
+      "max_peak_mib": 32.77
+    },
+    "studio": {
+      "runs": [
+        {
+          "initial": {
+            "rss_mib": 60.05,
+            "peak_mib": 60.05
+          },
+          "after_workload": {
+            "rss_mib": 66.72,
+            "peak_mib": 66.72
+          },
+          "model_loaded": false,
+          "workload": "Studio headless 150x42, 3 abas de 200 linhas, 20 traduções por regras, 1 calculadora por padrão e 1 intenção aplicada no editor; motor no mesmo processo"
+        },
+        {
+          "initial": {
+            "rss_mib": 60.44,
+            "peak_mib": 60.44
+          },
+          "after_workload": {
+            "rss_mib": 67.38,
+            "peak_mib": 67.38
+          },
+          "model_loaded": false,
+          "workload": "Studio headless 150x42, 3 abas de 200 linhas, 20 traduções por regras, 1 calculadora por padrão e 1 intenção aplicada no editor; motor no mesmo processo"
+        },
+        {
+          "initial": {
+            "rss_mib": 59.34,
+            "peak_mib": 59.34
+          },
+          "after_workload": {
+            "rss_mib": 65.77,
+            "peak_mib": 65.77
+          },
+          "model_loaded": false,
+          "workload": "Studio headless 150x42, 3 abas de 200 linhas, 20 traduções por regras, 1 calculadora por padrão e 1 intenção aplicada no editor; motor no mesmo processo"
+        }
+      ],
+      "median_rss_mib": 66.72,
+      "min_rss_mib": 65.77,
+      "max_rss_mib": 67.38,
+      "max_peak_mib": 67.38
+    }
+  }
+}

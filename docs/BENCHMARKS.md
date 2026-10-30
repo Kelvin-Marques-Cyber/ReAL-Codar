@@ -1,5 +1,16 @@
 # Desempenho e escolha de modelos
 
+## Memória sem IA (0.5.0)
+
+Medição de 29/10/2026 em Linux x86_64, Python 3.12.14 e Textual 8.2.8, com o mesmo script e carga pequena descritos abaixo. Três processos novos por cenário, sem modelo, daemon separado ou emulador de terminal.
+
+| Cenário | RSS após o trabalho: mediana | Faixa | Maior pico |
+|---|---|---|---|
+| Motor no processo local | **30,75 MiB** | 30,13–30,80 MiB | 32,77 MiB |
+| Studio headless, três abas de 200 linhas | **66,72 MiB** | 65,77–67,38 MiB | 67,38 MiB |
+
+[Dados por execução e condições](benchmarks/memory-0.5.0.json). Não houve benchmark comparativo com outras IDEs nem teste de projetos grandes. O ambiente de execução difere do histórico de 0.3.1; os números não isolam o efeito das alterações de código.
+
 ## Memória sem IA (0.3.1)
 
 Medição em 10/10/2026, Linux x86_64, Python 3.12.14 e Textual 8.2.8. Cada cenário foi executado três vezes, em processos novos e configurações temporárias. Nenhum modelo foi carregado ou baixado. RSS e pico VmHWM vieram de `/proc/self/status`; os valores estão em **MiB** (1 MiB = 1.048.576 bytes).
