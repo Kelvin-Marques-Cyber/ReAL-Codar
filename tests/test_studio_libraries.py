@@ -42,7 +42,8 @@ def test_bibliotecas_filtra_consulta_trilha_e_preserva_editor(tmp_path, monkeypa
             await wait(pilot, lambda: 'somar' in str(screen.query_one('#libraries-details', RichLog).lines))
             assert editor.text == before
             screen.query_one('#libraries-study', Button).press()
-            await wait(pilot, lambda: isinstance(app.screen, LibraryStudyScreen))
+            # a tela é empilhada antes de montar os filhos: espera o botão existir, não só a tela
+            await wait(pilot, lambda: isinstance(app.screen, LibraryStudyScreen) and app.screen.query('#lesson-mark'))
             lesson = app.screen
             lesson.query_one('#lesson-mark', Button).press()
             await pilot.pause(.1)
