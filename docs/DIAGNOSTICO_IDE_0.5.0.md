@@ -44,15 +44,6 @@ Nesta rodada, três processos novos por cenário mediram mediana de **30,75 MiB*
 
 Exercícios e comandos executam código local com limites; não são uma sandbox de segurança. Plugins Python opcionais também rodam no processo do daemon. O orçamento de memória do daemon não limita todos os SDKs e processos do projeto.
 
-## Atualização de 30/10/2026
-
-Depois da revisão inspecionada, a 0.5.0 recebeu: saída do F5 visível em todas as perspectivas e painel maximizável;
-realce restrito à área visível (num arquivo de 6 mil linhas, o custo por tecla que cresce com o tamanho caiu de ~230 ms
-para ~22 ms); imports automáticos de funções e classes de outros arquivos do projeto e POO conferida com as classes
-reais, sem IA; estrutura inicial de projetos; estudo de mais 12 linguagens; e correções de segurança no consultor, na
-prévia em rede, nos plugins e no instalador. Nada disso muda o parecer: continuam ausentes cliente LSP, depurador
-(DAP) e painel Git, e a validação multiplataforma segue pendente.
-
 ## Prioridades para aproximar o Studio de uma IDE principal
 
 1. **Restabelecer a validação de distribuição:** executar a matriz CI, Windows/macOS, instalação/atualização/remoção nas distribuições e testes de recuperação; liberar estabilidade só com evidência.

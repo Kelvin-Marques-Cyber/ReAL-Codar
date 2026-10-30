@@ -18,21 +18,26 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.5.0.** [Downloads e notas da prévia v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. O projeto continua em fase alfa; esta publicação não certifica equivalência com uma IDE de uso geral. Use a tag `v0.5.0` para reproduzir a versão distribuída. Instalar `main` usa o código atual dessa branch.
+**Versão do código: 0.6.0.** [Downloads e notas da prévia v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. O projeto continua em fase alfa; esta publicação não certifica equivalência com uma IDE de uso geral. Use a tag `v0.6.0` para reproduzir a versão distribuída. Instalar `main` usa o código atual dessa branch.
+
+## Novidades da 0.6.0
+
+- **Estudo de mais 12 linguagens:** LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity, com guia, aulas por nível, projeto e referência da linha do cursor. Os exemplos passam pela ferramenta oficial de cada uma (pdflatex, xmllint, protoc, make, terraform, iverilog, ghdl, solc). F5 compila `.tex` e roda Makefiles.
+- **Estrutura de projeto:** o botão ESTRUTURA, a paleta ou a frase `crie a estrutura de um projeto full stack typescript` criam pastas e arquivos iniciais de 13 modelos (Full Stack TS/JS, site estático, pacote, API e dados em Python, Go, Rust, Java, C, C++, Dart, LaTeX). A prévia mostra o que será criado; nada existente é sobrescrito. Pela CLI: `codar project scaffold`.
+- **POO e arquivos conectados:** herança, métodos, objetos e chamadas sem IA, conferidos com as classes reais; funções e classes de outros arquivos do projeto entram com o import certo.
+- **Terminal, desempenho e segurança:** a saída do F5 aparece em qualquer perspectiva (Shift+F9 maximiza o painel); em arquivos grandes, o custo por tecla caiu cerca de 10 vezes; sugestões e prévia ficam confinadas ao projeto e o instalador confere o SHA-256 dos pacotes. Veja [SECURITY.md](SECURITY.md).
+
+[Validação da 0.6.0](docs/VALIDACAO_0.6.0.md) · [Estudo das novas linguagens](docs/ESTUDO.md#documentos-dados-build-hardware-e-contratos-060) · [Segurança](SECURITY.md) · [Diagnóstico e comparação com IDEs](docs/DIAGNOSTICO_IDE_0.5.0.md).
 
 ## Novidades da 0.5.0
 
-- **Estudo linha a linha:** em HTML e CSS, o painel F7 explica cada elemento, atributo, propriedade e seletor da linha do cursor (com especificidade, valores e unidades) e aponta problemas como `img` sem `alt`, campo sem rótulo, `button` sem `type` ou viewport que bloqueia o zoom. Dentro de `<script>` e `<style>`, a linha é explicada como JavaScript ou CSS.
-- **Construções próprias de 20 linguagens:** `#include` e ponteiros em C, `std::vector` em C++, LINQ e `async` em C#, null safety em Kotlin, `guard let` em Swift, tabelas e `pcall` em Lua, `JOIN` e transações em SQL, `param` e `-WhatIf` em PowerShell, entre outras. Nas linhas das próprias aulas, a explicação apenas pelo guia genérico caiu de 48% para 3%. `codar study explain --file ARQUIVO --line N` mostra o mesmo pela CLI.
-- **Estudo de mais 12 linguagens:** LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity, com guia, aulas por nível, projeto e referência da linha do cursor. Os exemplos passam pela ferramenta oficial de cada uma (pdflatex, xmllint, protoc, make, terraform, iverilog, ghdl, solc). F5 compila `.tex` e roda Makefiles.
-- **Pedidos encadeados:** `agora adicione tipagem`, `add type hints` ou `transforme em async` editam no Studio somente a função sob o cursor ou a recém-inserida. Se várias funções puderem ser o alvo, nada é alterado e o pedido fica na barra.
-- **Estrutura de projeto:** o botão ESTRUTURA, a paleta ou a frase `crie a estrutura de um projeto full stack typescript` criam pastas e arquivos iniciais de 13 modelos (Full Stack TS/JS, site estático, pacote, API e dados em Python, Go, Rust, Java, C, C++, Dart, LaTeX). A prévia mostra o que será criado; nada existente é sobrescrito. Pela CLI: `codar project scaffold`.
-- **POO e arquivos conectados:** herança, métodos, objetos e chamadas sem IA, conferidos com as classes reais; funções e classes de outros arquivos do projeto entram com o import certo.
-- **Procedência visível:** cada resultado informa origem (compilador, banco ou IA), modelo, sintaxe conferida e se houve teste. Código da IA aparece sempre como **não testado**.
-- **Terminal, desempenho e segurança:** a saída do F5 aparece em qualquer perspectiva (Shift+F9 maximiza o painel); em arquivos grandes, o custo por tecla caiu cerca de 10 vezes; sugestões e prévia ficam confinadas ao projeto e o instalador confere o SHA-256 dos pacotes. Veja [SECURITY.md](SECURITY.md).
-- **Qualidade:** diagnóstico do CI, linha de base, critérios de liberação e cenários mínimos de regressão em [docs/QUALIDADE.md](docs/QUALIDADE.md); correções no patternlint em Go e ao fechar o Studio.
+- **Continuidade na edição:** pedidos como `agora adicione tipagem` ou `transforme em async` usam a função sob o cursor, a recém-inserida ou a imediatamente anterior. Se o alvo for ambíguo, o Studio preserva o código e pede uma indicação.
+- **Procedência verificável:** o resultado identifica compilador, banco ou modelo, fontes e validação de sintaxe. Código gerado pela IA aparece como não testado; só variantes do banco com teste executável são marcadas como testadas.
+- **Estudo mais específico:** 128 verbetes de construções em 20 linguagens, além de 76 verbetes HTML/CSS sobre elementos, atributos, propriedades, valores e seletores. `#include`, `#[derive]` e `#region` recebem a classificação correta.
+- **HTML e CSS linha a linha:** explicações locais e alertas de acessibilidade e formulários; trechos em `<script>` e `<style>` usam JavaScript e CSS. Disponível também com `codar study explain`.
+- **Correções de confiabilidade:** roteamento equivalente nos quatro idiomas, reparo limitado de sintaxe em edições, métodos Python sem tipos inventados, código de saída correto nos testes Go e fechamento do Studio sem evento tardio quebrar a tela.
 
-[Validação da 0.5.0](docs/VALIDACAO_0.5.0.md) · [Diagnóstico e comparação com IDEs](docs/DIAGNOSTICO_IDE_0.5.0.md) · [Estudo linha a linha](docs/ESTUDO.md#explicação-linha-a-linha) · [Qualidade e critérios de liberação](docs/QUALIDADE.md).
+[Validação da 0.5.0](docs/VALIDACAO_0.5.0.md) · [Diagnóstico e comparação com IDEs](docs/DIAGNOSTICO_IDE_0.5.0.md) · [Qualidade e critérios de liberação](docs/QUALIDADE.md).
 
 ## Novidades da 0.4.0
 
@@ -146,7 +151,7 @@ Outras vantagens no trabalho diário:
 - **Consultor de projeto**: sugestões para o ambiente e dependências, incluindo migrações de npm para pnpm ou Bun. Você escolhe a ação a executar.
 - **Atualização e distribuição**: versões dos componentes sincronizadas, diagnóstico de instalações duplicadas ou daemon antigo e arquivos publicados para Linux, Windows e macOS. Windows/macOS requerem Python 3.10+ e pipx; a extensão VS Code é instalada separadamente.
 
-O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da prévia v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
+O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da prévia v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
 
 ### Correções e praticidade na 0.3.1
 
@@ -162,14 +167,14 @@ O terminal integrado executa comandos e entrada de programas. Para aliases, conc
 
 ### Começar pela versão publicada (pipx)
 
-Requer **Python 3.10+ e pipx**. Baixe `codar-0.5.0-py3-none-any.whl` na [prévia v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0) e execute na pasta do download:
+Requer **Python 3.10+ e pipx**. Baixe `codar-0.6.0-py3-none-any.whl` na [prévia v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0) e execute na pasta do download:
 
 ```sh
-pipx install --force ./codar-0.5.0-py3-none-any.whl
+pipx install --force ./codar-0.6.0-py3-none-any.whl
 pipx ensurepath --prepend
 ```
 
-Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.5.0`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
+Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.6.0`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
 
 ### Código atual da branch `main` (pipx)
 
@@ -245,7 +250,7 @@ curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/mai
 O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release estável. Para instalar esta prévia, informe a versão ao processo `sh`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | CODAR_VERSION=0.5.0 sh
+curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | CODAR_VERSION=0.6.0 sh
 ```
 
 Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
@@ -266,8 +271,8 @@ Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônom
 
 | Sistema | Arquivo | Comando dentro da pasta extraída |
 |---|---|---|
-| Windows | `codar-0.5.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
-| macOS | `codar-0.5.0-macos-python.tar.gz` | `sh install.sh` |
+| Windows | `codar-0.6.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.6.0-macos-python.tar.gz` | `sh install.sh` |
 
 O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
 
@@ -370,7 +375,7 @@ Ative **F7** e mova o cursor: o painel explica o conceito, mostra um exemplo na 
 
 Em HTML e CSS, o painel explica cada elemento, atributo, propriedade e seletor da linha (com especificidade, valores e unidades) e aponta problemas como `img` sem `alt`, campo sem rótulo ou viewport que bloqueia o zoom. Dentro de `<script>` e `<style>`, a linha é explicada como JavaScript ou CSS. Nas demais linguagens, uma referência de construções reconhece a forma própria de cada uma (`#include` e ponteiros em C, LINQ em C#, `guard let` em Swift, tabelas em Lua, `JOIN` em SQL, `param` em PowerShell, entre outras). `codar study explain --file index.html --line 12` mostra o mesmo pela CLI; veja [docs/ESTUDO.md](docs/ESTUDO.md).
 
-São 36 tipos de arquivo reconhecidos: as 19 linguagens do compilador, SQL, HTML, CSS, YAML, Dockerfile e, com estudo próprio desde a 0.5.0, LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity. O catálogo inclui testes, tipos, geradores, logs e ambientes Python; null safety, Future e widgets/estado Flutter em Dart; pipeline e erros PowerShell; posse Rust; erros Go; agregações SQL; acessibilidade HTML; Flexbox; vetores R e broadcast Julia. Material e links oficiais revisados em **10/10/2026**.
+São 36 tipos de arquivo reconhecidos: as 19 linguagens do compilador, SQL, HTML, CSS, YAML, Dockerfile e, com estudo próprio desde a 0.6.0, LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity. O catálogo inclui testes, tipos, geradores, logs e ambientes Python; null safety, Future e widgets/estado Flutter em Dart; pipeline e erros PowerShell; posse Rust; erros Go; agregações SQL; acessibilidade HTML; Flexbox; vetores R e broadcast Julia. Material e links oficiais revisados em **10/10/2026**.
 
 ```bash
 codar study list --lang dart
@@ -684,4 +689,4 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) e o [histórico de mudanças](CHANGELOG.
 
 ---
 
-**In English:** Version 0.5.0 (alpha preview) explains each line in Study mode across 36 file types — HTML/CSS elements and selectors, idiomatic constructs of 20 programming languages and new tracks for LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL and Solidity, whose examples are checked with each language's official tool. Without AI, it now generates inheritance, methods, objects and calls checked against the real classes, adds imports for functions from other project files and scaffolds starter projects without overwriting files. Follow-up edits target the right function, results show their provenance and AI output is marked as untested. The Studio shows F5 output in every layout and types faster in large files; suggestions and network preview stay inside the project. [Preview v0.5.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.5.0) provides Linux packages, Python/pipx bundles for Windows/macOS, wheel/source archives and VSIX, with checksums and documented validation limits. Full LSP/DAP integration and advanced Git workflows remain future work. Alpha project, Apache-2.0 licensed.
+**In English:** Version 0.6.0 (alpha preview) explains each line in Study mode across 36 file types — HTML/CSS elements and selectors, idiomatic constructs of 20 programming languages and new tracks for LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL and Solidity, whose examples are checked with each language's official tool. Without AI, it now generates inheritance, methods, objects and calls checked against the real classes, adds imports for functions from other project files and scaffolds starter projects without overwriting files. Follow-up edits target the right function, results show their provenance and AI output is marked as untested. The Studio shows F5 output in every layout and types faster in large files; suggestions and network preview stay inside the project. [Preview v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0) provides Linux packages, Python/pipx bundles for Windows/macOS, wheel/source archives and VSIX, with checksums and documented validation limits. Full LSP/DAP integration and advanced Git workflows remain future work. Alpha project, Apache-2.0 licensed.

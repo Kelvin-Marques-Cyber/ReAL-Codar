@@ -1,20 +1,15 @@
-# CODAR 0.5.0 — Estudo em mais linguagens, POO e arquivos conectados, estrutura de projetos
+# CODAR 0.5.0 — Continuidade, procedência e estudo offline
 
-**Prévia alfa.** Esta versão faz o modo Estudo explicar a linha que você está escrevendo em 36 tipos de arquivo, gera POO e imports entre arquivos sem IA, cria a estrutura inicial de projetos, mostra a saída do F5 em qualquer perspectiva e informa de onde veio cada resultado. A validação foi local em Linux; a matriz remota e a execução nativa em Windows/macOS continuam pendentes.
+**Prévia alfa.** Esta versão melhora os pedidos encadeados, a transparência das gerações e o estudo de construções de programação e de HTML/CSS. A validação foi local em Linux; a matriz remota e a execução nativa em Windows/macOS continuam pendentes.
 
 ## O que mudou
 
-- **Estudo de mais 12 linguagens:** LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity têm guia, aulas do básico ao avançado, projeto de revisão e referência da linha do cursor (51 aulas e 136 verbetes; nenhuma linha das aulas fica só com o guia genérico). Os exemplos passam pela ferramenta oficial de cada linguagem: `pdflatex`, `xmllint` com XSD, `protoc`, `make`, `terraform fmt`, o parser do `graphql-js`, `iverilog`/`vvp`, `ghdl` e `solc`. No Studio, F5 compila `.tex` com `pdflatex` e roda Makefiles.
-- **HTML/CSS linha a linha:** o painel F7 explica cada elemento, atributo, tipo de `input`, propriedade, valor, unidade e seletor da linha do cursor (76 verbetes, com a especificidade de cada seletor) e aponta problemas como `img` sem `alt`, campo sem rótulo, `button` sem `type` e viewport que bloqueia o zoom. Dentro de `<script>` e `<style>`, a linha é explicada como JavaScript ou CSS. Disponível também em `codar study explain`.
-- **Construções das linguagens de programação:** 128 verbetes em 20 linguagens — `#include` e ponteiros em C, `std::vector` em C++, LINQ em C#, null safety em Kotlin, `guard let` em Swift, tabelas em Lua, `JOIN` em SQL, `param` em PowerShell, goroutines em Go, `Result` em Rust, entre outros. `#include`, `#[derive]` e `#region` deixam de ser tratados como comentários. Nas linhas das aulas, a explicação apenas pelo guia genérico caiu de 48% para 3%.
-- **POO sem IA (Python, JavaScript e TypeScript):** `classe Aluno herda de Pessoa com matricula` lê o construtor da mãe no arquivo ou no projeto e repassa os parâmetros certos; métodos com corpo usam os atributos da classe; objetos e chamadas são conferidos com o construtor e os métodos reais, com explicação quando algo não existe. Os testes executam o código gerado com `python` e `node`.
-- **Arquivos conectados:** quando o código gerado usa uma função ou classe de outro arquivo do projeto, o import certo entra junto (Python absoluto, relativo ou layout `src`; ESM ou CommonJS conforme o arquivo). Nomes com mais de uma origem viram nota, sem adivinhar.
-- **Estrutura de projeto:** o botão ESTRUTURA, a paleta, a frase `crie a estrutura de um projeto full stack typescript` ou `codar project scaffold` criam pastas e arquivos iniciais de 13 modelos (Full Stack TS e JS, site estático, pacote, API e dados em Python, Go, Rust, Java, C, C++, Dart e LaTeX). A prévia mostra o que será criado; nada existente é sobrescrito e nada é escrito fora da pasta.
 - **Continuidade na edição:** pedidos como `agora adicione tipagem` e `transforme em async` selecionam a função sob o cursor, recém-inserida ou imediatamente anterior. Alvos ambíguos preservam o código e exigem uma indicação.
-- **Procedência:** resultados informam compilador, banco ou modelo, fontes, validador e se houve teste. Código da IA aparece como não testado; sintaxe conferida não é apresentada como teste de comportamento.
-- **Terminal e desempenho do Studio:** a saída do F5 aparece também na perspectiva Essencial, com mais espaço útil, e Shift+F9 maximiza o painel. Em arquivos grandes, o realce consulta só a área visível: num arquivo de 6 mil linhas, o custo por tecla que cresce com o tamanho caiu de ~230 ms para ~22 ms.
-- **Segurança:** sugestões do consultor e de plugins não escrevem fora do projeto; a prévia na rede não segue links simbólicos nem entrega credenciais; nomes de slot de plugins não viram código; o instalador confere o SHA-256 dos pacotes com o `SHA256SUMS` da Release antes de instalar. Política e limites em [SECURITY.md](../SECURITY.md).
-- **Confiabilidade:** roteamento equivalente nos quatro idiomas, reparo limitado de sintaxe em edições, métodos Python sem anotações inventadas para `self`, preservação do código de saída nos testes Go e correção de eventos tardios no fechamento do Studio. Diagnóstico do CI e critérios de liberação em `docs/QUALIDADE.md`; diagnóstico frente a IDEs em `docs/DIAGNOSTICO_IDE_0.5.0.md`.
+- **Procedência:** resultados informam compilador, banco ou modelo, fontes, validador e se houve teste. Código da IA aparece como não testado. Sintaxe conferida não é apresentada como teste de comportamento.
+- **Estudo por construção:** 128 verbetes em 20 linguagens, com reconhecimento adequado de `#include`, `#[derive]` e `#region`.
+- **HTML/CSS linha a linha:** 76 verbetes de elementos, atributos, propriedades, valores, unidades e seletores, além de alertas de acessibilidade e formulários. Disponível também em `codar study explain`.
+- **Confiabilidade:** roteamento equivalente nos quatro idiomas, reparo limitado de sintaxe em edições, métodos Python sem anotações inventadas para `self`, preservação do código de saída nos testes Go e correção de eventos tardios no fechamento do Studio.
+- README, manifestos, CHANGELOG e instruções de distribuição sincronizados em 0.5.0; diagnóstico com evidências e limites publicado junto da versão.
 
 ## Downloads
 
@@ -56,13 +51,12 @@ Esta é uma **prévia**: o instalador Linux padrão consulta a última versão e
 
 ## Verificação e limites
 
-- **1986 testes Python aprovados, 52 ignorados, nenhuma falha.** As ausências estão discriminadas em `docs/VALIDACAO_0.5.0.md`.
-- **107 exemplos de estudo** das novas linguagens aprovados pela ferramenta oficial (pdflatex, xmllint, protoc, make, terraform, graphql-js, iverilog, ghdl, solc).
-- **8 testes do cliente VS Code** contra daemon real e **35 checagens do plugin Vim**, sem falhas. Os testes Node não são testes de interface em um Extension Host.
-- **158 execuções do banco de padrões sem falhas**; 352 variantes validadas, nenhum erro de sintaxe e 56 variantes sem validador disponível. Seis gabaritos do editbench aprovados; esse modo não avalia a IA.
-- Wheel, fontes, VSIX e quatro pacotes Linux construídos. **161 arquivos de código/dados por distribuição** comparados byte a byte com a fonte. Manifestos Windows/macOS e checksums conferidos; instalação pipx isolada testada em Linux.
+- **1.557 testes Python aprovados, 64 ignorados, nenhuma falha.** As ausências estão discriminadas em `docs/VALIDACAO_0.5.0.md`.
+- **8 testes do cliente VS Code aprovados contra daemon real**, sem ignorados. Não são testes de interface em um Extension Host.
+- **152 execuções de padrões sem falhas**; 342 variantes validadas, 66 sem validador disponível. Seis gabaritos do editbench aprovados; esse modo não avalia a IA.
+- Wheel, fontes, VSIX e quatro pacotes Linux construídos. **154 arquivos de código/dados por distribuição** comparados com a fonte. Manifestos Windows/macOS e checksums conferidos; instalação pipx isolada testada em Linux.
 - **CI remoto sem runner/etapas**, sem aprovação da matriz; não houve validação nativa Windows/macOS nem instalação nas nove imagens Linux. Por isso, a versão permanece prévia alfa.
-- Nenhum benchmark de qualidade com modelo GGUF: gerações e edições da IA foram testadas com backends controlados. POO, imports entre arquivos e estruturas de projeto não usam IA e foram testados executando o código gerado. A medição de memória sem IA de 29/10 registrou medianas de 30,75 MiB no motor e 66,72 MiB no Studio headless, em carga pequena; não é uma comparação com outras IDEs.
-- O CODAR tem recursos de edição controlada e estudo offline. **Ainda não apresenta equivalência com VS Code/PyCharm** em análise semântica, depuração, Git e validação multiplataforma. O estudo das demais linguagens de programação (Haskell, Elixir, Scala, Perl, Fortran, entre outras) fica para a próxima versão.
+- Nenhum novo benchmark de qualidade com modelo GGUF. A medição sem IA registrou medianas de 30,75 MiB no motor e 66,72 MiB no Studio headless, em carga pequena; não é uma comparação com outras IDEs.
+- O CODAR tem recursos de edição controlada e estudo offline. **Ainda não apresenta equivalência com VS Code/PyCharm** em análise semântica, depuração, Git e validação multiplataforma.
 
 Consulte `docs/VALIDACAO_0.5.0.md`, `docs/DIAGNOSTICO_IDE_0.5.0.md` e `docs/BENCHMARKS.md` na tag da versão. O commit exato dos pacotes consta em `RELEASE.json`.

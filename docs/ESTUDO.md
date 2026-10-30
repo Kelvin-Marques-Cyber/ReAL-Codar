@@ -140,7 +140,7 @@ HTML inclui documento/semântica, formulários, metadados, imagens, tabelas, mí
 
 As demais linguagens recebem práticas próprias de dados, erros, memória, concorrência, contratos ou segurança conforme a linguagem, além de projetos de revisão. A estrutura não inventa POO, funções ou concorrência de aplicação para HTML, CSS, SQL, YAML ou Dockerfile.
 
-### Documentos, dados, build, hardware e contratos (0.5.0)
+### Documentos, dados, build, hardware e contratos (0.6.0)
 
 LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL e Solidity têm guia, aulas do básico ao avançado, projeto de revisão e referência de construções: 51 aulas e 136 verbetes,
 com 0% das linhas das aulas caindo só no guia genérico. Cada exemplo de guia e aula (e os trechos de referência de

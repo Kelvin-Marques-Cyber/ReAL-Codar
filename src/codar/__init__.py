@@ -1,5 +1,5 @@
 """codar — tradução offline de intenção para código com auditoria estática."""
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 # Revisao do motor (independente do numero de release do pacote).
 ENGINE_REVISION = 3
