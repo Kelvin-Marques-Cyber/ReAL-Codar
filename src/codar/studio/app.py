@@ -43,7 +43,8 @@ from codar.studio.references import AmbiguousReference, referenced_files, uses_e
 from codar.studio.explorer import SKIP, ConfirmScreen, Explorer
 from codar.studio import depuracao, linguagem
 from codar.studio.depuracao import DepuracaoMixin
-from codar.studio import explicacao
+from codar.studio import controle_versao, explicacao
+from codar.studio.controle_versao import ControleVersaoMixin
 from codar.studio.explicacao import ExplicacaoMixin, pedido_btw
 from codar.studio.linguagem import LinguagemMixin
 from codar.studio.terminal import TerminalInput, TerminalPainel
@@ -147,7 +148,7 @@ class IntentSuggester(Suggester):
         return None
 
 
-class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
+class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixin, App):
     TITLE = "codar studio"
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
@@ -194,6 +195,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
         *linguagem.ATALHOS,
         *depuracao.ATALHOS,
         *explicacao.ATALHOS,
+        *controle_versao.ATALHOS,
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -231,6 +233,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
         self.sugestao_estudo = None
         self._lsp_init()
         self._dap_init()
+        self._git_init()
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -255,6 +258,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
                     yield Botao(tr('BIBLIOTECAS'), acao='libraries', id='libraries-button')
                     yield Botao(tr('ESTRUTURA'), acao='estrutura', id='structure-button')
                     yield Botao(tr('DEPURAR'), acao='dap_iniciar', id='debug-button')
+                    yield Botao(tr('GIT'), acao='git_painel', id='git-button')
                     yield Botao(tr('AUTO OFF'), acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
@@ -276,6 +280,8 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
                         yield ListView(id="advice-list")
                     with TabPane(tr("DEPURAR"), id="tab-depurar"):
                         yield from self.compor_depuracao()
+                    with TabPane(tr("GIT"), id="tab-git"):
+                        yield from self.compor_git()
                     with TabPane(tr("ESTUDO"), id="tab-estudo"):
                         with Horizontal(id='study-tools'):
                             yield Botao(tr('Catálogo'), acao='estudo_catalogo')
@@ -322,6 +328,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
         table = self.query_one("#problems", DataTable)
         table.add_columns("SEV", "ID", "LINHA", "MENSAGEM")
         self.dap_montar()
+        self.git_montar()
         self.query_one("#hud-meta", Static).update(self.hud_meta())
         self.query_one('#autosave-button', Botao).update('AUTO ON' if self.autosave else 'AUTO OFF')
         self.render_pills()
@@ -467,6 +474,8 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
             line.append(f"  ◉ REDE :{self.rede_srv.porta} ", style=f"bold {C['mint']}")
         if rotulo_lsp := self.lsp_rotulo():
             line.append(f"  {rotulo_lsp} ", style=f"bold {C['error'] if '✗' in rotulo_lsp else C['cyan']}")
+        if rotulo_git := self.git_rotulo():
+            line.append(f"  {rotulo_git} ", style=f"bold {C['error'] if '!' in rotulo_git else C['mint']}")
         state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["error"])
         line.append(f"  DAEMON {state[0]} ", style=f"bold {state[1]}")
         line.append("  " + time.strftime("%Y-%b-%d %H:%MZ", time.gmtime()).upper(), style=f"bold {C['mint']}")
@@ -491,6 +500,10 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
             return "ENTER EXECUTA · ↑ HISTÓRICO · CTRL+T OUTRO TERMINAL · F12 SEU SHELL"
         if isinstance(focused, DataTable):
             return "ENTER VAI PARA A LINHA · ESC EDITOR"
+        if getattr(focused, "id", None) == "git-changes":
+            return "ENTER DIFERENÇAS · S PREPARA · U DESPREPARA · D DESCARTA · O ABRE · A PREPARA TUDO · ESC EDITOR"
+        if getattr(focused, "id", None) == "git-message":
+            return "ENTER FAZ O COMMIT DO QUE ESTÁ PREPARADO · ESC EDITOR"
         if isinstance(focused, ListView) and focused.id == "advice-list":
             return "ENTER ABRE A SUGESTÃO · ESC EDITOR"
         if isinstance(focused, CodeEditor) and self._dicas_atuais():
@@ -622,6 +635,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
         if ed.lang_id:
             self.symbols_worker(ed.id, ed.path, ed.text, ed.lang_id)
         self.lsp_documento_aberto(ed)
+        self.git_documento_aberto(ed)
         return ed
 
     @work(thread=True, group='completion-index', exclusive=True, exit_on_error=False)
@@ -685,6 +699,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
             self.agendar_estudo()
             self._schedule_autosave(ed)
             self.lsp_documento_alterado(ed)
+            self.git_documento_alterado(ed)
 
     def _schedule_autosave(self, ed):
         if timer := self._autosave_timers.pop(ed.id, None):
@@ -2015,6 +2030,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
         self._update_tab_label(ed)
         self.lsp_documento_salvo(ed)
         self.dap_documento_salvo(ed)
+        self.git_documento_salvo(ed)
         self.feed(f"{'AUTO' if automatic else 'SAVE'} · {path.name}", "green")
         if self.rede_srv is not None and hasattr(self.rede_srv, "avisar_mudanca"):
             self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
@@ -2048,6 +2064,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
             if ed is not None:
                 self.lsp_documento_fechado(ed)
                 self.dap_documento_fechado(ed)
+                self.git_documento_fechado(ed)
             await tabs.remove_pane(tabs.active)
             self.sync_welcome()
 
@@ -2222,6 +2239,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
     def programa_terminou(self, sessao, codigo: int) -> None:
         """Programa terminou: com erro, explica em português (o quê, onde, como corrigir) e marca a linha."""
         self.feed(f"RUN · exit {codigo}", "green" if codigo == 0 else "red")
+        self.git_programa_terminou()  # git pull, um formatador...: o estado e as marcas podem ter mudado
         if getattr(self, "instalando", None) and sessao.comando == self.instalando["comando"]:
             self.instalando = None
             self.verificar_pacotes(self.current_editor())
@@ -2545,6 +2563,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
             ("Depurar: entrar na função", "F11", self.action_dap_entrar),
             ("Depurar: sair da função", "Shift+F11", self.action_dap_sair),
             ("Depurar: parar", "Shift+F5", self.action_dap_parar),
+            *self.git_comandos_paleta(),
         ]
 
     def on_unmount(self) -> None:

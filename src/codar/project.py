@@ -22,6 +22,21 @@ SECRET_NAMES = {".env", "credentials", "credentials.json", "secrets.json", "secr
 MARKERS = (CONFIG_NAME, ".git", "pubspec.yaml", "pyproject.toml", "package.json", "Cargo.toml", "go.mod")
 
 
+def pasta_local(raiz: Path) -> Path:
+    """A pasta .codar do projeto (lixeira e backups do Studio). Ganha um .gitignore com *, como um venv: o que o
+    Codar guarda ali nunca aparece como arquivo novo no git nem entra num "preparar tudo"."""
+    local = Path(raiz) / ".codar"
+    local.mkdir(parents=True, exist_ok=True)
+    ignorar = local / ".gitignore"
+    if not ignorar.exists():
+        try:
+            ignorar.write_text("# pasta local do Codar (lixeira e backups): fora do controle de versão\n*\n",
+                               encoding="utf-8")
+        except OSError:
+            pass
+    return local
+
+
 def find_root(file: str | Path | None = None) -> Path | None:
     if not file:
         return None

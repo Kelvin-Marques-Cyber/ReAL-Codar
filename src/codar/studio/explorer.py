@@ -41,6 +41,15 @@ ACOES = [("abrir", "Enter", "Abrir"), ("novo_arquivo", "n", "Novo arquivo"), ("n
          ("apagar", "Del", "Apagar")]
 
 
+def pasta_lixeira(raiz: Path) -> Path:
+    """Uma pasta nova em .codar/lixeira/<data-hora>, de onde dá para recuperar o que foi apagado."""
+    from codar.project import pasta_local
+
+    destino = pasta_local(raiz) / "lixeira" / time.strftime("%Y%m%d-%H%M%S")
+    destino.mkdir(parents=True, exist_ok=True)
+    return destino
+
+
 def nome_livre(pasta: Path, nome: str, diretorio: bool = False) -> Path:
     """`pasta/nome`, ou `nome_copia.ext`, `nome_copia2.ext`… se já existir."""
     alvo = pasta / nome
@@ -110,11 +119,28 @@ class Explorer(DirectoryTree):
     def render_label(self, node, base_style, style):
         texto = super().render_label(node, base_style, style)
         if self.is_mounted and node.data is not None:
+            caminho = Path(node.data.path)
             if node._allow_expand:
                 texto.stylize(f"bold {C['orange']}", 0, 1)
+                if caminho in self.git_pastas:
+                    texto.append(" •", style=C["cyan"])
             else:
-                texto.stylize(C[TIPO_COR.get(Path(node.data.path).suffix.lower(), "dim")], 0, 1)
+                texto.stylize(C[TIPO_COR.get(caminho.suffix.lower(), "dim")], 0, 1)
+                if marca := self.git_arquivos.get(caminho):
+                    letra, cor = marca
+                    texto.stylize(C.get(cor, C["text"]), 2)
+                    texto.append(f" {letra}", style=f"bold {C.get(cor, C['text'])}")
         return texto
+
+    git_arquivos: dict[Path, tuple[str, str]] = {}  # caminho -> (letra, cor) do status no git
+    git_pastas: frozenset[Path] = frozenset()  # pastas com arquivos alterados dentro
+
+    def decorar_git(self, arquivos: dict[Path, tuple[str, str]], pastas: set[Path]) -> None:
+        """Status do git ao lado de cada nome (M alterado, N novo, ! conflito...), como no VS Code."""
+        if arquivos == self.git_arquivos and pastas == self.git_pastas:
+            return
+        self.git_arquivos, self.git_pastas = dict(arquivos), frozenset(pastas)
+        self._invalidate()  # a árvore guarda as linhas já desenhadas
 
     # ------------------------------------------------------------------ onde agir
     @property
@@ -277,9 +303,8 @@ class Explorer(DirectoryTree):
                              lambda ok: self._apagar(p) if ok else None)
 
     async def _apagar(self, p: Path) -> None:
-        destino = self.raiz / LIXEIRA / time.strftime("%Y%m%d-%H%M%S")
         try:
-            destino.mkdir(parents=True, exist_ok=True)
+            destino = pasta_lixeira(self.raiz)
             shutil.move(str(p), str(nome_livre(destino, p.name, p.is_dir())))
         except OSError as exc:
             self.avisar(f"não consegui apagar: {exc.strerror or exc}", erro=True)

@@ -581,3 +581,11 @@ CelularScreen {
 #debug-stack, #debug-vars, #debug-console { height: 1fr; background: $codar-bg; }
 #debug-eval { dock: bottom; height: 1; border: none; padding: 0 1; background: $codar-grid; }
 #debug-eval:focus { border: none; }
+
+/* painel GIT */
+#git-tools { height: 1; padding: 0 1; }
+#git-tools Botao { width: auto; margin-right: 2; color: $codar-mint; }
+#git-status { height: auto; max-height: 2; padding: 0 1; }
+#git-message { height: 1; border: none; padding: 0 1; background: $codar-grid; }
+#git-message:focus { border: none; }
+#git-changes { height: 1fr; background: $codar-bg; border: none; }

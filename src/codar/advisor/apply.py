@@ -56,7 +56,9 @@ def find_option(root: Path, bundle: Bundle, sid: str, oid: str | None) -> tuple[
 
 def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run: bool = False) -> None:
     root = root.resolve()
-    backup_dir = root / ".codar" / "backup" / time.strftime("%Y%m%d-%H%M%S")
+    from codar.project import pasta_local
+
+    backup_dir = root / ".codar" / "backup" / time.strftime("%Y%m%d-%H%M%S")  # pasta_local: .codar fora do git
     patterns = {p.id: p for p in bundle.patterns}
     for i, step in enumerate(steps, 1):
         osf = step.get("os")
@@ -78,6 +80,7 @@ def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run
         elif "backup" in step:
             src = _alvo(root, step["backup"])
             if src.exists():
+                pasta_local(root)
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(src), str(backup_dir / src.name))
                 out(f"    ✓ movido para {backup_dir.relative_to(root)}/{src.name}")
@@ -89,6 +92,7 @@ def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run
             content = _content(step, patterns, root)
             dest.parent.mkdir(parents=True, exist_ok=True)
             if dest.exists():
+                pasta_local(root)
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(dest, backup_dir / dest.name)
             dest.write_text(content, encoding="utf-8")
@@ -110,6 +114,7 @@ def apply_steps(root: Path, steps: list[dict], bundle: Bundle, out: Out, dry_run
             dest = _alvo(root, step["json_set"])
             data = (_load_json(root, step["json_set"]) if dest.exists() else {}) or {}
             if dest.exists():
+                pasta_local(root)
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(dest, backup_dir / dest.name)
             value = step.get("value")
