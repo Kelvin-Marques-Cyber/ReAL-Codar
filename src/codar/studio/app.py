@@ -41,6 +41,8 @@ from codar.engine.continuity import declarations, followup_target, wants_followu
 from codar.studio.edits import EditTarget, wants_edit
 from codar.studio.references import AmbiguousReference, referenced_files, uses_existing_code
 from codar.studio.explorer import SKIP, ConfirmScreen, Explorer
+from codar.studio import linguagem
+from codar.studio.linguagem import LinguagemMixin
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
 from codar.studio.screens import AdviceScreen, CelularScreen, HelpScreen, PromptScreen, TerminalOutputScreen
@@ -142,7 +144,7 @@ class IntentSuggester(Suggester):
         return None
 
 
-class Studio(App):
+class Studio(LinguagemMixin, App):
     TITLE = "codar studio"
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
@@ -186,6 +188,7 @@ class Studio(App):
         Binding('f10', 'complete_symbol', tr('Completar símbolo'), show=False, priority=True),
         Binding("ctrl+q", "quit", tr("Sair"), priority=True),
         Binding("f1", "help", tr("Ajuda"), priority=True),
+        *linguagem.ATALHOS,
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -221,6 +224,7 @@ class Studio(App):
         self._estudo_forcado: str | None = None
         self._estudo_poo = None
         self.sugestao_estudo = None
+        self._lsp_init()
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -451,6 +455,8 @@ class Studio(App):
         line.append(f" {total:.0f}/{budget} MB ", style=C["mint"])
         if self.rede_srv is not None:
             line.append(f"  ◉ REDE :{self.rede_srv.porta} ", style=f"bold {C['mint']}")
+        if rotulo_lsp := self.lsp_rotulo():
+            line.append(f"  {rotulo_lsp} ", style=f"bold {C['error'] if '✗' in rotulo_lsp else C['cyan']}")
         state = ("● ONLINE", C["mint"]) if self.online else ("○ OFFLINE", C["error"])
         line.append(f"  DAEMON {state[0]} ", style=f"bold {state[1]}")
         line.append("  " + time.strftime("%Y-%b-%d %H:%MZ", time.gmtime()).upper(), style=f"bold {C['mint']}")
@@ -482,6 +488,8 @@ class Studio(App):
         if isinstance(focused, CodeEditor):
             row, col = focused.cursor_location
             line = focused.document.get_line(row)
+            if diagnostico := focused.mensagens_diagnostico.get(row):
+                return " ".join(diagnostico.split())[:110] + " · ALT+H INFO"
             if focused.selection.start[0] != focused.selection.end[0]:
                 r0, r1 = focused.linhas_selecionadas()
                 return f"F3 / CTRL+G TRADUZ {r1 - r0 + 1} LINHAS (MÁX {self.max_linhas_bloco()}) · TAB INDENTA · CTRL+/ COMENTA"
@@ -602,6 +610,7 @@ class Studio(App):
         self.render_pills()
         if ed.lang_id:
             self.symbols_worker(ed.id, ed.path, ed.text, ed.lang_id)
+        self.lsp_documento_aberto(ed)
         return ed
 
     @work(thread=True, group='completion-index', exclusive=True, exit_on_error=False)
@@ -622,6 +631,8 @@ class Studio(App):
     def action_complete_symbol(self):
         ed = self.current_editor()
         if not ed or len(self.screen_stack) > 1:
+            return
+        if self.lsp_completar(ed):
             return
         row, col = ed.cursor_location
         match = re.search(r'[A-Za-z_$][\w$]*$', ed.document.get_line(row)[:col])
@@ -650,6 +661,7 @@ class Studio(App):
     @on(TabbedContent.TabActivated, "#editors")
     def _tab_changed(self) -> None:
         self.render_pills()
+        self._lsp_atualizar_problemas()
 
     @on(CodeEditor.Changed)
     def _editor_changed(self, event: CodeEditor.Changed) -> None:
@@ -658,6 +670,7 @@ class Studio(App):
             self._update_tab_label(ed)
             self.agendar_estudo()
             self._schedule_autosave(ed)
+            self.lsp_documento_alterado(ed)
 
     def _schedule_autosave(self, ed):
         if timer := self._autosave_timers.pop(ed.id, None):
@@ -1982,6 +1995,7 @@ class Studio(App):
         ed.autosave_paused = False
         ed.saved_text = ed.text
         self._update_tab_label(ed)
+        self.lsp_documento_salvo(ed)
         self.feed(f"{'AUTO' if automatic else 'SAVE'} · {path.name}", "green")
         if self.rede_srv is not None and hasattr(self.rede_srv, "avisar_mudanca"):
             self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
@@ -2012,6 +2026,8 @@ class Studio(App):
                 self.notify(tr("arquivo com alterações não salvas (Ctrl+S); feche de novo para descartar"), severity="warning")
                 ed.saved_text = ed.text
                 return
+            if ed is not None:
+                self.lsp_documento_fechado(ed)
             await tabs.remove_pane(tabs.active)
             self.sync_welcome()
 
@@ -2037,16 +2053,16 @@ class Studio(App):
         lang = langs.from_path(ed.path) if ed.path else langs.try_resolve(self.current_lang())
         if lang is None:
             return
-        self.audit_worker(ed.text, lang.id)
+        self.audit_worker(ed.text, lang.id, ed.path)
 
     @work(thread=True, exclusive=True, group="audit")
-    def audit_worker(self, code: str, lang: str) -> None:
+    def audit_worker(self, code: str, lang: str, path: str | None = None) -> None:
         try:
             res = self.backend.audit(code, lang)
         except Exception as exc:
             self.call_from_thread(self.notify, f"auditoria indisponível: {exc}", severity="error")
             return
-        self.call_from_thread(self._show_findings, res["findings"], 0, True)
+        self.call_from_thread(self.mostrar_auditoria, path, res["findings"])
         self.call_from_thread(self.feed, f"AUDIT · {len(res['findings'])} achado(s) · {res['ms']:.1f}MS",
                               "orange" if res["findings"] else "green")
 
@@ -2492,11 +2508,18 @@ class Studio(App):
             ("Codar: Mostrar/ocultar explorer", "Ctrl+B", self.action_toggle_left),
             ("Codar: Mostrar/ocultar painel", "F9", self.action_toggle_panel),
             ("Codar: Maximizar/restaurar painel", "Shift+F9", self.action_maximize_panel),
+            ("LSP: Ativar/desativar servidores de linguagem neste projeto", "Alt+L", self.action_lsp_ativar),
+            ("LSP: Ir para a definição", "Alt+D", self.action_lsp_definicao),
+            ("LSP: Referências do símbolo", "Alt+U · Shift+F12", self.action_lsp_referencias),
+            ("LSP: Informações do símbolo", "Alt+H", self.action_lsp_informacoes),
+            ("LSP: Renomear símbolo no projeto", "Alt+R", self.action_lsp_renomear),
+            ("LSP: Formatar documento", "Alt+F", self.action_lsp_formatar),
         ]
 
     def on_unmount(self) -> None:
         if self._generation_cancel is not None:
             self._generation_cancel.set()
+        self.lsp_encerrar_agora()
         self._parar_rede()
         self.terminal.parar_tudo()
         self.backend.close()

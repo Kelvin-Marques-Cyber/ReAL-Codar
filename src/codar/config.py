@@ -83,6 +83,12 @@ locale = "pt-BR"             # idioma humano: pt-BR | en | es | pt-PT; não muda
 autosave = false              # salva arquivos nomeados após uma pausa; botão AUTO no Studio
 autosave_delay_s = 1.5         # intervalo após a última alteração (0.3 a 60 segundos)
 
+[lsp]
+enabled = true                # servidores de linguagem no Studio (Alt+L ativa por projeto)
+trust_all = false             # true dispensa a confirmação por projeto (os servidores podem executar código dele)
+# Servidor por linguagem, no lugar da lista padrão: python = ["pyright-langserver", "--stdio"]
+[lsp.servers]
+
 # Regras próprias (regex, custo zero):
 # [[audit.rules]]
 # id = "ORG001"

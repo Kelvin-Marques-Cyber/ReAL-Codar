@@ -124,6 +124,15 @@ class Processo:
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 self._dreno.cancel()
 
+    def terminar_agora(self) -> None:
+        """Sem esperar: fecha stdin e manda SIGTERM ao grupo (usado quando o Studio está saindo)."""
+        proc = self._proc
+        if proc is None or proc.returncode is not None:
+            return
+        if proc.stdin and not proc.stdin.is_closing():
+            proc.stdin.close()
+        self._sinal(signal.SIGTERM)
+
     def _sinal(self, sinal) -> None:
         proc = self._proc
         if proc is None or proc.returncode is not None:

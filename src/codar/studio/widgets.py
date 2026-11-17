@@ -163,12 +163,16 @@ def _recuo(texto: str) -> str:
     return texto[: len(texto) - len(texto.lstrip())]
 
 
-def _sobrepor(strip: Strip, marcas: dict[int, tuple[str, Style]], destaque: tuple[int, Style] | None) -> Strip:
-    """Troca células de espaço por marcas (pontinhos de indentação) e pinta o fundo a partir de uma coluna."""
+def _sobrepor(strip: Strip, marcas: dict[int, tuple[str, Style]], destaque: tuple[int, Style] | None,
+              trecho: tuple[int, int, Style] | None = None) -> Strip:
+    """Troca células de espaço por marcas (indentação, breakpoint, Git), pinta o fundo a partir de uma coluna e
+    estiliza um trecho (o número da linha com diagnóstico)."""
     largura = strip.cell_length
     cortes = {c for x in marcas for c in (x, x + 1)}
     if destaque:
         cortes.add(destaque[0])
+    if trecho:
+        cortes.update(trecho[:2])
     cortes = sorted(c for c in cortes if 0 < c < largura)
     pecas = strip.divide([*cortes, largura])
     saida, pos = [], 0
@@ -178,11 +182,18 @@ def _sobrepor(strip: Strip, marcas: dict[int, tuple[str, Style]], destaque: tupl
             ch, estilo = marcas[pos]
             seg = next(iter(peca))
             peca = Strip([Segment(ch, (seg.style or Style()) + estilo)], 1)
+        if trecho and trecho[0] <= pos < trecho[1]:
+            peca = Strip([Segment(t, (st or Style()) + trecho[2], c) for t, st, c in peca], tamanho)
         if destaque and pos >= destaque[0]:
             peca = Strip([Segment(t, (st or Style()) + destaque[1], c) for t, st, c in peca], tamanho)
         saida.append(peca)
         pos += tamanho
     return Strip.join(saida)
+
+
+# Marcas da margem: a coluna antes do código mostra o Git; a anterior, breakpoint ou a linha parada no depurador.
+_MARCA_GIT = {"novo": ("▎", "green"), "alterado": ("▎", "cyan"), "apagado": ("▁", "error")}
+_COR_DIAGNOSTICO = {"error": "error", "warning": "orange", "info": "cyan", "hint": "dim"}
 
 
 class _DocumentoQuebrado(WrappedDocument):
@@ -225,6 +236,14 @@ class CodeEditor(TextArea):
             self.editor = editor
             self.row = row
 
+    class MargemClicada(Message):
+        """Clique na margem (números das linhas): o Studio alterna o breakpoint da linha."""
+
+        def __init__(self, editor: CodeEditor, linha: int) -> None:
+            super().__init__()
+            self.editor = editor
+            self.linha = linha
+
     BINDINGS = [
         Binding("ctrl+a", "select_all", "Selecionar tudo", show=False),
         Binding("ctrl+underscore,ctrl+slash", "comentar", "Comentar", show=False),
@@ -245,6 +264,12 @@ class CodeEditor(TextArea):
         self.guias = True  # pontinhos na indentação
         self._auto: set[tuple[int, int]] = set()  # fechamentos postos pelo editor: (linha, distância até o fim)
         self._destaque: tuple[int, int] | None = None  # linhas recém-inseridas, com fundo realçado por um instante
+        # Serviços de IDE: diagnósticos do servidor de linguagem, depurador e Git (linhas a partir de 0).
+        self.marcas_diagnostico: dict[int, str] = {}  # linha -> gravidade mais alta
+        self.mensagens_diagnostico: dict[int, str] = {}
+        self.breakpoints: set[int] = set()
+        self.linha_depuracao: int | None = None
+        self.marcas_git: dict[int, str] = {}  # linha -> novo, alterado ou apagado (linhas apagadas logo abaixo)
 
     @property
     def dirty(self) -> bool:
@@ -675,6 +700,20 @@ class CodeEditor(TextArea):
         self._destaque = None
         self.refresh()
 
+    def _linha_da_tela(self, y: int) -> int | None:
+        try:
+            return self.wrapped_document._offset_to_line_info[self.scroll_offset[1] + y][0]
+        except IndexError:
+            return None
+
+    async def _on_mouse_down(self, event: events.MouseDown) -> None:
+        x, y = event.x - self.gutter.left, event.y - self.gutter.top
+        if self.show_line_numbers and 0 <= x < self.gutter_width and (linha := self._linha_da_tela(y)) is not None:
+            event.stop()
+            self.post_message(self.MargemClicada(self, linha))
+            return
+        await super()._on_mouse_down(event)
+
     def render_line(self, y: int) -> Strip:
         strip = super().render_line(y)
         if not self.text:
@@ -703,9 +742,22 @@ class CodeEditor(TextArea):
         destaque = None
         if self._destaque and self._destaque[0] <= linha <= self._destaque[1]:
             destaque = (self.gutter_width, Style(bgcolor=C["flash"]))
-        if not marcas and not destaque:
+        elif linha == self.linha_depuracao:
+            destaque = (self.gutter_width, Style(bgcolor=C["sel"]))
+        trecho = None
+        margem = self.gutter_width
+        if secao == 0 and margem >= 3:
+            if linha == self.linha_depuracao:
+                marcas[margem - 2] = (">" if ASCII else "➜", Style(color=C["orange"], bold=True))
+            elif linha in self.breakpoints:
+                marcas[margem - 2] = ("*" if ASCII else "●", Style(color=C["error"], bold=True))
+            if git := _MARCA_GIT.get(self.marcas_git.get(linha, "")):
+                marcas[margem - 1] = ("|" if ASCII and git[0] == "▎" else "_" if ASCII else git[0], Style(color=C[git[1]]))
+            if gravidade := self.marcas_diagnostico.get(linha):
+                trecho = (0, margem - 2, Style(color=C[_COR_DIAGNOSTICO.get(gravidade, "error")], bold=True))
+        if not marcas and not destaque and not trecho:
             return strip
-        return _sobrepor(strip, marcas, destaque)
+        return _sobrepor(strip, marcas, destaque, trecho)
 
 
 class Botao(Static):
