@@ -41,7 +41,8 @@ from codar.engine.continuity import declarations, followup_target, wants_followu
 from codar.studio.edits import EditTarget, wants_edit
 from codar.studio.references import AmbiguousReference, referenced_files, uses_existing_code
 from codar.studio.explorer import SKIP, ConfirmScreen, Explorer
-from codar.studio import linguagem
+from codar.studio import depuracao, linguagem
+from codar.studio.depuracao import DepuracaoMixin
 from codar.studio.linguagem import LinguagemMixin
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
@@ -144,7 +145,7 @@ class IntentSuggester(Suggester):
         return None
 
 
-class Studio(LinguagemMixin, App):
+class Studio(LinguagemMixin, DepuracaoMixin, App):
     TITLE = "codar studio"
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
@@ -189,6 +190,7 @@ class Studio(LinguagemMixin, App):
         Binding("ctrl+q", "quit", tr("Sair"), priority=True),
         Binding("f1", "help", tr("Ajuda"), priority=True),
         *linguagem.ATALHOS,
+        *depuracao.ATALHOS,
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -225,6 +227,7 @@ class Studio(LinguagemMixin, App):
         self._estudo_poo = None
         self.sugestao_estudo = None
         self._lsp_init()
+        self._dap_init()
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -248,6 +251,7 @@ class Studio(LinguagemMixin, App):
                     yield Botao(tr('SDKs'), acao='runtimes', id='runtimes-button')
                     yield Botao(tr('BIBLIOTECAS'), acao='libraries', id='libraries-button')
                     yield Botao(tr('ESTRUTURA'), acao='estrutura', id='structure-button')
+                    yield Botao(tr('DEPURAR'), acao='dap_iniciar', id='debug-button')
                     yield Botao(tr('AUTO OFF'), acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
@@ -267,6 +271,8 @@ class Studio(LinguagemMixin, App):
                         yield OutputLog(id="output", markup=True, wrap=True, max_lines=2000, min_width=20)
                     with TabPane(tr("CONSULTOR"), id="tab-advisor"):
                         yield ListView(id="advice-list")
+                    with TabPane(tr("DEPURAR"), id="tab-depurar"):
+                        yield from self.compor_depuracao()
                     with TabPane(tr("ESTUDO"), id="tab-estudo"):
                         with Horizontal(id='study-tools'):
                             yield Botao(tr('Catálogo'), acao='estudo_catalogo')
@@ -312,6 +318,7 @@ class Studio(LinguagemMixin, App):
             self.query_one(wid).border_title = title
         table = self.query_one("#problems", DataTable)
         table.add_columns("SEV", "ID", "LINHA", "MENSAGEM")
+        self.dap_montar()
         self.query_one("#hud-meta", Static).update(self.hud_meta())
         self.query_one('#autosave-button', Botao).update('AUTO ON' if self.autosave else 'AUTO OFF')
         self.render_pills()
@@ -595,6 +602,7 @@ class Studio(LinguagemMixin, App):
         ed.disk_baseline = Path(path).read_bytes() if path and Path(path).is_file() else None
         ed.autosave_paused = False
         ed.lang_id = lang.id if lang else None
+        self.dap_documento_aberto(ed)
         nome = f"codar-{self.theme}"
         ed.register_theme(tema_editor(nome))
         ed.theme = nome
@@ -631,6 +639,9 @@ class Studio(LinguagemMixin, App):
     def action_complete_symbol(self):
         ed = self.current_editor()
         if not ed or len(self.screen_stack) > 1:
+            return
+        if self.dap_ativo():  # durante a depuração, F10 passa por cima da linha, como no VS Code
+            self.run_worker(self.action_dap_passar(), group="dap-passo", exit_on_error=False)
             return
         if self.lsp_completar(ed):
             return
@@ -1996,6 +2007,7 @@ class Studio(LinguagemMixin, App):
         ed.saved_text = ed.text
         self._update_tab_label(ed)
         self.lsp_documento_salvo(ed)
+        self.dap_documento_salvo(ed)
         self.feed(f"{'AUTO' if automatic else 'SAVE'} · {path.name}", "green")
         if self.rede_srv is not None and hasattr(self.rede_srv, "avisar_mudanca"):
             self.rede_srv.avisar_mudanca()  # a página aberta no celular recarrega
@@ -2028,6 +2040,7 @@ class Studio(LinguagemMixin, App):
                 return
             if ed is not None:
                 self.lsp_documento_fechado(ed)
+                self.dap_documento_fechado(ed)
             await tabs.remove_pane(tabs.active)
             self.sync_welcome()
 
@@ -2067,6 +2080,9 @@ class Studio(LinguagemMixin, App):
                               "orange" if res["findings"] else "green")
 
     async def action_run_file(self) -> None:
+        if self.dap_ativo():  # durante a depuração, F5 continua, como no VS Code
+            await self.action_dap_continuar()
+            return
         ed = self.current_editor()
         if ed is None or not ed.path:
             self.notify(tr("salve o arquivo antes de executar (Ctrl+S)"), severity="warning")
@@ -2514,12 +2530,20 @@ class Studio(LinguagemMixin, App):
             ("LSP: Informações do símbolo", "Alt+H", self.action_lsp_informacoes),
             ("LSP: Renomear símbolo no projeto", "Alt+R", self.action_lsp_renomear),
             ("LSP: Formatar documento", "Alt+F", self.action_lsp_formatar),
+            ("Depurar: iniciar no arquivo atual", "Ctrl+F5 · Python, C, C++, Rust", self.action_dap_iniciar),
+            ("Depurar: alternar breakpoint na linha", "Alt+B ou clique na margem", self.action_dap_breakpoint),
+            ("Depurar: continuar", "F5 durante a depuração", self.action_dap_continuar),
+            ("Depurar: passar por cima", "F10 durante a depuração", self.action_dap_passar),
+            ("Depurar: entrar na função", "F11", self.action_dap_entrar),
+            ("Depurar: sair da função", "Shift+F11", self.action_dap_sair),
+            ("Depurar: parar", "Shift+F5", self.action_dap_parar),
         ]
 
     def on_unmount(self) -> None:
         if self._generation_cancel is not None:
             self._generation_cancel.set()
         self.lsp_encerrar_agora()
+        self.dap_encerrar_agora()
         self._parar_rede()
         self.terminal.parar_tudo()
         self.backend.close()

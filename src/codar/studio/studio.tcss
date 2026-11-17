@@ -569,3 +569,15 @@ CelularScreen {
     width: auto;
     margin-top: 1;
 }
+
+/* depurador (aba DEPURAR) */
+#debug-tools { height: 1; padding: 0 1; }
+#debug-tools Botao { width: auto; margin-right: 2; color: $codar-mint; }
+#debug-status { height: 1; padding: 0 1; }
+#debug-body { height: 1fr; }
+#debug-stack-box { width: 1fr; }
+#debug-vars-box, #debug-console-box { width: 2fr; }
+.debug-title { height: 1; padding: 0 1; color: $codar-dim; }
+#debug-stack, #debug-vars, #debug-console { height: 1fr; background: $codar-bg; }
+#debug-eval { dock: bottom; height: 1; border: none; padding: 0 1; background: $codar-grid; }
+#debug-eval:focus { border: none; }

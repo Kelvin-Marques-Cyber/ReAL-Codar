@@ -700,6 +700,24 @@ class CodeEditor(TextArea):
         self._destaque = None
         self.refresh()
 
+    def edit(self, edit):
+        """Breakpoints acompanham o código: linhas inseridas ou apagadas acima deles os deslocam."""
+        inicio, fim = sorted((edit.from_location, edit.to_location))
+        resultado = super().edit(edit)
+        delta = (resultado.end_location[0] - inicio[0]) - (fim[0] - inicio[0])
+        if delta and self.breakpoints:
+            empurra = inicio[1] == 0 and fim == inicio and edit.text.endswith("\n")  # Enter no início da linha
+            novos = set()
+            for linha in self.breakpoints:
+                if linha < inicio[0] or (linha == inicio[0] and not empurra):
+                    novos.add(linha)
+                elif linha > fim[0] or linha == inicio[0]:
+                    novos.add(linha + delta)
+                elif linha <= resultado.end_location[0]:
+                    novos.add(linha)  # dentro do trecho substituído que continua existindo
+            self.breakpoints = {linha for linha in novos if 0 <= linha < self.document.line_count}
+        return resultado
+
     def _linha_da_tela(self, y: int) -> int | None:
         try:
             return self.wrapped_document._offset_to_line_info[self.scroll_offset[1] + y][0]
@@ -707,12 +725,12 @@ class CodeEditor(TextArea):
             return None
 
     async def _on_mouse_down(self, event: events.MouseDown) -> None:
+        # O Textual chama também o _on_mouse_down do TextArea; prevent_default o impede só no clique da margem.
         x, y = event.x - self.gutter.left, event.y - self.gutter.top
         if self.show_line_numbers and 0 <= x < self.gutter_width and (linha := self._linha_da_tela(y)) is not None:
+            event.prevent_default()
             event.stop()
             self.post_message(self.MargemClicada(self, linha))
-            return
-        await super()._on_mouse_down(event)
 
     def render_line(self, y: int) -> Strip:
         strip = super().render_line(y)
