@@ -66,6 +66,11 @@ class StudioBackend:
                                after=after, selected=selected, project_root=project_root, mode=mode,
                                stages=stages, hints=hints, on_delta=on_delta, cancel=cancel, locale=get_locale())
 
+    def explain(self, code: str, lang: str, question: str = "", context: str = "", use_model: bool = True) -> dict:
+        with self._client() as c:
+            return c.call("explain", {"code": code, "lang": lang, "question": question, "context": context,
+                                      "use_model": use_model})
+
     def audit(self, code: str, lang: str) -> dict:
         with self._client() as c:
             return c.audit(code, lang)

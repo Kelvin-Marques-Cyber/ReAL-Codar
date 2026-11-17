@@ -126,7 +126,7 @@ class Daemon:
             "patterns.add": self.m_pat_add, "patterns.remove": self.m_pat_remove, "model.load": self.m_model_load,
             "model.unload": self.m_model_unload, "model.info": self.m_model_info, "cache.clear": self.m_cache_clear,
             "rules.list": self.m_rules, "skills.list": self.m_skills, "langs.list": self.m_langs,
-            "advise": self.m_advise, "plugins.list": self.m_plugins,
+            "advise": self.m_advise, "plugins.list": self.m_plugins, "explain": self.m_explain,
         }
         from codar.editing import METHODS
 
@@ -354,6 +354,19 @@ class Daemon:
         if lang is None:
             raise RpcError(INVALID_PARAMS, "informe lang ou file")
         return self.router.audit(code, lang.id, bool(p.get("hints")))
+
+    async def m_explain(self, conn, p, rid):
+        """/btw: explicação de um trecho em texto; nunca gera código para o editor."""
+        from codar.engine.explicar import explicar
+
+        trecho = str(p.get("code", ""))
+        lang = langs.try_resolve(p.get("lang")) or langs.from_path(p.get("file"))
+        if lang is None:
+            raise RpcError(INVALID_PARAMS, "informe lang ou file")
+        if not trecho.strip():
+            raise RpcError(INVALID_PARAMS, "trecho vazio")
+        return await explicar(self.stage2, trecho, lang.id, str(p.get("question", "")), str(p.get("context", "")),
+                              usar_ia=bool(p.get("use_model", True)))
 
     async def m_stats(self, conn, p, rid):
         return {"version": __version__, "engine_revision": ENGINE_REVISION, "installation": self.installation,

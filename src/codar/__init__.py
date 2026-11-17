@@ -2,4 +2,4 @@
 
 __version__ = "0.6.0"
 # Revisao do motor (independente do numero de release do pacote).
-ENGINE_REVISION = 3
+ENGINE_REVISION = 4

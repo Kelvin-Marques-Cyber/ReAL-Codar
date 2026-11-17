@@ -108,6 +108,14 @@ class LocalClient:
             return self.stage2.info()
         if method == "cache.clear":
             return {"cleared": self.router.clear_cache()}
+        if method == "explain":
+            from codar.engine.explicar import explicar
+
+            lang = langs.try_resolve(p.get("lang")) or langs.from_path(p.get("file"))
+            if lang is None or not str(p.get("code", "")).strip():
+                raise RpcError(-32602, "informe o trecho e a linguagem")
+            return asyncio.run(explicar(self.stage2, str(p["code"]), lang.id, str(p.get("question", "")),
+                                        str(p.get("context", "")), usar_ia=bool(p.get("use_model", True))))
         if method == "advise":
             from pathlib import Path
 

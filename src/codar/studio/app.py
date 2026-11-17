@@ -43,6 +43,8 @@ from codar.studio.references import AmbiguousReference, referenced_files, uses_e
 from codar.studio.explorer import SKIP, ConfirmScreen, Explorer
 from codar.studio import depuracao, linguagem
 from codar.studio.depuracao import DepuracaoMixin
+from codar.studio import explicacao
+from codar.studio.explicacao import ExplicacaoMixin, pedido_btw
 from codar.studio.linguagem import LinguagemMixin
 from codar.studio.terminal import TerminalInput, TerminalPainel
 from codar.engine import emmet
@@ -145,7 +147,7 @@ class IntentSuggester(Suggester):
         return None
 
 
-class Studio(LinguagemMixin, DepuracaoMixin, App):
+class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, App):
     TITLE = "codar studio"
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
@@ -191,6 +193,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, App):
         Binding("f1", "help", tr("Ajuda"), priority=True),
         *linguagem.ATALHOS,
         *depuracao.ATALHOS,
+        *explicacao.ATALHOS,
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -1643,6 +1646,10 @@ class Studio(LinguagemMixin, DepuracaoMixin, App):
     async def submit_intent(self, text: str, resolved: list[str] | None = None) -> None:
         if not text.strip():
             return
+        if (pergunta := pedido_btw(text)) is not None:  # /btw: explica o trecho selecionado, sem alterar o código
+            self.query_one('#intent', Input).value = ''
+            self.btw(pergunta)
+            return
         from codar.engine.actions import INFORMATIONAL, classify
         from codar.i18n import get_locale
 
@@ -2530,6 +2537,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, App):
             ("LSP: Informações do símbolo", "Alt+H", self.action_lsp_informacoes),
             ("LSP: Renomear símbolo no projeto", "Alt+R", self.action_lsp_renomear),
             ("LSP: Formatar documento", "Alt+F", self.action_lsp_formatar),
+            ("IA: explicar o trecho selecionado (/btw)", "Alt+E · /btw pergunta na barra de intenção", self.action_btw),
             ("Depurar: iniciar no arquivo atual", "Ctrl+F5 · Python, C, C++, Rust", self.action_dap_iniciar),
             ("Depurar: alternar breakpoint na linha", "Alt+B ou clique na margem", self.action_dap_breakpoint),
             ("Depurar: continuar", "F5 durante a depuração", self.action_dap_continuar),

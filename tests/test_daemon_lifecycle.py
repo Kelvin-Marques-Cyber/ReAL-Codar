@@ -71,6 +71,12 @@ def test_real_tcp_daemon_stages_auth_and_bad_frames(tmp_path, monkeypatch):
                         client.call("translate", {"intent": ""})
                     assert error.value.code == -32602
                     assert client.ping()["pong"]  # erro anterior não quebrou a conexão
+                    explicacao = client.call("explain", {"code": "for n in numeros:\n    print(n)\n", "lang": "python",
+                                                         "question": "o que faz?", "use_model": False})
+                    assert explicacao["origin"] == "estudo" and "for n in numeros:\n  → " in explicacao["text"]
+                    with pytest.raises(RpcError) as error:
+                        client.call("explain", {"code": "  ", "lang": "python"})
+                    assert error.value.code == -32602
 
             await asyncio.to_thread(client_flow)
             host, port = daemon.endpoint.address.rsplit(":", 1)
