@@ -1,5 +1,9 @@
 codar (0.6.0-1) unstable; urgency=medium
 
+  * Studio usa os servidores de linguagem instalados (diagnósticos, definição,
+    referências, renomear e formatar), depura Python, C, C++ e Rust (DAP) e
+    integra o Git (trechos, commit, branches, histórico e conflitos).
+  * /btw explica o trecho selecionado com a IA local, sem alterar o código.
   * Acrescenta ao estudo LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL,
     Protocol Buffers, Terraform, Verilog, VHDL e Solidity.
   * Gera POO e imports entre arquivos sem IA e cria a estrutura inicial de projetos.
@@ -8,7 +12,7 @@ codar (0.6.0-1) unstable; urgency=medium
   * Confina sugestões e prévia ao projeto e confere o SHA-256 dos pacotes no
     instalador.
 
- -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Fri, 30 Oct 2026 10:15:00 -0300
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Tue, 17 Nov 2026 21:00:00 -0300
 
 codar (0.5.0-1) unstable; urgency=medium
 

@@ -81,6 +81,7 @@ Cada item de `findings`: `id`, `severity` (`info`, `warning`, `error`, `critical
 | `ping` | | `{"pong": true, "version": "0.3.2", "pid": 5837}` |
 | `auth` | `token` | `{"ok": true}` |
 | `audit` | `code`, `lang`, `hints?` | `{"findings": [...], "ms": 0.4}` |
+| `explain` | `code`, `lang` ou `file`, `question?`, `context?`, `use_model?` | `{"text", "origin": "ia" \| "estudo", "model", "truncated"}`: explicação em texto (o /btw do Studio), nunca código para aplicar |
 | `stats` | | memória, modelo, estágios, cache, número de pedidos |
 | `history` | `limit?` | últimas traduções |
 | `advise` | `root` | `{"facts": {...}, "suggestions": [{"id", "title", "reason", "options": [...]}]}` |

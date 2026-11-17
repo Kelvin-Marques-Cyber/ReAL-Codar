@@ -2,6 +2,8 @@
 
 Avaliação de 29/10/2026. Código funcional inspecionado em `bce276c562841774495567f870ef19079a8f748a`, com manifestos e documentação preparados para 0.5.0. Os resultados executados nesta rodada estão em [VALIDACAO_0.5.0.md](VALIDACAO_0.5.0.md).
 
+> **Atualização na 0.6.0 (17/11/2026).** Três lacunas da tabela abaixo ganharam uma primeira resposta no Studio: **análise semântica** pelos servidores de linguagem instalados (diagnósticos, definição, referências, renomear no projeto, formatar e completar), **depuração** de Python (debugpy), C, C++ e Rust (GDB) com breakpoints, passos, pilha, variáveis e console, e um **painel Git** com preparação e descarte por trecho, commit, branches, histórico e resolução de conflitos. A qualidade da análise depende do servidor instalado; depuração de outras linguagens, blame/stash/rebase, testes integrados, desenvolvimento remoto e um ecossistema de extensões continuam fora. O parecer abaixo é o da 0.5.0 e foi mantido como registro; a validação da 0.6.0 está em [VALIDACAO_0.6.0.md](VALIDACAO_0.6.0.md).
+
 ## Parecer
 
 **O CODAR ainda não tem a abrangência nem a robustez comprovada do VS Code ou do PyCharm como ambiente principal de desenvolvimento.** Já oferece recursos úteis de tradução de intenção, estudo offline e edição controlada. As melhorias desta versão estão implementadas; isso não encerra o desenvolvimento nem demonstra equivalência com uma IDE de uso geral.

@@ -1,12 +1,16 @@
 # Validação da prévia 0.6.0
 
-Verificações locais em 30/10/2026, Linux x86_64, Python 3.13.17, Textual 8.2.8, Node.js 22, Go 1.24 e Rust 1.97. A revisão exata de cada distribuição consta no `RELEASE.json` que acompanha os downloads. Os resultados são locais: o GitHub Actions não atribuiu runners aos jobs (veja [QUALIDADE.md](QUALIDADE.md)).
+Verificações locais em 17/11/2026, Linux x86_64, Python 3.13.17, Textual 8.2.8, Node.js 22, Go 1.24, Rust 1.97, git 2.43.0 e GDB 15.1. A revisão exata de cada distribuição consta no `RELEASE.json` que acompanha os downloads. Os resultados são locais: o GitHub Actions não atribuiu runners aos jobs (veja [QUALIDADE.md](QUALIDADE.md)).
 
 ## Resultados executados
 
 | Verificação | Resultado |
 |---|---|
-| Suíte Python completa, `python -m pytest -ra` | **1986 aprovados, 52 ignorados, 0 falhas**, 207,0 s |
+| Suíte Python completa, `python -m pytest -ra` | **2044 aprovados, 52 ignorados, 0 falhas**, 228,8 s |
+| Servidores de linguagem reais, `tests/test_ide_lsp.py` e `tests/test_studio_lsp.py` (14 testes) | pylsp 1.15.0: diagnóstico, definição, referências e renomear entre arquivos, também pelo Studio; pyright 1.1.414, clangd 18.1.3, gopls 0.16.2 e typescript-language-server 4.3.3: diagnósticos e definição. Um servidor falso cobre o protocolo inteiro, os pedidos do servidor e a queda do processo |
+| Depurador, `tests/test_ide_dap.py` e `tests/test_studio_depuracao.py` (10 testes) | debugpy 1.8.22 (Python) e GNU gdb 15.1 em modo DAP (C, C++ e Rust compilados com `-g -O0`): breakpoint, pilha, variáveis, sair da função, continuar e saída do programa; no Studio, clique na margem, F10/F5, console e a oferta de instalar o debugpy. Os testes com o GDB, repetidos 5 vezes, não falharam |
+| Git, `tests/test_ide_git.py` e `tests/test_studio_git.py` (25 testes) | git 2.43.0 em repositórios temporários: estado com renomeação, exclusão e arquivo não rastreado; preparar, despreparar e descartar por trecho, inclusive com CRLF e sem quebra no fim; commit, emenda, branches locais e remotas com ↑↓; merge real com conflito resolvido pelo Studio e outro abortado; marcas da margem; arquivo novo descartado para a lixeira. Os 4 cenários de ponta a ponta do Studio, repetidos 3 vezes, não falharam |
+| /btw, `tests/test_btw.py` (9 testes) e ciclo de vida do daemon | O prompt trata o trecho como dado; resposta de uma IA controlada e explicação sem IA nos quatro motivos; cliente local, Studio e método `explain` pelo daemon real, por TCP |
 | Cliente VS Code, `npm run compile` e `npm test` | **8 aprovados, 0 falhas, nenhum ignorado**, contra daemon real por socket Unix |
 | Plugin Vim, `tests/clients/run.sh` | **35 checagens OK** contra daemon real; Neovim não instalado neste ambiente |
 | Banco de padrões, `python -m codar.evals.patternlint` | **132 padrões, 352 variantes validadas, 56 sem validador; 158 execuções, 0 erros de sintaxe, 0 falhas** |
@@ -16,10 +20,10 @@ Verificações locais em 30/10/2026, Linux x86_64, Python 3.13.17, Textual 8.2.8
 | Versões, `python packaging/check_versions.py --tag v0.6.0` | Python, README, VS Code/lockfile, PowerShell, RPM, Debian, manual e CHANGELOG consistentes em 0.6.0 |
 | Fixtures de edição, `python -m codar.evals.editbench --reference` | **6 de 6 aprovadas**; verifica os gabaritos, sem avaliar um modelo |
 | Build, `packaging/build.sh`, com nfpm 2.47.0 | Wheel, sdist, DEB, RPM, Alpine APK, Arch, distribuições Python Windows/macOS, VSIX, `RELEASE.json` (revisão de origem, árvore limpa) e `SHA256SUMS` gerados; `sha256sum -c` sem divergências |
-| Conteúdo das distribuições | **161 arquivos de código/dados** comparados byte a byte com a fonte na wheel, no sdist e nos quatro pacotes Linux, sem diferenças |
+| Conteúdo das distribuições | **171 arquivos de código/dados** comparados byte a byte com a fonte na wheel, no sdist e nos quatro pacotes Linux, sem diferenças |
 | Distribuições Windows/macOS | Manifestos SHA-256 conferidos pelo instalador com `--verify-only`; wheel e VSIX internos idênticos aos downloads separados |
-| Instalação Python em Linux | Wheel instalada por pipx em diretórios isolados; `codar --version` confirmou 0.6.0 e `codar run --local --stages 0,1 --json "x é igual a 10"` produziu `x = 10`, estágio 0 |
-| Sintaxe e revisão | `sh -n` nos 9 scripts POSIX de empacotamento e instalação; `git diff --check` sem erros |
+| Instalação Python em Linux | Wheel instalada por pipx em diretórios isolados; `codar --version` confirmou 0.6.0 e `codar run --local --stages 0,1 --json "x é igual a 10"` produziu `x = 10`, estágio 0; os módulos de LSP, depurador, Git e /btw importam no ambiente do pipx |
+| Sintaxe e revisão | `sh -n` nos 10 scripts POSIX de empacotamento e instalação; `git diff --check` sem erros |
 | Memória sem IA (medição da 0.5.0, 29/10, revisão `bce276c`) | Três processos novos por cenário: mediana RSS **30,75 MiB** no motor local e **66,72 MiB** no Studio headless; [dados completos](benchmarks/memory-0.5.0.json) |
 | Cenários mínimos de regressão | 8 cenários mapeados para testes existentes, todos aprovados |
 
@@ -40,6 +44,10 @@ Os testes ignorados não são aprovações. Sem a ferramenta de cada linguagem n
 
 ## Defeitos encontrados durante a validação
 
+- Diffs de arquivos com CRLF perdiam o `\r` na leitura em modo texto do subprocess, e o trecho não se aplicava no índice. O git passou a ser lido e escrito em bytes; um teste cobre o caso.
+- Com o GDB 15, o `launch` já inicia o programa, e breakpoints enviados depois dele às vezes chegavam tarde. Para o GDB, os breakpoints agora vão antes do `launch`; repetido 6 vezes, também com a CPU ocupada, sem falhas.
+- Num merge cujo resultado ficava igual ao HEAD, o commit era recusado por "nada preparado". Durante um merge, o commit passou a ser aceito.
+- O clique na margem para ligar um breakpoint também movia o cursor do editor; a margem passou a consumir o evento.
 - Sob carga, o teste da trilha de bibliotecas consultava um botão antes de a tela terminar de montar (`NoMatches`). O teste agora espera o botão; repetido 5 vezes com a CPU ocupada, sem falhas.
 - Dois exemplos de estudo não passavam na ferramenta oficial na primeira versão (um Makefile sem alvo final e um serviço Protobuf que usava mensagens não declaradas). Corrigidos antes da publicação.
 
@@ -52,6 +60,7 @@ Os testes ignorados não são aprovações. Sem a ferramenta de cada linguagem n
 - Não foi instalado/carregado um modelo GGUF. Respostas controladas em testes e gabaritos do editbench não medem a qualidade da IA. Não há novo percentual de acerto de IA nesta versão.
 - A medição de memória exclui modelo, daemon separado, emulador de terminal, servidores de linguagem, builds e programas filhos ativos, e foi feita na 0.5.0, antes das mudanças de estudo, POO, terminal e desempenho desta versão. Não houve teste comparativo com outras IDEs nem de monorepositório.
 - Os alertas do Estudo analisam a linha do cursor; problemas que dependem do documento inteiro (ids repetidos, ordem dos títulos) continuam na revisão manual e nos desafios estruturais.
-- Exercícios e plugins Python não são uma sandbox de segurança. LSP/DAP completos, Git integrado avançado e tradução integral do conteúdo legado continuam fora da cobertura. O estudo das demais linguagens de programação (Haskell, Elixir, Scala, Perl, Fortran e outras) não faz parte desta versão.
+- Exercícios e plugins Python não são uma sandbox de segurança.
+- Os servidores de linguagem dependem do que estiver instalado: dos 28 comandos conhecidos, cinco foram exercitados de verdade (pylsp, pyright, clangd, gopls e typescript-language-server). A depuração cobre Python, C, C++ e Rust. O Git integrado não tem blame, stash, rebase interativo nem cherry-pick, e pull e push dependem do terminal (credenciais e progresso). A tradução integral do conteúdo legado continua fora da cobertura. O estudo das demais linguagens de programação (Haskell, Elixir, Scala, Perl, Fortran e outras) não faz parte desta versão.
 
 O [diagnóstico frente a IDEs](DIAGNOSTICO_IDE_0.5.0.md) detalha os pontos fortes, as lacunas e as prioridades técnicas.

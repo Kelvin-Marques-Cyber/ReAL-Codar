@@ -340,6 +340,18 @@ codar project scaffold fullstack-ts --name loja     # cria
 
 Plugins podem acrescentar modelos com um `estruturas.toml`; veja [EXTENDING.md](EXTENDING.md).
 
+### Servidores de linguagem, depurador e Git no Studio
+
+**Servidores de linguagem (LSP).** O Studio usa o servidor de linguagem que você já tem instalado: pylsp, pyright, basedpyright ou jedi-language-server (Python), typescript-language-server (JavaScript/TypeScript), gopls, rust-analyzer, clangd (C/C++) e os de Java, C#, Bash, Lua, Ruby, PHP, Kotlin, Swift, Dart, HTML, CSS, JSON, YAML, Dockerfile, LaTeX, Markdown, TOML e Terraform. Alguns servidores executam código do projeto (configurações, plugins), por isso só iniciam em projetos que você marca como confiáveis com **Alt+L**; a escolha fica salva e Alt+L de novo desliga. Com o servidor ativo, erros e avisos colorem o número da linha (vermelho/laranja), aparecem na barra de status e em PROBLEMAS; **Alt+D** vai para a definição, inclusive em outro arquivo; **Alt+U** ou **Shift+F12** lista as referências; **Alt+H** mostra tipo e documentação; **Alt+R** renomeia o símbolo em todos os arquivos, com confirmação; **Alt+F** formata o documento; **F10** ou **Ctrl+Espaço** completa com as sugestões do servidor. Ferramentas do `.venv` e de `node_modules/.bin` do projeto são encontradas sem configuração; `[lsp.servers]` no `config.toml` troca o comando de uma linguagem e `[lsp] enabled = false` desliga os servidores.
+
+**Depurador (DAP).** **Ctrl+F5** depura o arquivo atual: Python pelo debugpy (o Studio oferece instalá-lo no ambiente do projeto quando falta) e C, C++ e Rust compilados com `-g -O0` e executados no GDB 14 ou mais novo, em modo DAP. Um clique na margem ou **Alt+B** liga o breakpoint da linha; os breakpoints ficam salvos por projeto e acompanham as edições. Parado, a linha atual ganha ➜ e a aba DEPURAR mostra a pilha (Enter troca de quadro), as variáveis expansíveis e um console que avalia expressões no quadro atual. Durante a depuração, **F5** continua, **F10** passa por cima, **F11** entra, **Shift+F11** sai e **Shift+F5** para; fora dela, F5 executa e F10 completa, como antes.
+
+**Git.** A aba GIT (**Alt+G** ou botão GIT) lista conflitos, alterações preparadas e não preparadas, com a branch, o remoto e os commits a enviar e a receber. **Enter** num arquivo abre as diferenças trecho a trecho: **s** prepara, **u** desprepara e **d** descarta só o trecho escolhido; **t** alterna entre o lado preparado e o não preparado, e Enter abre o editor na linha do trecho. Na lista, as mesmas letras agem no arquivo inteiro, **o** abre o arquivo e **a** prepara tudo. Descartar pede confirmação; um arquivo novo descartado vai para `.codar/lixeira/`. A mensagem mais Enter faz o commit do que está preparado; sem nada preparado, o Studio oferece preparar tudo, e arquivos não salvos são oferecidos para salvar antes. **⎇ BRANCH** troca ou cria branches, inclusive a partir de uma remota; **≡ HISTÓRICO** mostra os commits e o diff de cada um (a paleta também tem o histórico do arquivo atual). **PULL**, **PUSH** e fetch rodam no terminal integrado, onde aparecem a senha e o progresso; o primeiro push publica a branch com `-u`. Num merge com conflito, Enter no arquivo abre a resolução bloco a bloco: **1** mantém o atual, **2** aceita o que entra, **3** mantém os dois e **z** desfaz; ao final, o Studio oferece marcar o arquivo como resolvido. A paleta tem **Git: abortar merge**, **emendar o último commit** e **iniciar repositório**. A margem do editor marca linhas novas (verde), alteradas (azul) e apagadas (vermelho) em relação ao índice, e o explorer mostra a letra de cada arquivo (M alterado, N novo, A adicionado, D apagado, R renomeado, ! conflito). O que é feito fora do Studio, como `git pull` no terminal, é percebido pelo índice; abas sem alterações não salvas recarregam o arquivo do disco. A pasta `.codar/` do projeto (lixeira e backups) ganha um `.gitignore` próprio e não aparece como arquivo novo.
+
+**/btw.** Selecione um trecho e escreva `/btw` na barra de intenção, ou `/btw por que usar um dicionário aqui?`, ou tecle **Alt+E**: a IA local explica o trecho na aba SAÍDA, sem alterar o código. Sem modelo, ou com o estágio 2 desligado, a explicação vem do material do Estudo, linha a linha, e diz que não houve IA.
+
+Limites: o Studio não instala servidores de linguagem nem depuradores por conta própria, exceto o debugpy com confirmação. A depuração cobre Python, C, C++ e Rust. O Git integrado não tem blame, stash, rebase interativo, cherry-pick nem histórico em grafo; para isso, use o terminal integrado ou o seu shell (F12).
+
 ### Editar um projeto pela CLI
 
 Dentro da pasta do projeto, inicialize suas convenções e peça uma alteração. A geração de edições exige o extra `llm` e um modelo local instalado; `project`, `check` e o histórico funcionam sem IA.
@@ -525,6 +537,12 @@ Os mesmos gestos em todos os lugares:
 | **Ctrl+F** / **Ctrl+Shift+F** | busca no buffer / nomes e conteúdo do projeto; IA opcional | Studio |
 | **Ctrl+Shift+F7** | abre o catálogo de estudo da linguagem do arquivo | Studio |
 | **AUTO ON/OFF** / **SDKs** | configura autosave / escolhe a versão Python do projeto | Studio |
+| **Alt+L** / **Alt+D** / **Alt+U** | ativa os servidores de linguagem no projeto / vai para a definição / lista as referências | Studio |
+| **Alt+H** / **Alt+R** / **Alt+F** | informações do símbolo / renomeia no projeto / formata o documento | Studio |
+| **Ctrl+F5** / **Alt+B** | depura o arquivo atual / liga o breakpoint (ou clique na margem) | Studio |
+| **F5** / **F10** / **F11** / **Shift+F11** / **Shift+F5** durante a depuração | continua / passa por cima / entra / sai da função / para | Studio |
+| **Alt+G** | painel GIT: diferenças por trecho, commit, branches, histórico e conflitos | Studio |
+| **/btw** ou **Alt+E** | a IA local explica o trecho selecionado, sem alterar o código | Studio |
 
 O autocompletar do Studio sugere palavras do próprio arquivo, palavras-chave da linguagem e o vocabulário do pseudocódigo ("imprimir", "enquanto", "senão"…). A barra de intenção sugere o que você já pediu e frases de exemplo.
 
@@ -812,6 +830,8 @@ A busca literal lê o buffer do arquivo ou o projeto sem precisar de daemon/IA. 
 
 Seleções de runtime são persistidas nos dados do CODAR e herdadas pelas subpastas. O ambiente dos novos processos recebe o interpretador escolhido; o processo do CODAR mantém seu próprio Python. No POSIX, wrappers privados para python/python3/pip/pip3 preservam a identidade do venv.
 
+Servidores de linguagem, depurador e git são processos externos que o Studio encontra no PATH (e no `.venv`/`node_modules` do projeto); nenhum deles passa pelo daemon. O cliente LSP fala JSON-RPC com cabeçalho `Content-Length`, negocia a codificação de posições (UTF-16 por padrão) e recusa pedidos do servidor para editar arquivos sem confirmação; o depurador fala DAP com o debugpy ou com o GDB; o git roda com argumentos em lista, sem shell, sem pedir senha e sem travas opcionais no índice. Pull e push vão para o terminal integrado.
+
 Autosave é opcional e usa uma pausa após a última alteração. A gravação troca o arquivo por um temporário no mesmo diretório, preserva permissões e compara os bytes originais antes da troca. Mudanças externas pausam a aba; o buffer permanece disponível. A comparação reduz o risco de conflito, mas não oferece uma transação com editores externos que escrevam simultaneamente.
 
 ## Referência do protocolo
@@ -896,6 +916,7 @@ Cada item de `findings`: `id`, `severity` (`info`, `warning`, `error`, `critical
 | `ping` | | `{"pong": true, "version": "0.3.2", "pid": 5837}` |
 | `auth` | `token` | `{"ok": true}` |
 | `audit` | `code`, `lang`, `hints?` | `{"findings": [...], "ms": 0.4}` |
+| `explain` | `code`, `lang` ou `file`, `question?`, `context?`, `use_model?` | `{"text", "origin": "ia" \| "estudo", "model", "truncated"}`: explicação em texto (o /btw do Studio), nunca código para aplicar |
 | `stats` | | memória, modelo, estágios, cache, número de pedidos |
 | `history` | `limit?` | últimas traduções |
 | `advise` | `root` | `{"facts": {...}, "suggestions": [{"id", "title", "reason", "options": [...]}]}` |
