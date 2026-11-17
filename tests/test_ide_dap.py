@@ -132,6 +132,50 @@ def test_c_compilado_e_depurado_pelo_gdb(tmp_path):
     asyncio.run(cenario())
 
 
+_FONTES_COMPILADAS = {
+    "cpp": ("alvo.cpp", "#include <iostream>\nint dobro(int x) {\n    int y = x * 2;\n    return y;\n}\n"
+                        "int main() {\n    int r = dobro(21);\n    std::cout << \"depois \" << r << std::endl;\n"
+                        "    return 0;\n}\n"),
+    "rust": ("alvo.rs", "// alvo\nfn dobro(x: i32) -> i32 {\n    let y = x * 2;\n    y\n}\n"
+                        "fn main() {\n    let r = dobro(21);\n    println!(\"depois {}\", r);\n}\n"),
+}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("lang", sorted(_FONTES_COMPILADAS))
+def test_cpp_e_rust_compilados_e_depurados_pelo_gdb(tmp_path, lang):
+    nome, fonte = _FONTES_COMPILADAS[lang]
+    arquivo = tmp_path / nome
+    arquivo.write_text(fonte)
+    plano = dap.plano(lang, arquivo, tmp_path, python=sys.executable, pasta_build=tmp_path / "build")
+    if plano.falta:
+        pytest.skip(plano.falta)
+    (tmp_path / "build").mkdir()
+    subprocess.run(plano.compilar, check=True, capture_output=True)
+    eventos = []
+
+    async def cenario():
+        sessao = _sessao(plano, tmp_path, eventos)
+        await sessao.iniciar(plano.adapter_id, plano.lancamento, {arquivo: [2]},  # y = x * 2
+                             configurar_antes=plano.configurar_antes)
+        try:
+            assert await _esperar(lambda: sessao.parado_em is not None)
+            [quadro, *_] = await sessao.pilha()
+            assert "dobro" in quadro.nome and (quadro.linha, quadro.caminho.name) == (2, nome)
+            valores = {v.nome: v.valor for e in await sessao.escopos(quadro.id) if not e.caro
+                       for v in await sessao.variaveis(e.referencia)}
+            assert valores["x"] == "21"
+            await sessao.sair()
+            assert await _esperar(lambda: sessao.parado_em is not None and sessao.motivo_parada != "breakpoint")
+            assert "main" in (await sessao.pilha())[0].nome
+            await sessao.continuar()
+            assert await _esperar(lambda: sessao.terminou)
+            assert sessao.codigo_saida == 0 and "depois 42" in "".join(t for _, t in sessao.saida)
+        finally:
+            await sessao.encerrar()
+    asyncio.run(cenario())
+
+
 def test_planos_por_linguagem(tmp_path):
     sem_debugpy = shutil.which("python3", path="/usr/bin")
     if sem_debugpy and not _tem_debugpy(sem_debugpy):
