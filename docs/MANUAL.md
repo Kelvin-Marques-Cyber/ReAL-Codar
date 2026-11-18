@@ -352,6 +352,19 @@ Plugins podem acrescentar modelos com um `estruturas.toml`; veja [EXTENDING.md](
 
 Limites: o Studio não instala servidores de linguagem nem depuradores por conta própria, exceto o debugpy com confirmação. A depuração cobre Python, C, C++ e Rust. O Git integrado não tem blame, stash, rebase interativo, cherry-pick nem histórico em grafo; para isso, use o terminal integrado ou o seu shell (F12).
 
+### Disposição da tela: alças e blocos recolhíveis
+
+O Studio se ajusta ao tamanho da janela. Na coluna da esquerda, o explorer tem prioridade: o feed de eventos divide o resto, o radar só aparece em janelas com 50 linhas ou mais e o feed some abaixo de 28. O logotipo da coluna da direita sai abaixo de 36 linhas. A coluna da esquerda aparece a partir de 84 colunas (com 26 de largura até 110, depois 32) e a da direita, na perspectiva Desenvolvimento, a partir de 150, para o editor não ficar estreito. O painel tem 14 linhas e não passa de 56% da altura (45% em janelas com menos de 28 linhas). Com a coluna central estreita, a barra de ferramentas usa rótulos curtos.
+
+Tudo isso também se ajusta à mão:
+
+- **Alças ⋮** entre as colunas: arraste para mudar a largura; clique para recolher ou expandir a coluna. Com a coluna recolhida, a alça na borda mostra uma seta (› ou ‹): um clique a abre de novo, e arrastá-la abre já com a largura escolhida. Arrastar até quase sumir também recolhe.
+- **Título de um bloco**, com ▾ (aberto) ou ▸ (recolhido): EXPLORER, PIPELINE ORBIT, SOURCE / EVENT FEED, PAINEL, LAST TRANSLATION, TELEMETRIA e HISTÓRICO recolhem até a linha do título com um clique e voltam com outro. O título do PAINEL também se arrasta para cima ou para baixo para mudar a altura.
+- **Teclado**: Ctrl+B mostra ou oculta o explorer; F9 recolhe o painel ao título; Shift+F9 maximiza o painel; Alt+M deixa só o editor na tela e, de novo, volta tudo como estava. Ctrl+E abre o explorer mesmo se estiver recolhido.
+- Um painel recolhido se expande sozinho quando um comando precisa dele (F5, /btw, depurador, Git).
+
+Larguras, altura do painel, colunas abertas ou fechadas à mão e blocos recolhidos ficam salvos entre sessões. **Layout: restaurar o padrão**, na paleta (Ctrl+P), volta ao automático; escolher uma perspectiva também devolve as colunas ao automático.
+
 ### Editar um projeto pela CLI
 
 Dentro da pasta do projeto, inicialize suas convenções e peça uma alteração. A geração de edições exige o extra `llm` e um modelo local instalado; `project`, `check` e o histórico funcionam sem IA.
@@ -543,6 +556,9 @@ Os mesmos gestos em todos os lugares:
 | **F5** / **F10** / **F11** / **Shift+F11** / **Shift+F5** durante a depuração | continua / passa por cima / entra / sai da função / para | Studio |
 | **Alt+G** | painel GIT: diferenças por trecho, commit, branches, histórico e conflitos | Studio |
 | **/btw** ou **Alt+E** | a IA local explica o trecho selecionado, sem alterar o código | Studio |
+| alças **⋮** entre as colunas | arrastar muda a largura; clicar recolhe ou expande a coluna | Studio |
+| título de um bloco (**▾**/**▸**) | clicar recolhe ou expande; arrastar o título do PAINEL muda a altura | Studio |
+| **Alt+M** / **F9** | maximiza o editor / recolhe o painel ao título (de novo: volta) | Studio |
 
 O autocompletar do Studio sugere palavras do próprio arquivo, palavras-chave da linguagem e o vocabulário do pseudocódigo ("imprimir", "enquanto", "senão"…). A barra de intenção sugere o que você já pediu e frases de exemplo.
 

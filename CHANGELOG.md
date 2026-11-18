@@ -4,6 +4,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não publicado]
 
+## [0.6.1] - 2026-11-18
+
+- Studio se adapta ao tamanho da janela. O explorer tem prioridade na coluna da esquerda (numa janela de 136×35, de 1 para 17 linhas úteis; em 120×30, de 0 para 14), o radar só aparece com 50 linhas ou mais, o feed some abaixo de 28 e o logotipo da direita abaixo de 36. A coluna da direita aparece a partir de 150 colunas (antes 118, o que deixava o editor com 66 colunas em 136), a da esquerda fica com 26 colunas até 110, e o painel não passa de 45% da altura em janelas com menos de 28 linhas. Nomes longos não criam mais barra horizontal no explorer nem no feed, e a barra de ferramentas usa rótulos curtos quando a coluna central fica estreita.
+- Alças ⋮ entre as colunas: arrastar muda a largura e clicar recolhe ou expande; uma coluna recolhida abre pela alça da borda. Os títulos dos blocos (EXPLORER, PIPELINE ORBIT, FEED, PAINEL, LAST TRANSLATION, TELEMETRIA, HISTÓRICO) recolhem e expandem com um clique, e o do PAINEL também se arrasta para mudar a altura. F9 recolhe o painel ao título; Alt+M maximiza o editor e volta. Larguras, altura e blocos recolhidos ficam salvos, e a paleta tem "Layout: restaurar o padrão". Um painel recolhido se expande sozinho quando o F5, o /btw, o depurador ou o Git o mostram.
+
 ## [0.6.0] - 2026-11-17
 
 - Servidores de linguagem no Studio (LSP): com o servidor instalado (pylsp, pyright, basedpyright, jedi-language-server, typescript-language-server, gopls, rust-analyzer, clangd e outros 20, em 25 linguagens), erros e avisos aparecem na margem, na barra de status e em PROBLEMAS; Alt+D vai para a definição, Alt+U/Shift+F12 lista referências, Alt+H mostra tipo e documentação, Alt+R renomeia no projeto com confirmação, Alt+F formata e F10/Ctrl+Espaço completa pelo servidor. Os servidores só iniciam em projetos marcados como confiáveis (Alt+L), porque alguns executam código do projeto. Ferramentas do `.venv` e de `node_modules/.bin` são encontradas sem configuração; `[lsp]` no `config.toml` desliga ou troca comandos.

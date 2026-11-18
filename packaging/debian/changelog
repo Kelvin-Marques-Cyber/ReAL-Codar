@@ -1,3 +1,13 @@
+codar (0.6.1-1) unstable; urgency=medium
+
+  * Studio se adapta ao tamanho da janela: o explorer tem prioridade, blocos
+    decorativos saem primeiro e a coluna da direita só aparece com espaço.
+  * Alças entre as colunas (arrastar muda a largura, clicar recolhe), blocos
+    recolhíveis pelo título, painel com altura ajustável e Alt+M para
+    maximizar o editor; as escolhas ficam salvas.
+
+ -- Kelvin e Silva Marques <148489077+Kelvin-Marques-Cyber@users.noreply.github.com>  Wed, 18 Nov 2026 12:00:00 -0300
+
 codar (0.6.0-1) unstable; urgency=medium
 
   * Studio usa os servidores de linguagem instalados (diagnósticos, definição,

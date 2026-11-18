@@ -18,7 +18,14 @@ df+jcc+aic                                →  display: flex; justify-content: �
 
 > Projeto em fase alfa: o compilador, o banco de padrões e os clientes de terminal estão testados; espere mudanças.
 
-**Versão do código: 0.6.0.** [Downloads e notas da prévia v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. O projeto continua em fase alfa; esta publicação não certifica equivalência com uma IDE de uso geral. Use a tag `v0.6.0` para reproduzir a versão distribuída. Instalar `main` usa o código atual dessa branch.
+**Versão do código: 0.6.1.** [Downloads e notas da prévia v0.6.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.1): pacotes Linux, wheel/sdist, instaladores via Python para Windows/macOS, extensão do VS Code e checksums. O projeto continua em fase alfa; esta publicação não certifica equivalência com uma IDE de uso geral. Use a tag `v0.6.1` para reproduzir a versão distribuída. Instalar `main` usa o código atual dessa branch.
+
+## Novidades da 0.6.1
+
+- **Tela que se adapta à janela:** o explorer fica com a maior parte da coluna da esquerda (numa janela de 136×35, de 1 para 17 linhas úteis), radar e logotipo saem primeiro em janelas baixas, a coluna da direita só aparece quando sobra largura para o editor (a partir de 150 colunas) e o painel cede espaço em janelas muito baixas. Nomes longos não criam mais uma barra horizontal no explorer.
+- **Alças e blocos recolhíveis:** arraste as alças ⋮ entre as colunas para mudar a largura, ou clique nelas para recolher e expandir; clique no título de um bloco (EXPLORER, FEED, PAINEL, TELEMETRIA…) para recolhê-lo e arraste o título do PAINEL para mudar a altura. Alt+M maximiza o editor. As escolhas ficam salvas; a paleta tem **Layout: restaurar o padrão**.
+
+[Validação da 0.6.1](docs/VALIDACAO_0.6.1.md) · [Notas da 0.6.1](docs/RELEASE_0.6.1.md).
 
 ## Novidades da 0.6.0
 
@@ -153,7 +160,7 @@ Outras vantagens no trabalho diário:
 - **Consultor de projeto**: sugestões para o ambiente e dependências, incluindo migrações de npm para pnpm ou Bun. Você escolhe a ação a executar.
 - **Atualização e distribuição**: versões dos componentes sincronizadas, diagnóstico de instalações duplicadas ou daemon antigo e arquivos publicados para Linux, Windows e macOS. Windows/macOS requerem Python 3.10+ e pipx; a extensão VS Code é instalada separadamente.
 
-O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da prévia v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
+O [CHANGELOG](CHANGELOG.md) separa as mudanças por versão. As [notas da prévia v0.6.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.1) registram os testes executados e as plataformas ainda sem validação nativa nesta publicação.
 
 ### Correções e praticidade na 0.3.1
 
@@ -169,14 +176,14 @@ O terminal integrado executa comandos e entrada de programas. Para aliases, conc
 
 ### Começar pela versão publicada (pipx)
 
-Requer **Python 3.10+ e pipx**. Baixe `codar-0.6.0-py3-none-any.whl` na [prévia v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0) e execute na pasta do download:
+Requer **Python 3.10+ e pipx**. Baixe `codar-0.6.1-py3-none-any.whl` na [prévia v0.6.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.1) e execute na pasta do download:
 
 ```sh
-pipx install --force ./codar-0.6.0-py3-none-any.whl
+pipx install --force ./codar-0.6.1-py3-none-any.whl
 pipx ensurepath --prepend
 ```
 
-Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.6.0`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
+Esse comando instala ou atualiza o núcleo da CLI. Abra um terminal novo, confira `codar --version` (deve mostrar `0.6.1`) e experimente `codar run "x é igual a 10"`. Para adicionar o Studio, use `codar extras install studio`; para a IA local, siga **Depois de instalar**. Se estiver atualizando uma sessão em uso, feche o Studio e execute `codar restart` pelo executável atualizado.
 
 ### Código atual da branch `main` (pipx)
 
@@ -252,7 +259,7 @@ curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/mai
 O instalador detecta apt, zypper, dnf, pacman ou apk e baixa o pacote da última Release estável. Para instalar esta prévia, informe a versão ao processo `sh`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | CODAR_VERSION=0.6.0 sh
+curl -fsSL https://raw.githubusercontent.com/Kelvin-Marques-Cyber/ReAL-Codar/main/packaging/install.sh | CODAR_VERSION=0.6.1 sh
 ```
 
 Se preferir baixar o arquivo manualmente, substitua `<versao>` pelo número do pacote baixado:
@@ -273,8 +280,8 @@ Esses arquivos requerem **Python 3.10+ e pipx**; não são instaladores autônom
 
 | Sistema | Arquivo | Comando dentro da pasta extraída |
 |---|---|---|
-| Windows | `codar-0.6.0-windows-python.zip` | `py -3 .\install.py` no PowerShell |
-| macOS | `codar-0.6.0-macos-python.tar.gz` | `sh install.sh` |
+| Windows | `codar-0.6.1-windows-python.zip` | `py -3 .\install.py` no PowerShell |
+| macOS | `codar-0.6.1-macos-python.tar.gz` | `sh install.sh` |
 
 O instalador confere a integridade dos arquivos, instala a wheel incluída pelo pipx, verifica a versão e mostra o executável exato. Studio e gramáticas opcionais entram por padrão; `--core` instala só a CLI. O README dentro de cada arquivo explica como instalar os pré-requisitos. Abra um terminal novo e execute `codar restart` depois de atualizar. A extensão `codar.vsix` continua sendo instalada separadamente no VS Code.
 
@@ -577,6 +584,9 @@ Os mesmos gestos em todos os lugares:
 | **F5** / **F10** / **F11** / **Shift+F11** / **Shift+F5** durante a depuração | continua / passa por cima / entra / sai da função / para | Studio |
 | **Alt+G** | painel GIT: diferenças por trecho, commit, branches, histórico e conflitos | Studio |
 | **/btw** ou **Alt+E** | a IA local explica o trecho selecionado, sem alterar o código | Studio |
+| alças **⋮** entre as colunas | arrastar muda a largura; clicar recolhe ou expande a coluna | Studio |
+| título de um bloco (**▾**/**▸**) | clicar recolhe ou expande; arrastar o título do PAINEL muda a altura | Studio |
+| **Alt+M** / **F9** | maximiza o editor / recolhe o painel ao título (de novo: volta) | Studio |
 
 O autocompletar do Studio sugere palavras do próprio arquivo, palavras-chave da linguagem e o vocabulário do pseudocódigo ("imprimir", "enquanto", "senão"…). A barra de intenção sugere o que você já pediu e frases de exemplo.
 
@@ -697,4 +707,4 @@ Veja [CONTRIBUTING.md](CONTRIBUTING.md) e o [histórico de mudanças](CHANGELOG.
 
 ---
 
-**In English:** Version 0.6.0 (alpha preview) explains each line in Study mode across 36 file types — HTML/CSS elements and selectors, idiomatic constructs of 20 programming languages and new tracks for LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL and Solidity, whose examples are checked with each language's official tool. Without AI, it now generates inheritance, methods, objects and calls checked against the real classes, adds imports for functions from other project files and scaffolds starter projects without overwriting files. Follow-up edits target the right function, results show their provenance and AI output is marked as untested. The Studio shows F5 output in every layout and types faster in large files; suggestions and network preview stay inside the project. [Preview v0.6.0](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.0) provides Linux packages, Python/pipx bundles for Windows/macOS, wheel/source archives and VSIX, with checksums and documented validation limits. The Studio also uses the language servers you have installed (diagnostics, go to definition, references, project-wide rename, formatting), debugs Python, C, C++ and Rust through DAP (debugpy, GDB), integrates Git (hunk staging and discarding, commits, branches, history, conflict resolution, changed lines in the gutter) and explains the selected code with /btw. Blame, stash, interactive rebase and debugging for other languages remain future work. Alpha project, Apache-2.0 licensed.
+**In English:** Version 0.6.1 (alpha preview) explains each line in Study mode across 36 file types — HTML/CSS elements and selectors, idiomatic constructs of 20 programming languages and new tracks for LaTeX, Markdown, JSON, TOML, XML, Makefile, GraphQL, Protocol Buffers, Terraform, Verilog, VHDL and Solidity, whose examples are checked with each language's official tool. Without AI, it now generates inheritance, methods, objects and calls checked against the real classes, adds imports for functions from other project files and scaffolds starter projects without overwriting files. Follow-up edits target the right function, results show their provenance and AI output is marked as untested. The Studio shows F5 output in every layout and types faster in large files; suggestions and network preview stay inside the project. [Preview v0.6.1](https://github.com/Kelvin-Marques-Cyber/ReAL-Codar/releases/tag/v0.6.1) provides Linux packages, Python/pipx bundles for Windows/macOS, wheel/source archives and VSIX, with checksums and documented validation limits. The Studio also uses the language servers you have installed (diagnostics, go to definition, references, project-wide rename, formatting), debugs Python, C, C++ and Rust through DAP (debugpy, GDB), integrates Git (hunk staging and discarding, commits, branches, history, conflict resolution, changed lines in the gutter) and explains the selected code with /btw. The Studio layout adapts to the window size, with draggable handles between columns, collapsible blocks and a maximized-editor mode. Blame, stash, interactive rebase and debugging for other languages remain future work. Alpha project, Apache-2.0 licensed.
