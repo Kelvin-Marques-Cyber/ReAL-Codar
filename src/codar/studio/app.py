@@ -43,8 +43,9 @@ from codar.studio.references import AmbiguousReference, referenced_files, uses_e
 from codar.studio.explorer import SKIP, ConfirmScreen, Explorer
 from codar.studio import depuracao, linguagem
 from codar.studio.depuracao import DepuracaoMixin
-from codar.studio import controle_versao, explicacao
+from codar.studio import controle_versao, disposicao, explicacao
 from codar.studio.controle_versao import ControleVersaoMixin
+from codar.studio.disposicao import Alca, DisposicaoMixin, PainelInferior
 from codar.studio.explicacao import ExplicacaoMixin, pedido_btw
 from codar.studio.linguagem import LinguagemMixin
 from codar.studio.terminal import TerminalInput, TerminalPainel
@@ -148,8 +149,9 @@ class IntentSuggester(Suggester):
         return None
 
 
-class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixin, App):
+class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixin, DisposicaoMixin, App):
     TITLE = "codar studio"
+    VERTICAL_BREAKPOINTS = disposicao.VERTICAL  # classes da tela pela altura: blocos decorativos saem primeiro
     CSS_PATH = str(Path(__file__).with_name("studio.tcss"))
     COMMANDS = App.COMMANDS | {CodarCommands, ArquivosProvider}
     BINDINGS = [
@@ -196,6 +198,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
         *depuracao.ATALHOS,
         *explicacao.ATALHOS,
         *controle_versao.ATALHOS,
+        *disposicao.ATALHOS,
     ]
 
     def __init__(self, root: str | Path = ".", lang: str | None = None, local: bool = False) -> None:
@@ -234,6 +237,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
         self._lsp_init()
         self._dap_init()
         self._git_init()
+        self._disposicao_init()
 
     # ------------------------------------------------------------------ layout
     def compose(self) -> ComposeResult:
@@ -245,6 +249,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
                 yield Explorer(self.root, id="explorer")
                 yield OrbitRadar(id="radar")
                 yield RichLog(id="feed", markup=True, wrap=True, max_lines=500, min_width=16)
+            yield Alca("esquerda", id="alca-esquerda")
             with Vertical(id="center"):
                 with Horizontal(id="pills-bar"):
                     with Horizontal(id="pills"):
@@ -262,7 +267,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
                     yield Botao(tr('AUTO OFF'), acao='toggle_autosave', id='autosave-button')
                 yield Static(self.welcome_text(), id="welcome")
                 yield TabbedContent(id="editors")
-                with TabbedContent(id="panel", initial="tab-problems"):
+                with PainelInferior(id="panel", initial="tab-problems"):
                     with TabPane(tr("PROBLEMAS"), id="tab-problems"):
                         yield DataTable(id="problems", cursor_type="row")
                     with TabPane(tr("TERMINAL"), id="tab-terminal"):
@@ -292,6 +297,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
                         with VerticalScroll(id="estudo"):
                             yield Static(self.estudo_vazio(), id="estudo-corpo")
                             yield Botao(acao="estudo_aplicar", id="estudo-acao")
+            yield Alca("direita", id="alca-direita")
             with Vertical(id="right"):
                 yield Static(TITLE, id="hud-title")
                 yield Static(id="hud-meta")
@@ -345,15 +351,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
         self.query_one("#intent", Input).focus()
         self.apply_perspective(self.perspective, save=False)
         localize_widgets(self)
-
-    def resize_workspace(self, width):
-        from textual.css.query import NoMatches
-
-        try:
-            self.query_one('#left').display = self.perspective != 'essential' and width >= 84
-            self.query_one('#right').display = self.perspective == 'development' and width >= 118
-        except NoMatches:
-            pass
+        self.disposicao_montar()  # larguras, altura do painel e blocos recolhidos salvos
 
     def apply_perspective(self, perspective, save=True):
         self.perspective = perspective if perspective in ('essential', 'development', 'learning') else 'development'
@@ -371,7 +369,9 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
     def action_perspective(self):
         def chosen(value):
             if value:
+                self._visivel = {"esquerda": None, "direita": None}  # a perspectiva volta a decidir as colunas
                 self.apply_perspective(value)
+                self._salvar_disposicao()
         self.push_screen(ChoiceScreen(tr('PERSPECTIVA DO STUDIO'),
                                      [('essential', tr('Essencial')), ('development', tr('Desenvolvimento')),
                                       ('learning', tr('Aprendizagem'))]), chosen)
@@ -766,6 +766,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
             if locale:
                 config.set_value('ui.locale', locale)
                 localize_widgets(self)
+                self.disposicao_titulos()
                 self.notify(tr('Idioma salvo. Reabra o Studio para aplicar em todos os controles.'))
         self.push_screen(ChoiceScreen(tr('IDIOMA DA INTERFACE · independente da linguagem do código'), list(LOCALES.items())), choose)
 
@@ -1863,7 +1864,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
         self.query_one("#intent", Input).focus()
 
     def action_focus_explorer(self) -> None:
-        self.query_one("#left").display = True
+        self.mostrar_explorer()
         explorer = self.query_one("#explorer", Explorer)
         explorer.focus()
         if explorer.cursor_line < 0:
@@ -2067,20 +2068,6 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
                 self.git_documento_fechado(ed)
             await tabs.remove_pane(tabs.active)
             self.sync_welcome()
-
-    def action_toggle_left(self) -> None:
-        left = self.query_one("#left")
-        left.display = not left.display
-
-    def action_toggle_panel(self) -> None:
-        panel = self.query_one("#panel")
-        panel.display = not panel.display
-
-    def action_maximize_panel(self) -> None:
-        """Shift+F9: o painel ocupa quase toda a área central (como Maximizar painel do VS Code) e volta."""
-        panel = self.query_one("#panel")
-        panel.display = True
-        panel.toggle_class("maximizado")
 
     # ------------------------------------------------------------------ auditoria / execução
     def action_audit_file(self) -> None:
@@ -2546,8 +2533,9 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
             ("Codar: Ver no celular", "F4 — prévia na rede com QR code (ou repassa o servidor do terminal)",
              self.action_celular),
             ("Codar: Parar o servidor da rede", "para a prévia/repasse aberto com F4", self._parar_rede),
-            ("Codar: Mostrar/ocultar explorer", "Ctrl+B", self.action_toggle_left),
-            ("Codar: Mostrar/ocultar painel", "F9", self.action_toggle_panel),
+            ("Codar: Mostrar/ocultar explorer", "Ctrl+B · ou clique na alça ⋮ ao lado dele", self.action_toggle_left),
+            ("Codar: Recolher/expandir painel", "F9 · ou clique no título PAINEL; arraste o título para a altura",
+             self.action_toggle_panel),
             ("Codar: Maximizar/restaurar painel", "Shift+F9", self.action_maximize_panel),
             ("LSP: Ativar/desativar servidores de linguagem neste projeto", "Alt+L", self.action_lsp_ativar),
             ("LSP: Ir para a definição", "Alt+D", self.action_lsp_definicao),
@@ -2564,6 +2552,7 @@ class Studio(LinguagemMixin, DepuracaoMixin, ExplicacaoMixin, ControleVersaoMixi
             ("Depurar: sair da função", "Shift+F11", self.action_dap_sair),
             ("Depurar: parar", "Shift+F5", self.action_dap_parar),
             *self.git_comandos_paleta(),
+            *self.disposicao_comandos_paleta(),
         ]
 
     def on_unmount(self) -> None:
